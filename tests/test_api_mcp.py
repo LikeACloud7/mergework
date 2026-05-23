@@ -382,6 +382,8 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
     assert "github:alice" in proof_page
     assert "Ledger address" in account
     assert "MRWK wallet transfers are enabled" in account
+    assert 'href="/accounts/reserve:bounty:1"' in account
+    assert 'href="/accounts/github:alice"' in account
 
 
 def test_ledger_page_highlights_bounty_payment_and_release(sqlite_url: str) -> None:
