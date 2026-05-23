@@ -968,7 +968,10 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
             entry = session.get(LedgerEntry, int(args["sequence"]))
             if entry is None:
                 return "ledger entry not found"
-            return json.dumps(ledger_to_dict(entry))
+            proof = session.scalar(
+                select(Proof).where(Proof.ledger_sequence == entry.sequence).limit(1)
+            )
+            return json.dumps(ledger_to_dict(entry, proof.hash if proof else None))
         if name == "get_proof":
             proof = session.get(Proof, str(args["hash"]))
             if proof is None:
