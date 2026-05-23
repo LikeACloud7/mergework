@@ -41,3 +41,12 @@ the stored `entry_hash` must recompute from the entry payload.
 If MergeWork grows enough, public ledger state can be snapshotted for bridge or
 onchain-claim experiments. The public ledger and proof hashes are designed to
 make that process auditable.
+
+## Accounts and Sending
+
+MRWK v0 uses native ledger account ids as addresses. A GitHub payout account
+looks like `github:alice`; reserve accounts look like `reserve:bounty:1`.
+
+Balances and proofs are inspectable in the explorer. External wallet sending is
+not active in v0. The next sendable version should add a signed transfer module,
+account key registration, and replay protection before any public transfer UI.

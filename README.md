@@ -15,6 +15,10 @@ grows enough to support them.
 4. A maintainer applies `mrwk:accepted`.
 5. MergeWork writes a public ledger entry and proof.
 
+Accepted payouts are credited to native MRWK ledger account ids such as
+`github:alice`. Those ids are the current MRWK addresses inside the v0 ledger.
+External wallet sending requires a later signed transfer module.
+
 ## Reference Bounty Tiers
 
 | Tier | Work |

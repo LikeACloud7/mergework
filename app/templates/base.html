@@ -3,17 +3,23 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}MergeWork{% endblock %}</title>
+    <title>{% block title %}{% if site_context == "ltc_lab" %}LTC Lab{% else %}MergeWork{% endif %}{% endblock %}</title>
     <link rel="stylesheet" href="/static/style.css">
   </head>
   <body>
     <header>
-      <a class="brand" href="/">MergeWork <span>MRWK</span></a>
+      <a class="brand" href="/">{% if site_context == "ltc_lab" %}LTC Lab{% else %}MergeWork <span>MRWK</span>{% endif %}</a>
       <nav>
+        {% if site_context == "ltc_lab" %}
+        <a href="#projects">Projects</a>
+        <a href="https://mrwk.ltclab.site">MRWK</a>
+        <a href="https://github.com/ramimbo/mergework">GitHub</a>
+        {% else %}
         <a href="/bounties">Bounties</a>
-        <a href="/ledger">Ledger</a>
+        <a href="/ledger">Explorer</a>
         <a href="/docs">Docs</a>
         <a href="/api/v1/status">API</a>
+        {% endif %}
       </nav>
     </header>
     <main>{% block content %}{% endblock %}</main>

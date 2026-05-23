@@ -2,11 +2,13 @@
 {% block title %}MergeWork{% endblock %}
 {% block content %}
 <section class="hero">
+  <p class="eyebrow">MRWK from LTC Lab</p>
   <h1>Open-source work, recorded as MRWK.</h1>
   <p>MergeWork is an open-source work ledger where contributors and AI agents earn MRWK for useful accepted work.</p>
   <div class="actions">
     <a href="/bounties">View bounties</a>
-    <a href="/ledger">Inspect ledger</a>
+    <a href="/ledger">Open explorer</a>
+    <a href="https://ltclab.site">LTC Lab</a>
   </div>
 </section>
 <section class="grid">
@@ -17,5 +19,9 @@
 <section>
   <h2>Future path</h2>
   <p>MRWK starts as a native project coin on the MergeWork ledger. The ledger is designed for future public snapshots, bridges, or onchain claims if the network grows enough to support them.</p>
+</section>
+<section>
+  <h2>Accounts and payouts</h2>
+  <p>Accepted work is paid to a native MRWK ledger account such as <code>github:ramimbo</code>. That account id is the current MRWK address inside this ledger. External wallet sending is not active in v0; the next step is a signed transfer or wallet module.</p>
 </section>
 {% endblock %}

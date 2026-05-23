@@ -4,6 +4,15 @@
 <section class="detail">
   <p class="eyebrow">Proof</p>
   <h1>Accepted work proof</h1>
+  <p class="lead">{{ proof.amount_mrwk }} MRWK paid to <a href="/accounts/{{ proof.to_account }}">{{ proof.to_account }}</a>.</p>
+  <dl>
+    <dt>Ledger entry</dt>
+    <dd><a href="/ledger/{{ proof.ledger_sequence }}">#{{ proof.ledger_sequence }}</a></dd>
+    <dt>Ledger hash</dt>
+    <dd><code>{{ proof.ledger_hash }}</code></dd>
+    <dt>Submission</dt>
+    <dd><a href="{{ proof.submission_url }}">{{ proof.submission_url }}</a></dd>
+  </dl>
   <pre>{{ proof | tojson(indent=2) }}</pre>
 </section>
 {% endblock %}

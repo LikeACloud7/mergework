@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}MRWK Ledger #{{ entry.sequence }}{% endblock %}
+{% block content %}
+<section class="detail">
+  <p class="eyebrow">Ledger entry</p>
+  <h1>#{{ entry.sequence }} {{ entry.type }}</h1>
+  <p class="lead">{{ entry.amount_mrwk }} MRWK</p>
+  <dl>
+    <dt>From</dt>
+    <dd>{% if entry.from %}<a href="/accounts/{{ entry.from }}">{{ entry.from }}</a>{% else %}-{% endif %}</dd>
+    <dt>To</dt>
+    <dd>{% if entry.to %}<a href="/accounts/{{ entry.to }}">{{ entry.to }}</a>{% else %}-{% endif %}</dd>
+    <dt>Reference</dt>
+    <dd><a href="{{ entry.reference }}">{{ entry.reference }}</a></dd>
+    <dt>Previous hash</dt>
+    <dd><code>{{ entry.previous_hash }}</code></dd>
+    <dt>Entry hash</dt>
+    <dd><code>{{ entry.entry_hash }}</code></dd>
+    <dt>Created</dt>
+    <dd>{{ entry.created_at }}</dd>
+    {% if entry.proof_hash %}
+    <dt>Proof</dt>
+    <dd><a href="/proofs/{{ entry.proof_hash }}">{{ entry.proof_hash }}</a></dd>
+    {% endif %}
+  </dl>
+</section>
+{% endblock %}

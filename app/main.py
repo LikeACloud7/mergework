@@ -14,7 +14,8 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.db import create_schema, session_scope
@@ -48,7 +49,7 @@ def bounty_to_dict(bounty: Bounty) -> dict[str, Any]:
     }
 
 
-def ledger_to_dict(entry: LedgerEntry) -> dict[str, Any]:
+def ledger_to_dict(entry: LedgerEntry, proof_hash: str | None = None) -> dict[str, Any]:
     return {
         "sequence": entry.sequence,
         "type": entry.entry_type,
@@ -58,8 +59,26 @@ def ledger_to_dict(entry: LedgerEntry) -> dict[str, Any]:
         "reference": entry.reference,
         "previous_hash": entry.previous_hash,
         "entry_hash": entry.entry_hash,
+        "proof_hash": proof_hash,
         "created_at": entry.created_at.isoformat(),
     }
+
+
+def _host_without_port(request: Request) -> str:
+    return request.headers.get("host", "").split(":", 1)[0].lower()
+
+
+def _is_ltc_lab_host(request: Request) -> bool:
+    return _host_without_port(request) in {"ltclab.site", "www.ltclab.site"}
+
+
+def _proof_hashes_by_sequence(session: Session, sequences: list[int]) -> dict[int, str]:
+    if not sequences:
+        return {}
+    rows = session.execute(
+        select(Proof.ledger_sequence, Proof.hash).where(Proof.ledger_sequence.in_(sequences))
+    ).all()
+    return {int(sequence): str(proof_hash) for sequence, proof_hash in rows}
 
 
 def _oauth_configured(settings: Settings) -> bool:
@@ -190,8 +209,10 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             account_row = session.get(Account, account)
             return {
                 "account": account,
+                "ledger_address": account,
                 "exists": account_row is not None,
                 "balance_mrwk": format_mrwk(get_balance(session, account)),
+                "transfer_status": "Native ledger transfers are not enabled in MRWK v0.",
             }
 
     @app.get("/api/v1/ledger")
@@ -201,7 +222,17 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             entries = session.scalars(
                 select(LedgerEntry).order_by(LedgerEntry.sequence.desc()).limit(limit)
             ).all()
-            return [ledger_to_dict(entry) for entry in entries]
+            proofs = _proof_hashes_by_sequence(session, [entry.sequence for entry in entries])
+            return [ledger_to_dict(entry, proofs.get(entry.sequence)) for entry in entries]
+
+    @app.get("/api/v1/ledger/{sequence}")
+    def api_ledger_entry(sequence: int) -> dict[str, Any]:
+        with session_scope(db_url) as session:
+            entry = session.get(LedgerEntry, sequence)
+            if entry is None:
+                raise HTTPException(status_code=404, detail="ledger entry not found")
+            proof = session.scalar(select(Proof).where(Proof.ledger_sequence == sequence).limit(1))
+            return ledger_to_dict(entry, proof.hash if proof else None)
 
     @app.get("/api/v1/proofs/{proof_hash}")
     def api_proof(proof_hash: str) -> dict[str, Any]:
@@ -275,6 +306,22 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.get("/", response_class=HTMLResponse)
     def hub(request: Request) -> HTMLResponse:
+        if _is_ltc_lab_host(request):
+            return templates.TemplateResponse(
+                request,
+                "ltc_lab.html",
+                {
+                    "site_context": "ltc_lab",
+                    "projects": [
+                        {
+                            "name": "MergeWork",
+                            "tagline": "MRWK from LTC Lab",
+                            "href": "https://mrwk.ltclab.site",
+                            "status": "live",
+                        }
+                    ],
+                },
+            )
         status_data = api_status()
         return templates.TemplateResponse(
             request,
@@ -299,10 +346,26 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     def ledger_page(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request, "ledger.html", {"entries": api_ledger()})
 
+    @app.get("/ledger/{sequence}", response_class=HTMLResponse)
+    def ledger_entry_page(request: Request, sequence: int) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request, "ledger_entry.html", {"entry": api_ledger_entry(sequence)}
+        )
+
     @app.get("/accounts/{account:path}", response_class=HTMLResponse)
     def account_page(request: Request, account: str) -> HTMLResponse:
+        with session_scope(db_url) as session:
+            account_data = api_account(account)
+            entries = session.scalars(
+                select(LedgerEntry)
+                .where(or_(LedgerEntry.from_account == account, LedgerEntry.to_account == account))
+                .order_by(LedgerEntry.sequence.desc())
+                .limit(100)
+            ).all()
+            proofs = _proof_hashes_by_sequence(session, [entry.sequence for entry in entries])
+            transactions = [ledger_to_dict(entry, proofs.get(entry.sequence)) for entry in entries]
         return templates.TemplateResponse(
-            request, "account.html", {"account": api_account(account)}
+            request, "account.html", {"account": account_data, "transactions": transactions}
         )
 
     @app.get("/proofs/{proof_hash}", response_class=HTMLResponse)

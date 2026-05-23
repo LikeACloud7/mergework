@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.db import create_schema, session_scope
-from app.ledger.service import create_bounty, ensure_genesis
+from app.ledger.service import create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
 
 
@@ -53,3 +53,52 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     ).json()
     assert balance["result"]["content"][0]["type"] == "text"
     assert "100000000" in balance["result"]["content"][0]["text"]
+
+
+def test_host_specific_homepages(sqlite_url: str) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    lab = client.get("/", headers={"host": "ltclab.site"}).text
+    mrwk = client.get("/", headers={"host": "mrwk.ltclab.site"}).text
+
+    assert "LTC Lab" in lab
+    assert "MRWK from LTC Lab" in lab
+    assert "Open-source work, recorded as MRWK" in mrwk
+    assert "MRWK from LTC Lab" in mrwk
+
+
+def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=2,
+            issue_url="https://github.com/ramimbo/mergework/issues/2",
+            title="Explorer test",
+            reward_mrwk="25",
+            acceptance="Accepted label",
+        )
+        proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/3",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    ledger = client.get("/ledger").text
+    entry = client.get("/ledger/3").text
+    proof_page = client.get(f"/proofs/{proof.hash}").text
+    account = client.get("/accounts/github:alice").text
+
+    assert "/ledger/3" in ledger
+    assert f"/proofs/{proof.hash}" in ledger
+    assert "Previous hash" in entry
+    assert "github:alice" in proof_page
+    assert "Ledger address" in account
+    assert "Native ledger transfers are not enabled" in account

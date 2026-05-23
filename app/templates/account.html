@@ -6,5 +6,35 @@
   <h1><code>{{ account.account }}</code></h1>
   <p class="lead">{{ account.balance_mrwk }} MRWK</p>
   <p>{% if account.exists %}This account exists on the ledger.{% else %}This account has no ledger activity yet.{% endif %}</p>
+  <dl>
+    <dt>Ledger address</dt>
+    <dd><code>{{ account.ledger_address }}</code></dd>
+    <dt>Send status</dt>
+    <dd>{{ account.transfer_status }}</dd>
+  </dl>
+</section>
+
+<section>
+  <div class="section-head">
+    <h2>Transactions</h2>
+    <p>Credits and debits involving this account.</p>
+  </div>
+  <table>
+    <thead><tr><th>#</th><th>Type</th><th>From</th><th>To</th><th>Amount</th><th>Proof</th></tr></thead>
+    <tbody>
+      {% for entry in transactions %}
+      <tr>
+        <td><a href="/ledger/{{ entry.sequence }}">{{ entry.sequence }}</a></td>
+        <td>{{ entry.type }}</td>
+        <td>{{ entry.from or "-" }}</td>
+        <td>{{ entry.to or "-" }}</td>
+        <td>{{ entry.amount_mrwk }} MRWK</td>
+        <td>{% if entry.proof_hash %}<a href="/proofs/{{ entry.proof_hash }}">proof</a>{% else %}-{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6">No ledger entries yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </section>
 {% endblock %}
