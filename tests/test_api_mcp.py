@@ -486,4 +486,23 @@ def test_mcp_can_register_and_fetch_wallet(sqlite_url: str) -> None:
             },
         },
     ).json()
-    assert "mrwk1" in registered["result"]["content"][0]["text"]
+    registered_wallet = json.loads(registered["result"]["content"][0]["text"])
+    assert registered_wallet["address"].startswith("mrwk1")
+
+    fetched = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "get_wallet",
+                "arguments": {"address": registered_wallet["address"]},
+            },
+        },
+    ).json()
+    fetched_wallet = json.loads(fetched["result"]["content"][0]["text"])
+
+    assert fetched_wallet["address"] == registered_wallet["address"]
+    assert fetched_wallet["label"] == "MCP wallet"
+    assert fetched_wallet["created_at"] == registered_wallet["created_at"]
