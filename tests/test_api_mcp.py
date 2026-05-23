@@ -276,12 +276,12 @@ def test_ledger_page_highlights_bounty_payment_and_release(sqlite_url: str) -> N
     ledger = client.get("/ledger").text
 
     assert "Reference" in ledger
-    assert "Bounty payment" in ledger
-    assert "Bounty release" in ledger
-    assert "type-badge type-badge-bounty-payment" in ledger
-    assert "type-badge type-badge-bounty-release" in ledger
-    assert "ledger-row ledger-row-bounty-payment" in ledger
-    assert "ledger-row ledger-row-bounty-release" in ledger
+    assert "Bounty Payment" in ledger
+    assert "Bounty Release" in ledger
+    assert "ledger-type ledger-type--bounty-payment" in ledger
+    assert "ledger-type ledger-type--bounty-release" in ledger
+    assert "ledger-row ledger-row--bounty-payment" in ledger
+    assert "ledger-row ledger-row--bounty-release" in ledger
     assert "ramimbo/mergework/pull/24" in ledger
     assert "ramimbo/mergework/issues/23" in ledger
     assert f"/proofs/{proof.hash}" in ledger
