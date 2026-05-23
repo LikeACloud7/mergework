@@ -1,0 +1,26 @@
+name: MRWK bounty
+description: Propose work that may receive an MRWK bounty.
+title: "[bounty] "
+labels: ["mrwk:bounty"]
+body:
+  - type: textarea
+    id: work
+    attributes:
+      label: Work needed
+      description: Describe the useful accepted work.
+    validations:
+      required: true
+  - type: input
+    id: reward
+    attributes:
+      label: Proposed MRWK
+      placeholder: "250"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Explain what must be true before mrwk:accepted is applied.
+    validations:
+      required: true

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}MRWK Ledger{% endblock %}
+{% block content %}
+<h1>Ledger</h1>
+<table>
+  <thead><tr><th>#</th><th>Type</th><th>To</th><th>Amount</th><th>Hash</th></tr></thead>
+  <tbody>
+    {% for entry in entries %}
+    <tr>
+      <td>{{ entry.sequence }}</td>
+      <td>{{ entry.type }}</td>
+      <td>{{ entry.to }}</td>
+      <td>{{ entry.amount_mrwk }} MRWK</td>
+      <td><code>{{ entry.entry_hash[:16] }}</code></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

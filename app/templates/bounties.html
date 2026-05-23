@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}MRWK Bounties{% endblock %}
+{% block content %}
+<h1>Bounties</h1>
+<div class="list">
+  {% for bounty in bounties %}
+  <article>
+    <h2><a href="/bounties/{{ bounty.id }}">{{ bounty.title }}</a></h2>
+    <p>{{ bounty.repo }} #{{ bounty.issue_number }} · {{ bounty.reward_mrwk }} MRWK · {{ bounty.status }}</p>
+    <p>{{ bounty.acceptance }}</p>
+  </article>
+  {% else %}
+  <p>No bounties yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}MRWK Account {{ account.account }}{% endblock %}
+{% block content %}
+<section class="detail">
+  <p class="eyebrow">Account</p>
+  <h1><code>{{ account.account }}</code></h1>
+  <p class="lead">{{ account.balance_mrwk }} MRWK</p>
+  <p>{% if account.exists %}This account exists on the ledger.{% else %}This account has no ledger activity yet.{% endif %}</p>
+</section>
+{% endblock %}

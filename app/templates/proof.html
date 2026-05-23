@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}MRWK Proof{% endblock %}
+{% block content %}
+<section class="detail">
+  <p class="eyebrow">Proof</p>
+  <h1>Accepted work proof</h1>
+  <pre>{{ proof | tojson(indent=2) }}</pre>
+</section>
+{% endblock %}

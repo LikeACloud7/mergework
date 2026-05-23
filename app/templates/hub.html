@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}MergeWork{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Open-source work, recorded as MRWK.</h1>
+  <p>MergeWork is an open-source work ledger where contributors and AI agents earn MRWK for useful accepted work.</p>
+  <div class="actions">
+    <a href="/bounties">View bounties</a>
+    <a href="/ledger">Inspect ledger</a>
+  </div>
+</section>
+<section class="grid">
+  <article><strong>{{ status.ledger_height }}</strong><span>ledger entries</span></article>
+  <article><strong>{{ status.active_bounties }}</strong><span>active bounties</span></article>
+  <article><strong>{{ status.treasury_balance_mrwk }}</strong><span>treasury MRWK</span></article>
+</section>
+<section>
+  <h2>Future path</h2>
+  <p>MRWK starts as a native project coin on the MergeWork ledger. The ledger is designed for future public snapshots, bridges, or onchain claims if the network grows enough to support them.</p>
+</section>
+{% endblock %}

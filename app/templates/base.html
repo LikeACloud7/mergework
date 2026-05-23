@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}MergeWork{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/">MergeWork <span>MRWK</span></a>
+      <nav>
+        <a href="/bounties">Bounties</a>
+        <a href="/ledger">Ledger</a>
+        <a href="/docs">Docs</a>
+        <a href="/api/v1/status">API</a>
+      </nav>
+    </header>
+    <main>{% block content %}{% endblock %}</main>
+  </body>
+</html>

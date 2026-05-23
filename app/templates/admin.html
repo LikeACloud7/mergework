@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}MergeWork Admin{% endblock %}
+{% block content %}
+<section class="detail">
+  <p class="eyebrow">Admin</p>
+  <h1>Post a bounty</h1>
+  <p class="lead">Signed in as {{ login }}.</p>
+  <form method="post" action="/admin/bounties">
+    <label>Repository <input name="repo" placeholder="ramimbo/mergework" required></label>
+    <label>Issue number <input name="issue_number" type="number" min="1" required></label>
+    <label>Issue URL <input name="issue_url" type="url" required></label>
+    <label>Title <input name="title" required></label>
+    <label>Reward MRWK <input name="reward_mrwk" inputmode="decimal" placeholder="250" required></label>
+    <label>Acceptance text <textarea name="acceptance" rows="4" required></textarea></label>
+    <button type="submit">Create bounty</button>
+  </form>
+  <form method="post" action="/admin/logout" class="inline-form">
+    <button type="submit">Sign out</button>
+  </form>
+</section>
+{% endblock %}
