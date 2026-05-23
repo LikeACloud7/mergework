@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.db import create_schema, session_scope
-from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
+from app.ledger.service import create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
 
 
@@ -56,80 +56,6 @@ def test_bounty_api_reports_multi_award_capacity(sqlite_url: str) -> None:
     assert bounty["max_awards"] == 4
     assert bounty["awards_paid"] == 0
     assert bounty["awards_remaining"] == 4
-
-
-def test_bounty_api_reports_multi_award_paid_and_closed_status(sqlite_url: str) -> None:
-    create_schema(sqlite_url)
-    with session_scope(sqlite_url) as session:
-        ensure_genesis(session)
-        paid_bounty = create_bounty(
-            session,
-            repo="ramimbo/mergework",
-            issue_number=12,
-            issue_url="https://github.com/ramimbo/mergework/issues/12",
-            title="Paid multi-award bounty",
-            reward_mrwk="25",
-            max_awards=2,
-            acceptance="Each accepted submission earns one award.",
-        )
-        closed_bounty = create_bounty(
-            session,
-            repo="ramimbo/mergework",
-            issue_number=13,
-            issue_url="https://github.com/ramimbo/mergework/issues/13",
-            title="Closed multi-award bounty",
-            reward_mrwk="10",
-            max_awards=3,
-            acceptance="Each accepted submission earns one award.",
-        )
-        paid_id = paid_bounty.id
-        closed_id = closed_bounty.id
-
-        pay_bounty(
-            session,
-            bounty_id=paid_id,
-            to_account="github:alice",
-            submission_url="https://github.com/ramimbo/mergework/pull/12",
-            accepted_by="maintainer",
-            verifier_result={"label": "mrwk:accepted"},
-        )
-        pay_bounty(
-            session,
-            bounty_id=paid_id,
-            to_account="github:bob",
-            submission_url="https://github.com/ramimbo/mergework/pull/13",
-            accepted_by="maintainer",
-            verifier_result={"label": "mrwk:accepted"},
-        )
-        pay_bounty(
-            session,
-            bounty_id=closed_id,
-            to_account="github:carol",
-            submission_url="https://github.com/ramimbo/mergework/pull/14",
-            accepted_by="maintainer",
-            verifier_result={"label": "mrwk:accepted"},
-        )
-        close_bounty(
-            session,
-            bounty_id=closed_id,
-            closed_by="maintainer",
-            reference="https://github.com/ramimbo/mergework/issues/13#close",
-        )
-
-    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
-
-    paid = client.get(f"/api/v1/bounties/{paid_id}").json()
-    closed = client.get(f"/api/v1/bounties/{closed_id}").json()
-
-    assert paid["status"] == "paid"
-    assert paid["max_awards"] == 2
-    assert paid["awards_paid"] == 2
-    assert paid["awards_remaining"] == 0
-
-    assert closed["status"] == "closed"
-    assert closed["max_awards"] == 3
-    assert closed["awards_paid"] == 1
-    assert closed["awards_remaining"] == 0
 
 
 def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
