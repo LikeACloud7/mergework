@@ -22,17 +22,10 @@ GitHub OAuth and wallet-linking.
 
 ## GitHub OAuth
 
-Create a GitHub OAuth app for production login:
-
-- Homepage URL: `https://mrwk.ltclab.site`
-- Callback URL: `https://mrwk.ltclab.site/auth/github/callback`
-
-Set these environment variables on the server, then restart Docker Compose:
-
-- `MERGEWORK_GITHUB_OAUTH_CLIENT_ID`
-- `MERGEWORK_GITHUB_OAUTH_CLIENT_SECRET`
-- `MERGEWORK_COOKIE_SECRET`
-- `MERGEWORK_ADMIN_LOGINS`
+Production GitHub OAuth is configured for `https://mrwk.ltclab.site`.
+Contributors use `/me` to sign in, link wallets, and claim older GitHub ledger
+balances. If the GitHub app is rotated later, update deployment secrets outside
+the repository and restart Docker Compose.
 
 ## Disputes
 

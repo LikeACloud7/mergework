@@ -70,7 +70,6 @@ The production layout is Docker Compose with `app`, `caddy`, and `backup`
 services. SQLite lives at `/srv/mergework/data/mergework.sqlite3`; daily backups
 are written to `/srv/mergework/backups`.
 
-GitHub OAuth requires a GitHub OAuth app with callback URL
-`https://mrwk.ltclab.site/auth/github/callback`. Set
-`MERGEWORK_GITHUB_OAUTH_CLIENT_ID`, `MERGEWORK_GITHUB_OAUTH_CLIENT_SECRET`, and
-`MERGEWORK_COOKIE_SECRET` in the deployment environment before enabling login.
+Production GitHub OAuth is configured for `https://mrwk.ltclab.site`.
+Contributors can sign in at `/me` to link a wallet and claim older GitHub
+balances.
