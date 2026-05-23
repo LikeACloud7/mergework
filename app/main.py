@@ -28,8 +28,10 @@ from app.ledger.service import (
     format_mrwk,
     get_balance,
     link_wallet_to_github,
+    pay_bounty,
     public_url_or_none,
     register_wallet,
+    resolve_payout_account,
     submit_github_claim,
     submit_wallet_transfer,
 )
@@ -302,6 +304,49 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             if bounty is None:
                 raise HTTPException(status_code=404, detail="bounty not found")
             return bounty_to_dict(bounty)
+
+    @app.post("/api/v1/bounties/{bounty_id}/pay")
+    async def api_pay_bounty(
+        bounty_id: int,
+        request: Request,
+        admin_login: str = Depends(require_admin_token),
+    ) -> dict[str, Any]:
+        data = await request.json()
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="json body must be an object")
+        try:
+            requested_account = str(data["to_account"])
+            submission_url = str(data["submission_url"])
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=400, detail=f"missing required field: {exc.args[0]}"
+            ) from exc
+        accepted_by = str(data.get("accepted_by") or admin_login)
+        verifier_result = {
+            "source": "admin_api",
+            "accepted_by": accepted_by,
+        }
+        if data.get("note") is not None:
+            verifier_result["note"] = str(data["note"])[:240]
+        with session_scope(db_url) as session:
+            try:
+                to_account = resolve_payout_account(session, requested_account)
+                proof = pay_bounty(
+                    session,
+                    bounty_id=bounty_id,
+                    to_account=to_account,
+                    submission_url=submission_url,
+                    accepted_by=accepted_by,
+                    verifier_result=verifier_result,
+                )
+            except LedgerError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            return {
+                "status": "paid",
+                "bounty_id": bounty_id,
+                "to_account": to_account,
+                "proof_hash": proof.hash,
+            }
 
     @app.get("/api/v1/accounts/{account:path}")
     def api_account(account: str) -> dict[str, Any]:
