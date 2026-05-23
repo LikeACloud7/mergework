@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.db import create_schema, session_scope
-from app.ledger.service import create_bounty, ensure_genesis, pay_bounty
+from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
 
 
@@ -156,6 +156,51 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
     assert "github:alice" in proof_page
     assert "Ledger address" in account
     assert "MRWK wallet transfers are enabled" in account
+
+
+def test_ledger_page_highlights_bounty_payment_and_release(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=23,
+            issue_url="https://github.com/ramimbo/mergework/issues/23",
+            title="Improve ledger explorer payment scanning",
+            reward_mrwk="150",
+            max_awards=2,
+            acceptance="Ledger explorer highlights bounty payments and releases.",
+        )
+        proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/24",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        close_bounty(
+            session,
+            bounty_id=bounty.id,
+            closed_by="maintainer",
+            reference="https://github.com/ramimbo/mergework/issues/23",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    ledger = client.get("/ledger").text
+
+    assert "Reference" in ledger
+    assert "Bounty payment" in ledger
+    assert "Bounty release" in ledger
+    assert "type-badge type-badge-bounty-payment" in ledger
+    assert "type-badge type-badge-bounty-release" in ledger
+    assert "ledger-row ledger-row-bounty-payment" in ledger
+    assert "ledger-row ledger-row-bounty-release" in ledger
+    assert "ramimbo/mergework/pull/24" in ledger
+    assert "ramimbo/mergework/issues/23" in ledger
+    assert f"/proofs/{proof.hash}" in ledger
 
 
 def test_mcp_can_register_and_fetch_wallet(sqlite_url: str) -> None:
