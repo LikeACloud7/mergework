@@ -110,6 +110,85 @@ def test_wallet_transfer_api_returns_validation_error(sqlite_url: str) -> None:
     assert response.json()["detail"] in {"invalid signature", "insufficient balance"}
 
 
+def test_wallet_api_malformed_register_requests_return_4xx(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    missing_key = client.post("/api/v1/wallets/register", json={"label": "No key"})
+    assert missing_key.status_code == 400
+    assert missing_key.json()["detail"] == "public_key_hex is required"
+
+    non_object = client.post("/api/v1/wallets/register", json=["not", "an", "object"])
+    assert non_object.status_code == 400
+    assert non_object.json()["detail"] == "json body must be an object"
+
+
+def test_wallet_api_malformed_transfer_requests_return_4xx(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    _, sender_public, sender_address = _keypair()
+    _, receiver_public, receiver_address = _keypair()
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    client.post("/api/v1/wallets/register", json={"public_key_hex": sender_public})
+    client.post("/api/v1/wallets/register", json={"public_key_hex": receiver_public})
+
+    missing_sender = client.post(
+        "/api/v1/transfers",
+        json={
+            "to_address": receiver_address,
+            "amount_mrwk": "1",
+            "nonce": 1,
+            "signature_hex": "00" * 64,
+        },
+    )
+    assert missing_sender.status_code == 400
+    assert missing_sender.json()["detail"] == "from_address is required"
+
+    malformed_nonce = client.post(
+        "/api/v1/transfers",
+        json={
+            "from_address": sender_address,
+            "to_address": receiver_address,
+            "amount_mrwk": "1",
+            "nonce": "not-an-int",
+            "signature_hex": "00" * 64,
+        },
+    )
+    assert malformed_nonce.status_code == 400
+    assert malformed_nonce.json()["detail"] == "nonce must be an integer"
+
+
+def test_wallet_api_malformed_link_and_claim_requests_return_4xx(
+    sqlite_url: str, monkeypatch
+) -> None:
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "test-cookie-secret")
+    create_schema(sqlite_url)
+    _, public_hex, _ = _keypair()
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    client.cookies.set("mrwk_user", _signed_value("alice", "test-cookie-secret"))
+    client.post("/api/v1/wallets/register", json={"public_key_hex": public_hex})
+
+    missing_signature = client.post(
+        "/api/v1/wallets/link-github",
+        json={"address": "mrwk1" + "0" * 40, "nonce": 1},
+    )
+    assert missing_signature.status_code == 400
+    assert missing_signature.json()["detail"] == "signature_hex is required"
+
+    malformed_nonce = client.post(
+        "/api/v1/github/claim",
+        json={
+            "address": "mrwk1" + "0" * 40,
+            "nonce": None,
+            "signature_hex": "00" * 64,
+        },
+    )
+    assert malformed_nonce.status_code == 400
+    assert malformed_nonce.json()["detail"] == "nonce must be an integer"
+
+
 def test_wallet_link_and_claim_require_github_login(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     private_key, public_hex, address = _keypair()
