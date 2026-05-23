@@ -24,6 +24,7 @@
   <form data-action="link-github">
     <label>Wallet address <input name="address" placeholder="mrwk1..." required></label>
     <label>Private key <textarea name="private_key_hex" rows="5" required></textarea></label>
+    <p class="notice">Use the private key for this wallet address; a different key will be rejected.</p>
     <p class="notice" data-link-nonce-status>Transaction number is handled automatically.</p>
     <button type="submit">Sign and link</button>
   </form>
@@ -33,6 +34,7 @@
   <form data-action="claim-github">
     <label>Wallet address <input name="address" placeholder="mrwk1..." required></label>
     <label>Private key <textarea name="private_key_hex" rows="5" required></textarea></label>
+    <p class="notice">Claim works only after this GitHub account is linked to the wallet.</p>
     <p class="notice" data-claim-nonce-status>Transaction number is handled automatically.</p>
     <button type="submit">Sign and claim</button>
   </form>
