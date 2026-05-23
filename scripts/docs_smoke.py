@@ -9,6 +9,7 @@ REQUIRED = [
     "AGENTS.md",
     "CONTRIBUTING.md",
     "docs/bounty-rules.md",
+    "docs/paid-bounties.md",
     "docs/agents.md",
     "docs/ledger.md",
     "docs/admin-runbook.md",

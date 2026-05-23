@@ -13,8 +13,16 @@
       <strong class="status-pill">{{ bounty.status }}</strong>
     </article>
     <article>
-      <span>Reward</span>
+      <span>Reward per award</span>
       <strong>{{ bounty.reward_mrwk }} MRWK</strong>
+    </article>
+    <article>
+      <span>Awards</span>
+      <strong>{{ bounty.awards_paid }}/{{ bounty.max_awards }} paid</strong>
+    </article>
+    <article>
+      <span>Remaining</span>
+      <strong>{{ bounty.awards_remaining }}</strong>
     </article>
     <article>
       <span>Issue</span>

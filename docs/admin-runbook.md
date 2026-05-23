@@ -5,8 +5,11 @@
 1. Create or choose a GitHub issue.
 2. Decide the MRWK amount using the reference tiers.
 3. Add acceptance text that explains what counts as useful accepted work.
-4. Use `/admin` or `POST /api/v1/bounties` with an admin token.
-5. Add `mrwk:bounty` to the GitHub issue.
+4. Set `max_awards` to the number of separate payouts allowed. Use `1` for
+   a single-award bounty.
+5. Use `/admin` or `POST /api/v1/bounties` with an admin token.
+   Multi-award bounties reserve `reward_mrwk * max_awards`.
+6. Add `mrwk:bounty` to the GitHub issue.
 
 ## Accept Work
 
@@ -15,10 +18,27 @@
 1. Review the submission and test evidence.
 2. Confirm the work matches the bounty acceptance text.
 3. Confirm the labeler is listed in `MERGEWORK_GITHUB_ACCEPTED_LABELERS`.
-4. Confirm the PR body closes the bounty issue, such as `Closes #3`.
+4. Confirm the PR body links the bounty issue. Use `Bounty #3` or `Refs #3`
+   for multi-award bounties; use `Closes #3` only when the bounty issue should
+   close after that PR.
 5. Apply `mrwk:accepted` to the PR.
 6. Confirm the webhook records one ledger payment to the PR author.
-7. Add `mrwk:paid` after the explorer/API shows the proof.
+7. Add `mrwk:paid` to the PR after the explorer/API shows the proof.
+8. Add `mrwk:paid` to the bounty issue only after all awards are exhausted or
+   the bounty is intentionally closed.
+
+To close an open bounty without paying the remaining awards, release the unused
+reserve:
+
+```bash
+curl -X POST https://api.mrwk.ltclab.site/api/v1/bounties/<id>/close \
+  -H "content-type: application/json" \
+  -H "x-mergework-admin-token: $MERGEWORK_ADMIN_TOKEN" \
+  -d '{
+    "reference": "https://github.com/ramimbo/mergework/issues/<issue>#close",
+    "closed_by": "maintainer-login"
+  }'
+```
 
 If the contributor linked a wallet, the payout goes directly to that `mrwk1`
 address. If not, it goes to `github:{login}` and can be claimed later after
@@ -47,15 +67,20 @@ Manual payout checklist:
 1. Verify the public proof and wallet address.
 2. Pay through `POST /api/v1/bounties/{id}/pay`.
 3. Confirm the explorer/API shows the proof.
-4. Add `mrwk:paid`.
+4. Add `mrwk:paid` to the paid comment or submission when possible.
+5. Add `mrwk:paid` to the bounty issue only after all awards are exhausted or
+   the bounty is intentionally closed.
 
 Do not apply `mrwk:accepted` to maintainer-authored bounty issues for payment;
 those issues require the manual payout path.
 
 ### Final Checks
 
-1. Confirm the webhook or admin API records one ledger payment.
+1. Confirm the webhook or admin API records one ledger payment for that award.
 2. Confirm the proof pays the intended contributor account.
+3. Add the paid bounty row to
+   [docs/paid-bounties.md](paid-bounties.md) and
+   [GitHub Discussions #16](https://github.com/ramimbo/mergework/discussions/16).
 
 ## GitHub OAuth
 

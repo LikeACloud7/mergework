@@ -37,16 +37,27 @@ MRWK uses work-based tiers at launch. The project does not publish a fiat peg.
 ## Payout Flow
 
 1. A maintainer posts a bounty and MRWK is reserved from treasury.
+   Multi-award bounties reserve `reward_mrwk * max_awards`.
 2. A contributor submits an issue, PR, docs change, test, or report.
 3. Automated checks may verify objective facts.
 4. For PR submissions, a maintainer applies `mrwk:accepted` to the PR.
 5. For comment or wallet-proof submissions, a maintainer pays through the admin
    payout API.
-6. MergeWork creates one ledger payment and one public proof.
+6. MergeWork creates one ledger payment and one public proof per accepted award.
 
-Webhook replay must not create duplicate payments.
+Webhook replay or duplicate submission URLs must not create duplicate payments.
+Single-award bounties close after one payment. Multi-award bounties stay open
+until `max_awards` accepted submissions are paid.
 
 PR payouts go to a linked `mrwk1` wallet when one exists for the PR author's
 GitHub login. Otherwise, MRWK is held at `github:{login}` until the contributor
 links a wallet and signs a claim. Manual payouts can target a registered
 `mrwk1...` wallet or a `github:{login}` account.
+
+PR bounty submissions should link the bounty issue with `Bounty #<issue>` or
+`Refs #<issue>`. Use a closing reference only when the issue should close after
+that PR.
+
+Paid bounty links are tracked in
+[docs/paid-bounties.md](paid-bounties.md) and the public
+[GitHub discussion](https://github.com/ramimbo/mergework/discussions/16).

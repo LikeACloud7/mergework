@@ -39,6 +39,7 @@ def _admin_bounty_form_data(csrf_token: str | None = None) -> dict[str, str]:
         "issue_url": "https://github.com/ramimbo/mergework/issues/77",
         "title": "Security hardening",
         "reward_mrwk": "10",
+        "max_awards": "1",
         "acceptance": "Maintainer applies mrwk:accepted",
     }
     if csrf_token is not None:
@@ -156,6 +157,73 @@ def test_admin_payout_api_requires_admin_token_not_cookie_auth(
     assert token_auth.json()["to_account"] == wallet_address
     with session_scope(sqlite_url) as session:
         assert get_balance(session, wallet_address) == 25_000_000
+
+
+def test_admin_close_bounty_api_releases_remaining_reserve(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create_schema(sqlite_url)
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=89,
+            issue_url="https://github.com/ramimbo/mergework/issues/89",
+            title="Close stale bounty",
+            reward_mrwk="25",
+            max_awards=2,
+            acceptance="Each accepted submission earns one award.",
+        )
+        bounty_id = bounty.id
+
+    unauthenticated = client.post(f"/api/v1/bounties/{bounty_id}/close", json={})
+    token_auth = client.post(
+        f"/api/v1/bounties/{bounty_id}/close",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json={"reference": "https://github.com/ramimbo/mergework/issues/89#close"},
+    )
+
+    assert unauthenticated.status_code == 401
+    assert token_auth.status_code == 200
+    assert token_auth.json()["status"] == "closed"
+    assert token_auth.json()["released_mrwk"] == "50"
+
+
+def test_admin_bounty_api_accepts_multi_award_count(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+
+    response = client.post(
+        "/api/v1/bounties",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json={
+            "repo": "ramimbo/mergework",
+            "issue_number": 88,
+            "issue_url": "https://github.com/ramimbo/mergework/issues/88",
+            "title": "Multi-award admin bounty",
+            "reward_mrwk": "25",
+            "max_awards": 3,
+            "acceptance": "Each accepted submission earns one award.",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reward_mrwk"] == "25"
+    assert body["reserved_mrwk"] == "75"
+    assert body["max_awards"] == 3
+    assert body["awards_remaining"] == 3
 
 
 def test_amount_parser_rejects_non_finite_values() -> None:

@@ -8,8 +8,9 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 from urllib.parse import urlparse
 
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.engine import CursorResult
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -354,15 +355,21 @@ def create_bounty(
     issue_url: str,
     title: str,
     reward_mrwk: str,
+    max_awards: int = 1,
     acceptance: str,
 ) -> Bounty:
     ensure_genesis(session)
     reward = parse_mrwk_amount(reward_mrwk)
+    if max_awards <= 0:
+        raise LedgerError("max_awards must be positive")
+    if max_awards > 1_000:
+        raise LedgerError("max_awards is too large")
+    reserved = reward * max_awards
     clean_repo = _clean_required_text(repo, "repo", 200)
     clean_issue_url = validate_public_url(issue_url)
     clean_title = _clean_required_text(title, "title", 300)
     clean_acceptance = _clean_required_text(acceptance, "acceptance", 5_000)
-    if get_balance(session, TREASURY_ACCOUNT) < reward:
+    if get_balance(session, TREASURY_ACCOUNT) < reserved:
         raise LedgerError("treasury balance too low")
     bounty = Bounty(
         repo=clean_repo,
@@ -370,7 +377,9 @@ def create_bounty(
         issue_url=clean_issue_url,
         title=clean_title,
         reward_microunits=reward,
-        reserved_microunits=reward,
+        reserved_microunits=reserved,
+        max_awards=max_awards,
+        awards_paid=0,
         status="open",
         acceptance=clean_acceptance,
     )
@@ -381,7 +390,7 @@ def create_bounty(
         entry_type="bounty_reserve",
         from_account=TREASURY_ACCOUNT,
         to_account=reserve_account_for_bounty(bounty.id),
-        amount_microunits=reward,
+        amount_microunits=reserved,
         reference=clean_issue_url,
     )
     return bounty
@@ -536,9 +545,18 @@ def pay_bounty(
     bounty = session.get(Bounty, bounty_id)
     if bounty is None:
         raise LedgerError("bounty not found")
-    if bounty.status == "paid":
+    if bounty.awards_paid >= bounty.max_awards:
         raise LedgerError("bounty already paid")
+    if bounty.status != "open":
+        raise LedgerError("bounty is not open")
     clean_submission_url = validate_public_url(submission_url)
+    existing_submission = session.scalar(
+        select(Submission)
+        .where(Submission.bounty_id == bounty.id, Submission.url == clean_submission_url)
+        .limit(1)
+    )
+    if existing_submission is not None:
+        raise LedgerError("submission already paid")
     reserve_account = reserve_account_for_bounty(bounty.id)
     if get_balance(session, reserve_account) < bounty.reward_microunits:
         raise LedgerError("bounty reserve balance too low")
@@ -546,13 +564,19 @@ def pay_bounty(
         CursorResult[Any],
         session.execute(
             update(Bounty)
-            .where(Bounty.id == bounty.id, Bounty.status != "paid")
-            .values(status="paid")
+            .where(Bounty.id == bounty.id, Bounty.awards_paid < Bounty.max_awards)
+            .values(
+                awards_paid=Bounty.awards_paid + 1,
+                status=case(
+                    (Bounty.awards_paid + 1 >= Bounty.max_awards, "paid"),
+                    else_="open",
+                ),
+            )
         ),
     )
     if claimed.rowcount != 1:
         raise LedgerError("bounty already paid")
-    bounty.status = "paid"
+    session.refresh(bounty)
 
     submission = Submission(
         bounty_id=bounty.id,
@@ -562,7 +586,10 @@ def pay_bounty(
         verifier_result=canonical_json(verifier_result),
     )
     session.add(submission)
-    session.flush()
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        raise LedgerError("submission already paid") from exc
     ledger_entry = add_ledger_entry(
         session,
         entry_type="bounty_payment",
@@ -596,6 +623,46 @@ def pay_bounty(
     session.add(proof)
     session.flush()
     return proof
+
+
+def close_bounty(
+    session: Session,
+    *,
+    bounty_id: int,
+    closed_by: str,
+    reference: str | None = None,
+) -> LedgerEntry | None:
+    ensure_genesis(session)
+    bounty = session.get(Bounty, bounty_id)
+    if bounty is None:
+        raise LedgerError("bounty not found")
+    if bounty.status != "open":
+        raise LedgerError("bounty is not open")
+    _clean_required_text(closed_by, "closed_by", 80)
+    clean_reference = validate_public_url(reference or bounty.issue_url)
+    claimed = cast(
+        CursorResult[Any],
+        session.execute(
+            update(Bounty)
+            .where(Bounty.id == bounty.id, Bounty.status == "open")
+            .values(status="closed")
+        ),
+    )
+    if claimed.rowcount != 1:
+        raise LedgerError("bounty is not open")
+    session.refresh(bounty)
+    reserve_account = reserve_account_for_bounty(bounty.id)
+    release_amount = get_balance(session, reserve_account)
+    if release_amount <= 0:
+        return None
+    return add_ledger_entry(
+        session,
+        entry_type="bounty_release",
+        from_account=reserve_account,
+        to_account=TREASURY_ACCOUNT,
+        amount_microunits=release_amount,
+        reference=clean_reference,
+    )
 
 
 def verify_supply_conservation(session: Session) -> bool:

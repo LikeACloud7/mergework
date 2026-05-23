@@ -13,9 +13,10 @@ designed for future public snapshots, bridges, and onchain claims.
 ## Bounty Reserve Model
 
 Posting a bounty creates a reserve ledger entry from treasury to
-`reserve:bounty:{id}`. Accepted payout moves MRWK from that reserve account to a
-linked `mrwk1` wallet, or to a temporary `github:{login}` account when the
-contributor has not linked a wallet yet.
+`reserve:bounty:{id}`. Multi-award bounties reserve the per-award reward times
+the maximum award count. Each accepted payout moves one award from that reserve
+account to a linked `mrwk1` wallet, or to a temporary `github:{login}` account
+when the contributor has not linked a wallet yet.
 
 This keeps treasury balance useful: it shows MRWK not already reserved for open
 bounties.

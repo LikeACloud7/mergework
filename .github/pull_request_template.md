@@ -11,4 +11,4 @@
 
 ## MRWK
 
-Related bounty or issue:
+Related bounty or issue (`Bounty #N` or `Refs #N` for multi-award bounties):

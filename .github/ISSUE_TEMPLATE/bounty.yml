@@ -13,8 +13,15 @@ body:
   - type: input
     id: reward
     attributes:
-      label: Proposed MRWK
+      label: Proposed MRWK per award
       placeholder: "250"
+    validations:
+      required: true
+  - type: input
+    id: max_awards
+    attributes:
+      label: Max awards
+      placeholder: "1"
     validations:
       required: true
   - type: textarea

@@ -6,7 +6,12 @@
   {% for bounty in bounties %}
   <article>
     <h2><a href="/bounties/{{ bounty.id }}">{{ bounty.title }}</a></h2>
-    <p>{{ bounty.repo }} #{{ bounty.issue_number }} · {{ bounty.reward_mrwk }} MRWK · {{ bounty.status }}</p>
+    <p>
+      {{ bounty.repo }} #{{ bounty.issue_number }} ·
+      {{ bounty.reward_mrwk }} MRWK per award ·
+      {{ bounty.awards_remaining }}/{{ bounty.max_awards }} awards open ·
+      {{ bounty.status }}
+    </p>
     <p>{{ bounty.acceptance }}</p>
   </article>
   {% else %}

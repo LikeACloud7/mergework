@@ -73,5 +73,7 @@ Tools:
 - Read `AGENTS.md` before starting.
 - Use focused branches and focused PRs.
 - Run tests, lint, and type checks before submitting.
+- Link bounty PRs with `Bounty #<issue>` or `Refs #<issue>` unless the bounty
+  asks for a closing reference.
 - Do not put private security details in public issues, PRs, or ledger metadata.
 - Do not claim acceptance until a maintainer applies `mrwk:accepted`.

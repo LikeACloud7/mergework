@@ -46,6 +46,8 @@ class Bounty(Base):
     title: Mapped[str] = mapped_column(String(300))
     reward_microunits: Mapped[int] = mapped_column(Integer)
     reserved_microunits: Mapped[int] = mapped_column(Integer, default=0)
+    max_awards: Mapped[int] = mapped_column(Integer, default=1)
+    awards_paid: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(40), default="open", index=True)
     acceptance: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(default=utc_now)
@@ -54,6 +56,7 @@ class Bounty(Base):
 
 class Submission(Base):
     __tablename__ = "submissions"
+    __table_args__ = (UniqueConstraint("bounty_id", "url", name="uq_submission_bounty_url"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     bounty_id: Mapped[int] = mapped_column(ForeignKey("bounties.id"), index=True)

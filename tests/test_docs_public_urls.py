@@ -10,3 +10,5 @@ def test_readme_lists_live_ltclab_urls() -> None:
     assert "https://mrwk.ltclab.site" in readme
     assert "https://api.mrwk.ltclab.site" in readme
     assert "https://mcp.mrwk.ltclab.site" in readme
+    assert "https://github.com/ramimbo/mergework/discussions/16" in readme
+    assert "docs/paid-bounties.md" in readme

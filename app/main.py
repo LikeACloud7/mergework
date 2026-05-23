@@ -23,6 +23,7 @@ from app.ledger.service import (
     GENESIS_SUPPLY_MICRO,
     TREASURY_ACCOUNT,
     LedgerError,
+    close_bounty,
     create_bounty,
     ensure_genesis,
     format_mrwk,
@@ -62,6 +63,9 @@ SECURITY_HEADERS = {
 
 
 def bounty_to_dict(bounty: Bounty) -> dict[str, Any]:
+    awards_remaining = max(0, bounty.max_awards - bounty.awards_paid)
+    if bounty.status != "open":
+        awards_remaining = 0
     return {
         "id": bounty.id,
         "repo": bounty.repo,
@@ -70,6 +74,9 @@ def bounty_to_dict(bounty: Bounty) -> dict[str, Any]:
         "title": bounty.title,
         "reward_mrwk": format_mrwk(bounty.reward_microunits),
         "reserved_mrwk": format_mrwk(bounty.reserved_microunits),
+        "max_awards": bounty.max_awards,
+        "awards_paid": bounty.awards_paid,
+        "awards_remaining": awards_remaining,
         "status": bounty.status,
         "acceptance": bounty.acceptance,
         "created_at": bounty.created_at.isoformat(),
@@ -210,6 +217,16 @@ def _required_int(data: dict[str, Any], field: str) -> int:
         raise HTTPException(status_code=400, detail=f"{field} must be an integer") from exc
 
 
+def _optional_int(data: dict[str, Any], field: str, default: int) -> int:
+    value = data.get(field, default)
+    if value is None or isinstance(value, bool):
+        raise HTTPException(status_code=400, detail=f"{field} must be an integer")
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"{field} must be an integer") from exc
+
+
 def _csrf_token(action: str, login: str, secret: str) -> str:
     return _signed_value(f"{action}:{login}", secret)
 
@@ -325,6 +342,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                     issue_url=data["issue_url"],
                     title=data["title"],
                     reward_mrwk=str(data["reward_mrwk"]),
+                    max_awards=_optional_int(data, "max_awards", 1),
                     acceptance=data["acceptance"],
                 )
             except LedgerError as exc:
@@ -382,6 +400,32 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 "bounty_id": bounty_id,
                 "to_account": to_account,
                 "proof_hash": proof.hash,
+            }
+
+    @app.post("/api/v1/bounties/{bounty_id}/close")
+    async def api_close_bounty(
+        bounty_id: int,
+        request: Request,
+        admin_login: str = Depends(require_admin_token),
+    ) -> dict[str, Any]:
+        data = await _json_object(request)
+        reference = _optional_str(data, "reference") if data.get("reference") is not None else None
+        closed_by = _optional_str(data, "closed_by", admin_login)
+        with session_scope(db_url) as session:
+            try:
+                release = close_bounty(
+                    session,
+                    bounty_id=bounty_id,
+                    closed_by=closed_by,
+                    reference=reference,
+                )
+            except LedgerError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            return {
+                "status": "closed",
+                "bounty_id": bounty_id,
+                "released_mrwk": format_mrwk(release.amount_microunits) if release else "0",
+                "ledger_sequence": release.sequence if release else None,
             }
 
     @app.get("/api/v1/accounts/{account:path}")
@@ -848,6 +892,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         issue_url: str = Form(...),
         title: str = Form(...),
         reward_mrwk: str = Form(...),
+        max_awards: int = Form(1),
         acceptance: str = Form(...),
         csrf_token: str | None = Form(None),
         admin_login: str = Depends(require_admin),
@@ -869,6 +914,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                     issue_url=issue_url,
                     title=title,
                     reward_mrwk=reward_mrwk,
+                    max_awards=max_awards,
                     acceptance=acceptance,
                 )
             except LedgerError as exc:

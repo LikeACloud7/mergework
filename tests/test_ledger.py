@@ -2,19 +2,21 @@ from __future__ import annotations
 
 import pytest
 
-from app.db import create_schema, session_scope
+from app.db import create_schema, make_engine, session_scope
 from app.ledger.service import (
     GENESIS_SUPPLY_MICRO,
     TREASURY_ACCOUNT,
     LedgerError,
+    close_bounty,
     create_bounty,
     ensure_genesis,
     get_balance,
     pay_bounty,
+    reserve_account_for_bounty,
     verify_hash_chain,
     verify_supply_conservation,
 )
-from app.models import LedgerEntry
+from app.models import Bounty, LedgerEntry
 
 
 def test_genesis_creates_fixed_supply_once(sqlite_url: str) -> None:
@@ -61,6 +63,170 @@ def test_bounty_reserve_and_payout_conserve_supply(sqlite_url: str) -> None:
         assert verify_supply_conservation(session) is True
 
 
+def test_multi_award_bounty_pays_distinct_submissions_until_exhausted(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=10,
+            issue_url="https://github.com/ramimbo/mergework/issues/10",
+            title="Review multiple PRs",
+            reward_mrwk="25",
+            max_awards=3,
+            acceptance="Each accepted PR review can earn one award.",
+        )
+        reserve_account = reserve_account_for_bounty(bounty.id)
+
+        assert bounty.reward_microunits == 25_000_000
+        assert bounty.reserved_microunits == 75_000_000
+        assert bounty.max_awards == 3
+        assert bounty.awards_paid == 0
+        assert get_balance(session, reserve_account) == 75_000_000
+
+        pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/10",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        assert bounty.status == "open"
+        assert bounty.awards_paid == 1
+        assert get_balance(session, reserve_account) == 50_000_000
+
+        pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:bob",
+            submission_url="https://github.com/ramimbo/mergework/pull/11",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:carol",
+            submission_url="https://github.com/ramimbo/mergework/pull/12",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+
+        assert bounty.status == "paid"
+        assert bounty.awards_paid == 3
+        assert get_balance(session, reserve_account) == 0
+        assert get_balance(session, "github:alice") == 25_000_000
+        assert get_balance(session, "github:bob") == 25_000_000
+        assert get_balance(session, "github:carol") == 25_000_000
+        with pytest.raises(LedgerError, match="already paid"):
+            pay_bounty(
+                session,
+                bounty_id=bounty.id,
+                to_account="github:dana",
+                submission_url="https://github.com/ramimbo/mergework/pull/13",
+                accepted_by="maintainer",
+                verifier_result={"label": "mrwk:accepted"},
+            )
+        assert verify_hash_chain(session) is True
+        assert verify_supply_conservation(session) is True
+
+
+def test_multi_award_bounty_rejects_duplicate_submission_url(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=11,
+            issue_url="https://github.com/ramimbo/mergework/issues/11",
+            title="Repeated proof guard",
+            reward_mrwk="10",
+            max_awards=2,
+            acceptance="Each distinct accepted proof can earn one award.",
+        )
+        pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/11",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+
+        with pytest.raises(LedgerError, match="submission already paid"):
+            pay_bounty(
+                session,
+                bounty_id=bounty.id,
+                to_account="github:bob",
+                submission_url="https://github.com/ramimbo/mergework/pull/11",
+                accepted_by="maintainer",
+                verifier_result={"label": "mrwk:accepted", "delivery": "second"},
+            )
+
+        assert bounty.status == "open"
+        assert bounty.awards_paid == 1
+        assert get_balance(session, "github:bob") == 0
+
+
+def test_close_bounty_releases_unpaid_awards(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=13,
+            issue_url="https://github.com/ramimbo/mergework/issues/13",
+            title="Close unused awards",
+            reward_mrwk="10",
+            max_awards=3,
+            acceptance="Each accepted proof can earn one award.",
+        )
+        reserve_account = reserve_account_for_bounty(bounty.id)
+        pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/13",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+
+        release = close_bounty(
+            session,
+            bounty_id=bounty.id,
+            closed_by="maintainer",
+            reference="https://github.com/ramimbo/mergework/issues/13#close",
+        )
+
+        assert release is not None
+        assert release.entry_type == "bounty_release"
+        assert release.amount_microunits == 20_000_000
+        assert bounty.status == "closed"
+        assert bounty.awards_paid == 1
+        assert get_balance(session, reserve_account) == 0
+        assert get_balance(session, "github:alice") == 10_000_000
+        with pytest.raises(LedgerError, match="bounty is not open"):
+            pay_bounty(
+                session,
+                bounty_id=bounty.id,
+                to_account="github:bob",
+                submission_url="https://github.com/ramimbo/mergework/pull/14",
+                accepted_by="maintainer",
+                verifier_result={"label": "mrwk:accepted"},
+            )
+        assert verify_hash_chain(session) is True
+        assert verify_supply_conservation(session) is True
+
+
 def test_payout_is_idempotent_for_same_bounty(sqlite_url: str) -> None:
     create_schema(sqlite_url)
 
@@ -93,6 +259,67 @@ def test_payout_is_idempotent_for_same_bounty(sqlite_url: str) -> None:
                 accepted_by="maintainer",
                 verifier_result={"label": "mrwk:accepted"},
             )
+
+
+def test_bounty_max_awards_must_be_positive(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        with pytest.raises(LedgerError, match="max_awards must be positive"):
+            create_bounty(
+                session,
+                repo="ramimbo/mergework",
+                issue_number=12,
+                issue_url="https://github.com/ramimbo/mergework/issues/12",
+                title="Invalid award count",
+                reward_mrwk="10",
+                max_awards=0,
+                acceptance="Accepted label",
+            )
+
+
+def test_create_schema_migrates_existing_bounty_award_columns(sqlite_url: str) -> None:
+    engine = make_engine(sqlite_url)
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE bounties (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repo VARCHAR(200) NOT NULL,
+                issue_number INTEGER NOT NULL,
+                issue_url VARCHAR(500) NOT NULL,
+                title VARCHAR(300) NOT NULL,
+                reward_microunits INTEGER NOT NULL,
+                reserved_microunits INTEGER NOT NULL,
+                status VARCHAR(40) NOT NULL,
+                acceptance TEXT NOT NULL,
+                created_at DATETIME NOT NULL
+            )
+            """
+        )
+        connection.exec_driver_sql(
+            """
+            INSERT INTO bounties (
+                repo, issue_number, issue_url, title, reward_microunits,
+                reserved_microunits, status, acceptance, created_at
+            ) VALUES (
+                'ramimbo/mergework', 1,
+                'https://github.com/ramimbo/mergework/issues/1',
+                'Old paid bounty', 25000000, 25000000, 'paid',
+                'Accepted label', '2026-05-23 00:00:00'
+            )
+            """
+        )
+    engine.dispose()
+
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        bounty = session.get(Bounty, 1)
+        assert bounty is not None
+        assert bounty.max_awards == 1
+        assert bounty.awards_paid == 1
 
 
 def test_hash_chain_detects_tampering(sqlite_url: str) -> None:

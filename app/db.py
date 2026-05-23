@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -40,7 +40,32 @@ def make_engine(database_url: str) -> Engine:
 def create_schema(database_url: str) -> None:
     engine = make_engine(database_url)
     Base.metadata.create_all(engine)
+    _migrate_schema(engine)
     engine.dispose()
+
+
+def _migrate_schema(engine: Engine) -> None:
+    inspector = inspect(engine)
+    if "bounties" not in inspector.get_table_names():
+        return
+    bounty_columns = {column["name"] for column in inspector.get_columns("bounties")}
+    with engine.begin() as connection:
+        if "max_awards" not in bounty_columns:
+            connection.execute(
+                text("ALTER TABLE bounties ADD COLUMN max_awards INTEGER NOT NULL DEFAULT 1")
+            )
+        if "awards_paid" not in bounty_columns:
+            connection.execute(
+                text("ALTER TABLE bounties ADD COLUMN awards_paid INTEGER NOT NULL DEFAULT 0")
+            )
+            connection.execute(text("UPDATE bounties SET awards_paid = 1 WHERE status = 'paid'"))
+        if "submissions" in inspector.get_table_names():
+            connection.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_submission_bounty_url "
+                    "ON submissions (bounty_id, url)"
+                )
+            )
 
 
 @contextmanager

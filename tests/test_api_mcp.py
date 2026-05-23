@@ -32,6 +32,32 @@ def test_health_status_and_bounty_api(sqlite_url: str) -> None:
     assert bounties[0]["title"] == "First bounty"
 
 
+def test_bounty_api_reports_multi_award_capacity(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=11,
+            issue_url="https://github.com/ramimbo/mergework/issues/11",
+            title="Multi-award bounty",
+            reward_mrwk="25",
+            max_awards=4,
+            acceptance="Each accepted submission earns one award.",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    bounty = client.get("/api/v1/bounties").json()[0]
+
+    assert bounty["reward_mrwk"] == "25"
+    assert bounty["reserved_mrwk"] == "100"
+    assert bounty["max_awards"] == 4
+    assert bounty["awards_paid"] == 0
+    assert bounty["awards_remaining"] == 4
+
+
 def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
@@ -81,6 +107,8 @@ def test_docs_page_lists_live_ltclab_urls(sqlite_url: str) -> None:
     assert "https://mrwk.ltclab.site" in docs
     assert "https://api.mrwk.ltclab.site" in docs
     assert "https://mcp.mrwk.ltclab.site" in docs
+    assert "https://github.com/ramimbo/mergework/discussions/16" in docs
+    assert "docs/paid-bounties.md" in docs
     assert "OpenAPI docs" in docs
     assert "SwaggerUIBundle" in api_docs
 

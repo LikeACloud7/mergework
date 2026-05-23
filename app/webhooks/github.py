@@ -16,8 +16,8 @@ from app.ledger.service import (
 from app.models import WebhookEvent
 
 ACCEPTED_LABEL = "mrwk:accepted"
-CLOSING_REFERENCE_RE = re.compile(
-    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+"
+LINKED_ISSUE_RE = re.compile(
+    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs?|references?|bounty)\s+"
     r"(?:(?P<repo>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#(?P<repo_number>\d+)|#(?P<number>\d+))",
     re.IGNORECASE,
 )
@@ -52,14 +52,14 @@ def _record_event(
         )
 
 
-def _closing_issue_numbers(body: str, current_repo: str) -> list[int]:
+def _linked_issue_numbers(body: str, current_repo: str) -> list[int]:
     numbers: list[int] = []
-    for match in CLOSING_REFERENCE_RE.finditer(body):
+    for match in LINKED_ISSUE_RE.finditer(body):
         repo = match.group("repo")
         if repo is not None and repo.lower() != current_repo.lower():
             continue
         number = match.group("repo_number") or match.group("number")
-        if number is not None:
+        if number is not None and int(number) not in numbers:
             numbers.append(int(number))
     return numbers
 
@@ -109,7 +109,7 @@ def _handle_accepted_issue_label(
     bounty_issue_numbers: list[int] = []
     submission_url = labeled_item.get("html_url", "")
     if event_type == "pull_request":
-        bounty_issue_numbers = _closing_issue_numbers(str(pull_request.get("body") or ""), repo)
+        bounty_issue_numbers = _linked_issue_numbers(str(pull_request.get("body") or ""), repo)
     elif isinstance(issue_number, int):
         bounty_issue_numbers = [issue_number]
     if not bounty_issue_numbers:
