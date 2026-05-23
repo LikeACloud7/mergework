@@ -59,3 +59,19 @@ def test_deploy_readiness_requires_https_oauth_and_allowed_labelers() -> None:
     assert "MERGEWORK_PUBLIC_BASE_URL must use https" in errors
     assert "MERGEWORK_GITHUB_OAUTH_CLIENT_ID is required" in errors
     assert "MERGEWORK_GITHUB_ACCEPTED_LABELERS must list maintainer logins" in errors
+
+
+def test_deploy_readiness_rejects_public_base_url_path_query_or_fragment() -> None:
+    path_errors = validate_deploy_settings(
+        _settings(public_base_url="https://mrwk.example.test/app")
+    )
+    query_errors = validate_deploy_settings(
+        _settings(public_base_url="https://mrwk.example.test?next=/admin")
+    )
+    fragment_errors = validate_deploy_settings(
+        _settings(public_base_url="https://mrwk.example.test#callback")
+    )
+
+    assert "MERGEWORK_PUBLIC_BASE_URL must be an origin without a path" in path_errors
+    assert "MERGEWORK_PUBLIC_BASE_URL must not include query or fragment" in query_errors
+    assert "MERGEWORK_PUBLIC_BASE_URL must not include query or fragment" in fragment_errors
