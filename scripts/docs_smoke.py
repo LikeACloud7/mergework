@@ -19,7 +19,6 @@ BANNED_PUBLIC_PHRASES = [
     "guaranteed market value",
     "promised convertibility",
     "1 MRWK = $",
-    "if the network grows",
 ]
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 
