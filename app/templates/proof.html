@@ -5,7 +5,26 @@
   <p class="eyebrow">Proof</p>
   <h1>Accepted work proof</h1>
   <p class="lead">{{ proof.amount_mrwk }} MRWK paid to <a href="/accounts/{{ proof.to_account }}">{{ proof.to_account }}</a>.</p>
+  <div class="meta-grid">
+    <article>
+      <span>Proof hash</span>
+      <code class="hash">{{ proof_hash }}</code>
+    </article>
+    <article>
+      <span>Ledger hash</span>
+      <code class="hash">{{ proof.ledger_hash }}</code>
+    </article>
+  </div>
   <dl>
+    <dt>Issue</dt>
+    {% set issue_url = safe_public_url("https://github.com/" ~ proof.repo ~ "/issues/" ~ proof.issue_number) %}
+    <dd>{% if issue_url %}<a href="{{ issue_url }}">{{ proof.repo }} #{{ proof.issue_number }}</a>{% else %}{{ proof.repo }} #{{ proof.issue_number }}{% endif %}</dd>
+    <dt>Accepted by</dt>
+    <dd>{{ proof.accepted_by }}</dd>
+    <dt>Paid to</dt>
+    <dd><a href="/accounts/{{ proof.to_account }}">{{ proof.to_account }}</a></dd>
+    <dt>Amount</dt>
+    <dd>{{ proof.amount_mrwk }} MRWK</dd>
     <dt>Ledger entry</dt>
     <dd><a href="/ledger/{{ proof.ledger_sequence }}">#{{ proof.ledger_sequence }}</a></dd>
     <dt>Ledger hash</dt>

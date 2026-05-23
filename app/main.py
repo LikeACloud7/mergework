@@ -703,7 +703,9 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.get("/proofs/{proof_hash}", response_class=HTMLResponse)
     def proof_page(request: Request, proof_hash: str) -> HTMLResponse:
-        return templates.TemplateResponse(request, "proof.html", {"proof": api_proof(proof_hash)})
+        return templates.TemplateResponse(
+            request, "proof.html", {"proof": api_proof(proof_hash), "proof_hash": proof_hash}
+        )
 
     @app.get("/docs", response_class=HTMLResponse)
     def docs_page(request: Request) -> HTMLResponse:
