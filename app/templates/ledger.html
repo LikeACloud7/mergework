@@ -11,6 +11,7 @@
   "wallet_transfer": "Wallet transfer",
   "genesis": "Genesis"
 } %}
+<div class="table-scroll ledger-table-wrap">
 <table class="ledger-table">
   <thead><tr><th>Entry</th><th>Type</th><th>From</th><th>To</th><th>Amount</th><th>Reference</th><th>Proof</th><th>Entry hash</th></tr></thead>
   <tbody>
@@ -18,8 +19,8 @@
     {% set type_class = entry.type | replace("_", "-") %}
     {% set reference_url = safe_public_url(entry.reference) %}
     <tr class="ledger-row ledger-row--{{ type_class }}">
-      <td><a href="/ledger/{{ entry.sequence }}">#{{ entry.sequence }}</a></td>
-      <td>
+      <td data-label="Entry"><a href="/ledger/{{ entry.sequence }}">#{{ entry.sequence }}</a></td>
+      <td data-label="Type">
         <span class="ledger-type ledger-type--{{ type_class }}">{{ type_labels.get(entry.type, entry.type | replace("_", " ") | title) }}</span>
         {% if entry.type == "bounty_reserve" %}
         <span class="ledger-scan-note">Funds reserved</span>
@@ -29,10 +30,10 @@
         <span class="ledger-scan-note">Unused reserve released</span>
         {% endif %}
       </td>
-      <td>{% if entry.from %}<a href="/accounts/{{ entry.from }}">{{ entry.from }}</a>{% else %}-{% endif %}</td>
-      <td>{% if entry.to %}<a href="/accounts/{{ entry.to }}">{{ entry.to }}</a>{% else %}-{% endif %}</td>
-      <td>{{ entry.amount_mrwk }} MRWK</td>
-      <td class="reference-cell">
+      <td data-label="From">{% if entry.from %}<a href="/accounts/{{ entry.from }}">{{ entry.from }}</a>{% else %}-{% endif %}</td>
+      <td data-label="To">{% if entry.to %}<a href="/accounts/{{ entry.to }}">{{ entry.to }}</a>{% else %}-{% endif %}</td>
+      <td data-label="Amount">{{ entry.amount_mrwk }} MRWK</td>
+      <td class="reference-cell" data-label="Reference">
         {% if reference_url %}
           <a href="{{ reference_url }}">{{ entry.reference | replace("https://github.com/", "") }}</a>
         {% elif entry.reference %}
@@ -41,10 +42,11 @@
           -
         {% endif %}
       </td>
-      <td>{% if entry.proof_hash %}<a href="/proofs/{{ entry.proof_hash }}">Payment proof</a>{% else %}-{% endif %}</td>
-      <td><code class="hash">{{ entry.entry_hash[:16] }}</code></td>
+      <td data-label="Proof">{% if entry.proof_hash %}<a href="/proofs/{{ entry.proof_hash }}">Payment proof</a>{% else %}-{% endif %}</td>
+      <td data-label="Entry hash"><code class="hash">{{ entry.entry_hash[:16] }}</code></td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endblock %}

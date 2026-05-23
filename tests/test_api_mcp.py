@@ -287,6 +287,38 @@ def test_ledger_page_highlights_bounty_payment_and_release(sqlite_url: str) -> N
     assert f"/proofs/{proof.hash}" in ledger
 
 
+def test_ledger_page_has_responsive_table_structure(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=33,
+            issue_url="https://github.com/ramimbo/mergework/issues/33",
+            title="Responsive ledger",
+            reward_mrwk="25",
+            acceptance="Ledger remains readable on narrow screens.",
+        )
+        pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:long-contributor-name",
+            submission_url=("https://github.com/ramimbo/mergework/pull/33#issuecomment-1234567890"),
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    ledger = client.get("/ledger").text
+
+    assert 'class="table-scroll ledger-table-wrap"' in ledger
+    assert 'data-label="Entry"' in ledger
+    assert 'data-label="Reference"' in ledger
+    assert 'data-label="Proof"' in ledger
+
+
 def test_mcp_can_register_and_fetch_wallet(sqlite_url: str) -> None:
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 

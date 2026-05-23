@@ -69,6 +69,13 @@ table { width: 100%; border-collapse: collapse; background: var(--panel); }
 th, td { border-bottom: 1px solid var(--line); padding: 10px; text-align: left; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 code.hash { overflow-wrap: anywhere; }
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.ledger-table {
+  min-width: 920px;
+}
 .ledger-table td { vertical-align: top; }
 .ledger-row--bounty-reserve,
 .ledger-row--bounty-payment,
@@ -190,4 +197,54 @@ button { cursor: pointer; color: white; background: var(--accent); border-color:
   header { align-items: flex-start; flex-direction: column; }
   .detail dl { grid-template-columns: 1fr; }
   .bounty-summary { grid-template-columns: 1fr; }
+  .ledger-table-wrap {
+    overflow-x: visible;
+  }
+  .ledger-table {
+    min-width: 0;
+    border-collapse: separate;
+    border-spacing: 0 12px;
+    background: transparent;
+  }
+  .ledger-table thead {
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    position: absolute;
+    width: 1px;
+    clip: rect(0 0 0 0);
+  }
+  .ledger-table,
+  .ledger-table tbody,
+  .ledger-table tr,
+  .ledger-table td {
+    display: block;
+    width: 100%;
+  }
+  .ledger-table tr {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    overflow: hidden;
+  }
+  .ledger-table td {
+    display: grid;
+    grid-template-columns: minmax(86px, 34%) minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    overflow-wrap: anywhere;
+  }
+  .ledger-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-weight: 700;
+  }
+  .ledger-row--bounty-payment td:first-child,
+  .ledger-row--bounty-release td:first-child,
+  .ledger-row--bounty-reserve td:first-child {
+    border-left-width: 6px;
+  }
+  .reference-cell {
+    max-width: none;
+  }
 }
