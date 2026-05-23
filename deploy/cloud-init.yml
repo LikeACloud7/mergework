@@ -15,6 +15,7 @@ runcmd:
   - apt-get update
   - sh -c "apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin || apt-get install -y docker.io docker-compose-v2"
   - mkdir -p /srv/mergework/data /srv/mergework/backups
+  - chown -R 10001:10001 /srv/mergework/data
   - ufw allow OpenSSH
   - ufw allow 80/tcp
   - ufw allow 443/tcp

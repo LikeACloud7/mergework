@@ -10,7 +10,7 @@ COPY app ./app
 RUN python -m pip install --upgrade pip \
     && python -m pip install .
 
-RUN useradd --create-home --shell /usr/sbin/nologin mergework \
+RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin mergework \
     && mkdir -p /srv/mergework/data \
     && chown -R mergework:mergework /srv/mergework
 

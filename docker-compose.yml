@@ -5,7 +5,7 @@ services:
     env_file:
       - .env
     volumes:
-      - mergework-data:/srv/mergework/data
+      - /srv/mergework/data:/srv/mergework/data
     expose:
       - "8000"
 
@@ -26,8 +26,8 @@ services:
     image: alpine:3.20
     restart: unless-stopped
     volumes:
-      - mergework-data:/data:ro
-      - ./backups:/backups
+      - /srv/mergework/data:/data:ro
+      - /srv/mergework/backups:/backups
     command:
       - /bin/sh
       - -c
@@ -42,6 +42,5 @@ services:
         done
 
 volumes:
-  mergework-data:
   caddy-data:
   caddy-config:
