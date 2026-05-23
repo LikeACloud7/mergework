@@ -1,0 +1,175 @@
+from __future__ import annotations
+
+import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from app.db import create_schema, session_scope
+from app.ledger.service import (
+    TREASURY_ACCOUNT,
+    LedgerError,
+    add_ledger_entry,
+    ensure_genesis,
+    get_balance,
+    link_wallet_to_github,
+    register_wallet,
+    submit_github_claim,
+    submit_wallet_transfer,
+    wallet_claim_payload,
+    wallet_link_payload,
+    wallet_transfer_payload,
+)
+from app.wallets import address_from_public_key_hex, canonical_wallet_json
+
+
+def _keypair() -> tuple[Ed25519PrivateKey, str, str]:
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key()
+    public_hex = public_key.public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    ).hex()
+    address = address_from_public_key_hex(public_hex)
+    return private_key, public_hex, address
+
+
+def _sign(private_key: Ed25519PrivateKey, payload: dict[str, object]) -> str:
+    return private_key.sign(canonical_wallet_json(payload).encode()).hex()
+
+
+def test_wallet_address_is_derived_from_public_key() -> None:
+    _, public_hex, address = _keypair()
+
+    assert address.startswith("mrwk1")
+    assert len(address) == 45
+    assert address_from_public_key_hex(public_hex) == address
+
+
+def test_signed_wallet_transfer_moves_balance_and_rejects_replay(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    sender_key, sender_public, sender_address = _keypair()
+    _, receiver_public, receiver_address = _keypair()
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        register_wallet(session, public_key_hex=sender_public, label="Sender")
+        register_wallet(session, public_key_hex=receiver_public, label="Receiver")
+        add_ledger_entry(
+            session,
+            entry_type="test_funding",
+            from_account=TREASURY_ACCOUNT,
+            to_account=sender_address,
+            amount_microunits=10_000_000,
+            reference="test-funding",
+        )
+
+        payload = wallet_transfer_payload(
+            from_address=sender_address,
+            to_address=receiver_address,
+            amount_microunits=2_500_000,
+            nonce=1,
+            memo="first transfer",
+        )
+        signature = _sign(sender_key, payload)
+        transfer = submit_wallet_transfer(
+            session,
+            from_address=sender_address,
+            to_address=receiver_address,
+            amount_mrwk="2.5",
+            nonce=1,
+            memo="first transfer",
+            signature_hex=signature,
+        )
+
+        assert transfer.hash
+        assert transfer.ledger_sequence == 3
+        assert get_balance(session, sender_address) == 7_500_000
+        assert get_balance(session, receiver_address) == 2_500_000
+
+        with pytest.raises(LedgerError, match="invalid nonce"):
+            submit_wallet_transfer(
+                session,
+                from_address=sender_address,
+                to_address=receiver_address,
+                amount_mrwk="2.5",
+                nonce=1,
+                memo="first transfer",
+                signature_hex=signature,
+            )
+
+
+def test_wallet_transfer_rejects_bad_signature(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    sender_key, sender_public, sender_address = _keypair()
+    _, receiver_public, receiver_address = _keypair()
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        register_wallet(session, public_key_hex=sender_public, label=None)
+        register_wallet(session, public_key_hex=receiver_public, label=None)
+        add_ledger_entry(
+            session,
+            entry_type="test_funding",
+            from_account=TREASURY_ACCOUNT,
+            to_account=sender_address,
+            amount_microunits=10_000_000,
+            reference="test-funding",
+        )
+
+        wrong_payload = wallet_transfer_payload(
+            from_address=sender_address,
+            to_address=receiver_address,
+            amount_microunits=1_000_000,
+            nonce=2,
+            memo="tampered",
+        )
+        bad_signature = _sign(sender_key, wrong_payload)
+
+        with pytest.raises(LedgerError, match="invalid signature"):
+            submit_wallet_transfer(
+                session,
+                from_address=sender_address,
+                to_address=receiver_address,
+                amount_mrwk="1",
+                nonce=1,
+                memo="tampered",
+                signature_hex=bad_signature,
+            )
+
+
+def test_linked_wallet_can_claim_existing_github_balance(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    private_key, public_hex, address = _keypair()
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        register_wallet(session, public_key_hex=public_hex, label="Alice")
+        add_ledger_entry(
+            session,
+            entry_type="legacy_payment",
+            from_account=TREASURY_ACCOUNT,
+            to_account="github:alice",
+            amount_microunits=25_000_000,
+            reference="legacy",
+        )
+
+        link_payload = wallet_link_payload(address=address, github_login="alice", nonce=1)
+        link_wallet_to_github(
+            session,
+            address=address,
+            github_login="alice",
+            nonce=1,
+            signature_hex=_sign(private_key, link_payload),
+        )
+        claim_payload = wallet_claim_payload(address=address, github_login="alice", nonce=2)
+        entry = submit_github_claim(
+            session,
+            address=address,
+            github_login="alice",
+            nonce=2,
+            signature_hex=_sign(private_key, claim_payload),
+        )
+
+        assert entry.entry_type == "github_claim"
+        assert get_balance(session, "github:alice") == 0
+        assert get_balance(session, address) == 25_000_000

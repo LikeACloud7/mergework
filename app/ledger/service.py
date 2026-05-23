@@ -9,7 +9,24 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Account, Bounty, LedgerEntry, Proof, Submission, utc_now
+from app.models import (
+    Account,
+    Bounty,
+    LedgerEntry,
+    Proof,
+    Submission,
+    Wallet,
+    WalletTransfer,
+    utc_now,
+)
+from app.wallets import (
+    WalletError,
+    address_from_public_key_hex,
+    canonical_wallet_json,
+    normalize_signature_hex,
+    normalize_wallet_address,
+    verify_wallet_signature,
+)
 
 TREASURY_ACCOUNT = "treasury:mrwk"
 MICRO_UNITS = 1_000_000
@@ -48,6 +65,49 @@ def reserve_account_for_bounty(bounty_id: int) -> str:
     return f"reserve:bounty:{bounty_id}"
 
 
+def _normalize_github_login(github_login: str) -> str:
+    normalized = github_login.strip().lower()
+    if not normalized:
+        raise LedgerError("github login is required")
+    return normalized
+
+
+def wallet_transfer_payload(
+    *,
+    from_address: str,
+    to_address: str,
+    amount_microunits: int,
+    nonce: int,
+    memo: str,
+) -> dict[str, object]:
+    return {
+        "type": "mrwk_transfer_v1",
+        "from_address": normalize_wallet_address(from_address),
+        "to_address": normalize_wallet_address(to_address),
+        "amount_microunits": amount_microunits,
+        "nonce": nonce,
+        "memo": memo,
+    }
+
+
+def wallet_link_payload(*, address: str, github_login: str, nonce: int) -> dict[str, object]:
+    return {
+        "type": "mrwk_link_github_v1",
+        "address": normalize_wallet_address(address),
+        "github_login": _normalize_github_login(github_login),
+        "nonce": nonce,
+    }
+
+
+def wallet_claim_payload(*, address: str, github_login: str, nonce: int) -> dict[str, object]:
+    return {
+        "type": "mrwk_claim_github_v1",
+        "address": normalize_wallet_address(address),
+        "github_login": _normalize_github_login(github_login),
+        "nonce": nonce,
+    }
+
+
 def _canonical_timestamp(value: datetime) -> str:
     if value.tzinfo is None:
         value = value.replace(tzinfo=UTC)
@@ -81,6 +141,85 @@ def ensure_account(session: Session, account_id: str) -> Account:
     session.add(account)
     session.flush()
     return account
+
+
+def register_wallet(
+    session: Session,
+    *,
+    public_key_hex: str,
+    label: str | None = None,
+    github_login: str | None = None,
+) -> Wallet:
+    try:
+        address = address_from_public_key_hex(public_key_hex)
+    except WalletError as exc:
+        raise LedgerError(str(exc)) from exc
+    public_key = public_key_hex.strip().lower()
+    existing = session.get(Wallet, address)
+    normalized_login = _normalize_github_login(github_login) if github_login else None
+    if normalized_login:
+        linked = session.scalar(
+            select(Wallet).where(Wallet.github_login == normalized_login, Wallet.address != address)
+        )
+        if linked is not None:
+            raise LedgerError("github login already linked")
+    if existing is not None:
+        if existing.public_key_hex != public_key:
+            raise LedgerError("wallet address public key mismatch")
+        if label is not None:
+            existing.label = label
+        if normalized_login is not None:
+            existing.github_login = normalized_login
+        ensure_account(session, address)
+        return existing
+    wallet = Wallet(
+        address=address,
+        public_key_hex=public_key,
+        label=label,
+        github_login=normalized_login,
+        nonce=0,
+    )
+    session.add(wallet)
+    ensure_account(session, address)
+    session.flush()
+    return wallet
+
+
+def linked_wallet_for_github(session: Session, github_login: str) -> Wallet | None:
+    return session.scalar(
+        select(Wallet).where(Wallet.github_login == _normalize_github_login(github_login)).limit(1)
+    )
+
+
+def _wallet_for_update(session: Session, address: str) -> Wallet:
+    try:
+        normalized = normalize_wallet_address(address)
+    except WalletError as exc:
+        raise LedgerError(str(exc)) from exc
+    wallet = session.get(Wallet, normalized)
+    if wallet is None:
+        raise LedgerError("wallet not found")
+    return wallet
+
+
+def _verify_wallet_payload(
+    wallet: Wallet,
+    *,
+    payload: dict[str, object],
+    nonce: int,
+    signature_hex: str,
+) -> str:
+    if nonce != wallet.nonce + 1:
+        raise LedgerError("invalid nonce")
+    try:
+        signature = normalize_signature_hex(signature_hex)
+    except WalletError as exc:
+        raise LedgerError(str(exc)) from exc
+    if not verify_wallet_signature(
+        public_key_hex=wallet.public_key_hex, payload=payload, signature_hex=signature
+    ):
+        raise LedgerError("invalid signature")
+    return signature
 
 
 def _next_sequence(session: Session) -> int:
@@ -195,6 +334,122 @@ def get_balance(session: Session, account_id: str) -> int:
         )
     )
     return int(credits or 0) - int(debits or 0)
+
+
+def submit_wallet_transfer(
+    session: Session,
+    *,
+    from_address: str,
+    to_address: str,
+    amount_mrwk: str,
+    nonce: int,
+    memo: str,
+    signature_hex: str,
+) -> WalletTransfer:
+    ensure_genesis(session)
+    sender = _wallet_for_update(session, from_address)
+    receiver = _wallet_for_update(session, to_address)
+    amount = parse_mrwk_amount(amount_mrwk)
+    clean_memo = memo.strip()
+    if len(clean_memo) > 240:
+        raise LedgerError("memo is too long")
+    if get_balance(session, sender.address) < amount:
+        raise LedgerError("insufficient balance")
+    payload = wallet_transfer_payload(
+        from_address=sender.address,
+        to_address=receiver.address,
+        amount_microunits=amount,
+        nonce=nonce,
+        memo=clean_memo,
+    )
+    signature = _verify_wallet_payload(
+        sender, payload=payload, nonce=nonce, signature_hex=signature_hex
+    )
+    payload_json = canonical_wallet_json(payload)
+    transfer_hash = hashlib.sha256(f"{payload_json}.{signature}".encode()).hexdigest()
+    if session.get(WalletTransfer, transfer_hash) is not None:
+        raise LedgerError("transfer already exists")
+    ledger_entry = add_ledger_entry(
+        session,
+        entry_type="wallet_transfer",
+        from_account=sender.address,
+        to_account=receiver.address,
+        amount_microunits=amount,
+        reference=f"transfer:{transfer_hash}",
+    )
+    sender.nonce = nonce
+    transfer = WalletTransfer(
+        hash=transfer_hash,
+        ledger_sequence=ledger_entry.sequence,
+        from_address=sender.address,
+        to_address=receiver.address,
+        amount_microunits=amount,
+        nonce=nonce,
+        memo=clean_memo,
+        signature_hex=signature,
+        payload_json=payload_json,
+    )
+    session.add(transfer)
+    session.flush()
+    return transfer
+
+
+def link_wallet_to_github(
+    session: Session,
+    *,
+    address: str,
+    github_login: str,
+    nonce: int,
+    signature_hex: str,
+) -> Wallet:
+    wallet = _wallet_for_update(session, address)
+    normalized_login = _normalize_github_login(github_login)
+    linked = linked_wallet_for_github(session, normalized_login)
+    if linked is not None and linked.address != wallet.address:
+        raise LedgerError("github login already linked")
+    payload = wallet_link_payload(
+        address=wallet.address, github_login=normalized_login, nonce=nonce
+    )
+    _verify_wallet_payload(wallet, payload=payload, nonce=nonce, signature_hex=signature_hex)
+    wallet.github_login = normalized_login
+    wallet.nonce = nonce
+    ensure_account(session, f"github:{normalized_login}")
+    session.flush()
+    return wallet
+
+
+def submit_github_claim(
+    session: Session,
+    *,
+    address: str,
+    github_login: str,
+    nonce: int,
+    signature_hex: str,
+) -> LedgerEntry:
+    ensure_genesis(session)
+    wallet = _wallet_for_update(session, address)
+    normalized_login = _normalize_github_login(github_login)
+    if wallet.github_login != normalized_login:
+        raise LedgerError("wallet is not linked to github login")
+    payload = wallet_claim_payload(
+        address=wallet.address, github_login=normalized_login, nonce=nonce
+    )
+    _verify_wallet_payload(wallet, payload=payload, nonce=nonce, signature_hex=signature_hex)
+    github_account = f"github:{normalized_login}"
+    amount = get_balance(session, github_account)
+    if amount <= 0:
+        raise LedgerError("no github balance to claim")
+    ledger_entry = add_ledger_entry(
+        session,
+        entry_type="github_claim",
+        from_account=github_account,
+        to_account=wallet.address,
+        amount_microunits=amount,
+        reference=f"github-claim:{normalized_login}:{wallet.address}:{nonce}",
+    )
+    wallet.nonce = nonce
+    session.flush()
+    return ledger_entry
 
 
 def pay_bounty(

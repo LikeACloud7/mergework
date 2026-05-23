@@ -36,6 +36,7 @@ Run these before opening a PR:
 ## Architecture Map
 
 - `app/ledger/`: fixed-supply MRWK ledger and proof logic.
+- `app/wallets.py`: MRWK wallet address, canonical payload, and signature helpers.
 - `app/webhooks/`: GitHub webhook verification and idempotent processing.
 - `app/main.py`: FastAPI routes, pages, API, and MCP endpoint.
 - `docs/`: contributor-facing and operator-facing documentation.
@@ -47,6 +48,7 @@ Run these before opening a PR:
 - Add or update tests for changed behavior.
 - Update docs when public behavior changes.
 - Ledger changes require supply conservation and hash-chain tests.
+- Wallet changes require signature, nonce, replay, and spend tests.
 - Webhook changes require signature verification and replay tests.
 
 ## Security Reports

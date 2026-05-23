@@ -101,4 +101,28 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
     assert "Previous hash" in entry
     assert "github:alice" in proof_page
     assert "Ledger address" in account
-    assert "Native ledger transfers are not enabled" in account
+    assert "MRWK wallet transfers are enabled" in account
+
+
+def test_mcp_can_register_and_fetch_wallet(sqlite_url: str) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    tools = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).json()
+    tool_names = {tool["name"] for tool in tools["result"]["tools"]}
+    assert "register_wallet" in tool_names
+    assert "get_wallet" in tool_names
+
+    public_key_hex = "22" * 32
+    registered = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "register_wallet",
+                "arguments": {"public_key_hex": public_key_hex, "label": "MCP wallet"},
+            },
+        },
+    ).json()
+    assert "mrwk1" in registered["result"]["content"][0]["text"]

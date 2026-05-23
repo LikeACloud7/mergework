@@ -56,6 +56,13 @@ main { max-width: 980px; margin: 0 auto; padding: 48px 20px; }
   border-radius: 6px;
   padding: 18px;
 }
+.panel {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 18px;
+  margin: 24px 0;
+}
 .grid strong { display: block; font-size: 1.6rem; }
 .grid span, .list p, .section-head p { color: var(--muted); }
 table { width: 100%; border-collapse: collapse; background: var(--panel); }
@@ -77,6 +84,8 @@ pre {
   border-radius: 6px;
   padding: 16px;
 }
+.result:empty { display: none; }
+.notice { color: var(--muted); }
 form { display: grid; gap: 14px; max-width: 680px; }
 label { display: grid; gap: 6px; color: var(--muted); }
 input, textarea, button {
@@ -90,6 +99,7 @@ input, textarea, button {
 }
 button { cursor: pointer; color: white; background: var(--accent); border-color: var(--accent); }
 .inline-form { margin-top: 18px; max-width: 180px; }
+.wallet-tool form + h2 { margin-top: 34px; }
 @media (max-width: 640px) {
   header { align-items: flex-start; flex-direction: column; }
   .detail dl { grid-template-columns: 1fr; }

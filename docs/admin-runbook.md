@@ -16,6 +16,24 @@
 4. Confirm the webhook records one ledger payment.
 5. Add `mrwk:paid` after the explorer/API shows the proof.
 
+If the contributor linked a wallet, the payout goes directly to that `mrwk1`
+address. If not, it goes to `github:{login}` and can be claimed later after
+GitHub OAuth and wallet-linking.
+
+## GitHub OAuth
+
+Create a GitHub OAuth app for production login:
+
+- Homepage URL: `https://mrwk.ltclab.site`
+- Callback URL: `https://mrwk.ltclab.site/auth/github/callback`
+
+Set these environment variables on the server, then restart Docker Compose:
+
+- `MERGEWORK_GITHUB_OAUTH_CLIENT_ID`
+- `MERGEWORK_GITHUB_OAUTH_CLIENT_SECRET`
+- `MERGEWORK_COOKIE_SECRET`
+- `MERGEWORK_ADMIN_LOGINS`
+
 ## Disputes
 
 - Ask for concrete missing evidence with `mrwk:needs-info`.

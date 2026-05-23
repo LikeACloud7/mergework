@@ -14,8 +14,9 @@ grows enough to support them.
 ## Bounty Reserve Model
 
 Posting a bounty creates a reserve ledger entry from treasury to
-`reserve:bounty:{id}`. Accepted payout moves MRWK from that reserve account to
-the contributor account.
+`reserve:bounty:{id}`. Accepted payout moves MRWK from that reserve account to a
+linked `mrwk1` wallet, or to a temporary `github:{login}` account when the
+contributor has not linked a wallet yet.
 
 This keeps treasury balance useful: it shows MRWK not already reserved for open
 bounties.
@@ -42,11 +43,25 @@ If MergeWork grows enough, public ledger state can be snapshotted for bridge or
 onchain-claim experiments. The public ledger and proof hashes are designed to
 make that process auditable.
 
-## Accounts and Sending
+## Wallets and Sending
 
-MRWK v0 uses native ledger account ids as addresses. A GitHub payout account
-looks like `github:alice`; reserve accounts look like `reserve:bounty:1`.
+MRWK supports native wallet addresses and signed transfers inside the ledger.
+Wallet addresses look like `mrwk1...` and are derived from Ed25519 public keys:
 
-Balances and proofs are inspectable in the explorer. External wallet sending is
-not active in v0. The next sendable version should add a signed transfer module,
-account key registration, and replay protection before any public transfer UI.
+- `address = "mrwk1" + sha256(raw_public_key_hex)[0:40]`
+- `public_key_hex` is 32 raw Ed25519 public-key bytes encoded as lowercase hex.
+- Signatures are Ed25519 signatures over canonical JSON.
+- Wallet nonces start at `0`; each signed action must use `nonce + 1`.
+
+Transfer payloads use this shape:
+
+```json
+{"type":"mrwk_transfer_v1","from_address":"mrwk1...","to_address":"mrwk1...","amount_microunits":1000000,"nonce":1,"memo":"optional"}
+```
+
+GitHub payout accounts still exist for contributors who were paid before linking
+a wallet. A linked wallet can sign a claim payload to move the full positive
+`github:{login}` balance into the wallet.
+
+Balances and proofs are inspectable in the explorer. The ledger remains the
+source of truth for spendable MRWK balances.

@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -22,12 +22,17 @@ from app.db import create_schema, session_scope
 from app.ledger.service import (
     GENESIS_SUPPLY_MICRO,
     TREASURY_ACCOUNT,
+    LedgerError,
     create_bounty,
     ensure_genesis,
     format_mrwk,
     get_balance,
+    link_wallet_to_github,
+    register_wallet,
+    submit_github_claim,
+    submit_wallet_transfer,
 )
-from app.models import Account, Bounty, LedgerEntry, Proof
+from app.models import Account, Bounty, LedgerEntry, Proof, Wallet, WalletTransfer
 from app.webhooks.github import handle_github_webhook
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -64,6 +69,33 @@ def ledger_to_dict(entry: LedgerEntry, proof_hash: str | None = None) -> dict[st
     }
 
 
+def wallet_to_dict(session: Session, wallet: Wallet) -> dict[str, Any]:
+    return {
+        "address": wallet.address,
+        "public_key_hex": wallet.public_key_hex,
+        "label": wallet.label,
+        "github_login": wallet.github_login,
+        "balance_mrwk": format_mrwk(get_balance(session, wallet.address)),
+        "nonce": wallet.nonce,
+        "next_nonce": wallet.nonce + 1,
+        "created_at": wallet.created_at.isoformat(),
+    }
+
+
+def wallet_transfer_to_dict(transfer: WalletTransfer) -> dict[str, Any]:
+    return {
+        "hash": transfer.hash,
+        "type": "wallet_transfer",
+        "ledger_sequence": transfer.ledger_sequence,
+        "from_address": transfer.from_address,
+        "to_address": transfer.to_address,
+        "amount_mrwk": format_mrwk(transfer.amount_microunits),
+        "nonce": transfer.nonce,
+        "memo": transfer.memo,
+        "created_at": transfer.created_at.isoformat(),
+    }
+
+
 def _host_without_port(request: Request) -> str:
     return request.headers.get("host", "").split(":", 1)[0].lower()
 
@@ -86,8 +118,13 @@ def _oauth_configured(settings: Settings) -> bool:
         settings.github_oauth_client_id
         and settings.github_oauth_client_secret
         and settings.cookie_secret
-        and settings.admin_logins
     )
+
+
+def _safe_next_path(next_path: str | None) -> str:
+    if not next_path or not next_path.startswith("/") or next_path.startswith("//"):
+        return "/me"
+    return next_path
 
 
 def _signed_value(value: str, secret: str) -> str:
@@ -139,6 +176,16 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         if login and login.lower() in settings.admin_logins:
             return login.lower()
         return None
+
+    def github_login_from_request(request: Request) -> str | None:
+        login = _verified_value(request.cookies.get("mrwk_user"), settings.cookie_secret, 604_800)
+        return login.lower() if login else None
+
+    def require_github_login(request: Request) -> str:
+        login = github_login_from_request(request)
+        if login is None:
+            raise HTTPException(status_code=401, detail="github login required")
+        return login
 
     def require_admin(request: Request) -> str:
         login = admin_login_from_request(request)
@@ -212,8 +259,91 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 "ledger_address": account,
                 "exists": account_row is not None,
                 "balance_mrwk": format_mrwk(get_balance(session, account)),
-                "transfer_status": "Native ledger transfers are not enabled in MRWK v0.",
+                "transfer_status": (
+                    "MRWK wallet transfers are enabled for registered mrwk1 addresses."
+                ),
             }
+
+    @app.get("/api/v1/auth/me")
+    def api_auth_me(request: Request) -> dict[str, Any]:
+        login = github_login_from_request(request)
+        return {"authenticated": login is not None, "github_login": login}
+
+    @app.post("/api/v1/wallets/register")
+    async def api_register_wallet(request: Request) -> dict[str, Any]:
+        data = await request.json()
+        with session_scope(db_url) as session:
+            try:
+                wallet = register_wallet(
+                    session,
+                    public_key_hex=str(data["public_key_hex"]),
+                    label=str(data["label"]) if data.get("label") is not None else None,
+                )
+            except LedgerError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            return wallet_to_dict(session, wallet)
+
+    @app.get("/api/v1/wallets/{address}")
+    def api_wallet(address: str) -> dict[str, Any]:
+        with session_scope(db_url) as session:
+            wallet = session.get(Wallet, address.lower())
+            if wallet is None:
+                raise HTTPException(status_code=404, detail="wallet not found")
+            return wallet_to_dict(session, wallet)
+
+    @app.post("/api/v1/wallets/link-github")
+    async def api_link_wallet_github(
+        request: Request, github_login: str = Depends(require_github_login)
+    ) -> dict[str, Any]:
+        data = await request.json()
+        with session_scope(db_url) as session:
+            try:
+                wallet = link_wallet_to_github(
+                    session,
+                    address=str(data["address"]),
+                    github_login=github_login,
+                    nonce=int(data["nonce"]),
+                    signature_hex=str(data["signature_hex"]),
+                )
+            except LedgerError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            return wallet_to_dict(session, wallet)
+
+    @app.post("/api/v1/github/claim")
+    async def api_github_claim(
+        request: Request, github_login: str = Depends(require_github_login)
+    ) -> dict[str, Any]:
+        data = await request.json()
+        with session_scope(db_url) as session:
+            try:
+                entry = submit_github_claim(
+                    session,
+                    address=str(data["address"]),
+                    github_login=github_login,
+                    nonce=int(data["nonce"]),
+                    signature_hex=str(data["signature_hex"]),
+                )
+            except LedgerError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            return ledger_to_dict(entry)
+
+    @app.post("/api/v1/transfers")
+    async def api_submit_transfer(request: Request) -> dict[str, Any]:
+        data = await request.json()
+        with session_scope(db_url) as session:
+            try:
+                transfer = submit_wallet_transfer(
+                    session,
+                    from_address=str(data["from_address"]),
+                    to_address=str(data["to_address"]),
+                    amount_mrwk=str(data["amount_mrwk"]),
+                    nonce=int(data["nonce"]),
+                    memo=str(data.get("memo", "")),
+                    signature_hex=str(data["signature_hex"]),
+                )
+            except LedgerError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            return wallet_transfer_to_dict(transfer)
 
     @app.get("/api/v1/ledger")
     def api_ledger(limit: int = 50) -> list[dict[str, Any]]:
@@ -272,6 +402,15 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                         {"name": "list_bounties", "description": "List open MRWK bounties"},
                         {"name": "get_bounty", "description": "Get a bounty by id"},
                         {"name": "get_balance", "description": "Get an account balance"},
+                        {
+                            "name": "register_wallet",
+                            "description": "Register an MRWK wallet public key",
+                        },
+                        {"name": "get_wallet", "description": "Get an MRWK wallet by address"},
+                        {
+                            "name": "submit_wallet_transfer",
+                            "description": "Submit a signed MRWK wallet transfer",
+                        },
                         {"name": "get_ledger_entry", "description": "Get a ledger entry"},
                         {
                             "name": "submit_work_proof",
@@ -368,6 +507,45 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             request, "account.html", {"account": account_data, "transactions": transactions}
         )
 
+    @app.get("/wallets", response_class=HTMLResponse)
+    def wallets_page(request: Request) -> HTMLResponse:
+        with session_scope(db_url) as session:
+            wallets = session.scalars(
+                select(Wallet).order_by(Wallet.created_at.desc()).limit(100)
+            ).all()
+            wallet_rows = [wallet_to_dict(session, wallet) for wallet in wallets]
+        return templates.TemplateResponse(request, "wallets.html", {"wallets": wallet_rows})
+
+    @app.get("/wallets/{address}", response_class=HTMLResponse)
+    def wallet_page(request: Request, address: str) -> HTMLResponse:
+        with session_scope(db_url) as session:
+            wallet = session.get(Wallet, address.lower())
+            if wallet is None:
+                raise HTTPException(status_code=404, detail="wallet not found")
+            wallet_data = wallet_to_dict(session, wallet)
+            entries = session.scalars(
+                select(LedgerEntry)
+                .where(
+                    or_(
+                        LedgerEntry.from_account == wallet.address,
+                        LedgerEntry.to_account == wallet.address,
+                    )
+                )
+                .order_by(LedgerEntry.sequence.desc())
+                .limit(100)
+            ).all()
+            proofs = _proof_hashes_by_sequence(session, [entry.sequence for entry in entries])
+            transactions = [ledger_to_dict(entry, proofs.get(entry.sequence)) for entry in entries]
+        return templates.TemplateResponse(
+            request,
+            "wallet_detail.html",
+            {"wallet": wallet_data, "transactions": transactions},
+        )
+
+    @app.get("/transfer", response_class=HTMLResponse)
+    def transfer_page(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(request, "transfer.html")
+
     @app.get("/proofs/{proof_hash}", response_class=HTMLResponse)
     def proof_page(request: Request, proof_hash: str) -> HTMLResponse:
         return templates.TemplateResponse(request, "proof.html", {"proof": api_proof(proof_hash)})
@@ -376,15 +554,17 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     def docs_page(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request, "docs.html")
 
-    @app.get("/admin/login")
-    def admin_login() -> RedirectResponse:
+    @app.get("/auth/github/login")
+    def auth_github_login(next_path: str | None = Query(None, alias="next")) -> RedirectResponse:
         if not _oauth_configured(settings):
             raise HTTPException(status_code=503, detail="GitHub OAuth is not configured")
-        state = _signed_value(secrets.token_urlsafe(24), settings.cookie_secret)
+        safe_next = _safe_next_path(next_path)
+        state_value = f"{secrets.token_urlsafe(24)},{safe_next}"
+        state = _signed_value(state_value, settings.cookie_secret)
         query = urlencode(
             {
                 "client_id": settings.github_oauth_client_id,
-                "redirect_uri": f"{settings.public_base_url}/admin/callback",
+                "redirect_uri": f"{settings.public_base_url}/auth/github/callback",
                 "scope": "read:user",
                 "state": state,
             }
@@ -397,15 +577,21 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         )
         return response
 
-    @app.get("/admin/callback")
-    async def admin_callback(request: Request, code: str, state: str) -> RedirectResponse:
+    @app.get("/auth/github/callback")
+    async def auth_github_callback(request: Request, code: str, state: str) -> RedirectResponse:
         if not _oauth_configured(settings):
             raise HTTPException(status_code=503, detail="GitHub OAuth is not configured")
         cookie_state = request.cookies.get("mrwk_oauth_state")
         if not cookie_state or not hmac.compare_digest(cookie_state, state):
             raise HTTPException(status_code=401, detail="invalid OAuth state")
-        if _verified_value(state, settings.cookie_secret, 600) is None:
+        state_value = _verified_value(state, settings.cookie_secret, 600)
+        if state_value is None:
             raise HTTPException(status_code=401, detail="expired OAuth state")
+        try:
+            _, next_path = state_value.split(",", 1)
+        except ValueError as exc:
+            raise HTTPException(status_code=401, detail="invalid OAuth state") from exc
+        next_path = _safe_next_path(next_path)
         async with httpx.AsyncClient(timeout=10) as client:
             token_response = await client.post(
                 "https://github.com/login/oauth/access_token",
@@ -414,7 +600,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                     "client_id": settings.github_oauth_client_id,
                     "client_secret": settings.github_oauth_client_secret,
                     "code": code,
-                    "redirect_uri": f"{settings.public_base_url}/admin/callback",
+                    "redirect_uri": f"{settings.public_base_url}/auth/github/callback",
                 },
             )
             token_response.raise_for_status()
@@ -430,26 +616,55 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             )
             user_response.raise_for_status()
             login = str(user_response.json().get("login", "")).lower()
-        if login not in settings.admin_logins:
-            raise HTTPException(
-                status_code=403, detail="GitHub login is not a MergeWork maintainer"
-            )
-        response = RedirectResponse("/admin", status_code=302)
+            if not login:
+                raise HTTPException(status_code=401, detail="GitHub OAuth user lookup failed")
+        response = RedirectResponse(next_path, status_code=302)
         response.set_cookie(
-            "mrwk_admin",
+            "mrwk_user",
             _signed_value(login, settings.cookie_secret),
             httponly=True,
             secure=True,
             samesite="lax",
-            max_age=86_400,
+            max_age=604_800,
         )
+        if login in settings.admin_logins:
+            response.set_cookie(
+                "mrwk_admin",
+                _signed_value(login, settings.cookie_secret),
+                httponly=True,
+                secure=True,
+                samesite="lax",
+                max_age=86_400,
+            )
         response.delete_cookie("mrwk_oauth_state")
         return response
+
+    @app.get("/admin/login")
+    def admin_login() -> RedirectResponse:
+        return RedirectResponse("/auth/github/login?next=/admin", status_code=302)
+
+    @app.get("/admin/callback")
+    async def admin_callback(request: Request) -> RedirectResponse:
+        suffix = f"?{request.url.query}" if request.url.query else ""
+        return RedirectResponse(f"/auth/github/callback{suffix}", status_code=302)
+
+    @app.post("/auth/logout")
+    def auth_logout() -> RedirectResponse:
+        response = RedirectResponse("/", status_code=303)
+        response.delete_cookie("mrwk_user")
+        response.delete_cookie("mrwk_admin")
+        return response
+
+    @app.get("/me", response_class=HTMLResponse)
+    def me_page(request: Request) -> HTMLResponse:
+        login = github_login_from_request(request)
+        return templates.TemplateResponse(request, "me.html", {"github_login": login})
 
     @app.post("/admin/logout")
     def admin_logout() -> RedirectResponse:
         response = RedirectResponse("/", status_code=303)
         response.delete_cookie("mrwk_admin")
+        response.delete_cookie("mrwk_user")
         return response
 
     @app.get("/admin", response_class=HTMLResponse)
@@ -457,7 +672,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         login = admin_login_from_request(request)
         if login is None:
             if _oauth_configured(settings):
-                return RedirectResponse("/admin/login", status_code=302)
+                return RedirectResponse("/auth/github/login?next=/admin", status_code=302)
             raise HTTPException(status_code=503, detail="GitHub OAuth is not configured")
         return templates.TemplateResponse(request, "admin.html", {"login": login})
 
@@ -504,6 +719,29 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
         if name == "get_balance":
             account = str(args["account"])
             return f"{account}: {format_mrwk(get_balance(session, account))} MRWK"
+        if name == "register_wallet":
+            wallet = register_wallet(
+                session,
+                public_key_hex=str(args["public_key_hex"]),
+                label=str(args["label"]) if args.get("label") is not None else None,
+            )
+            return json.dumps(wallet_to_dict(session, wallet))
+        if name == "get_wallet":
+            wallet_row = session.get(Wallet, str(args["address"]).lower())
+            if wallet_row is None:
+                return "wallet not found"
+            return json.dumps(wallet_to_dict(session, wallet_row))
+        if name == "submit_wallet_transfer":
+            transfer = submit_wallet_transfer(
+                session,
+                from_address=str(args["from_address"]),
+                to_address=str(args["to_address"]),
+                amount_mrwk=str(args["amount_mrwk"]),
+                nonce=int(args["nonce"]),
+                memo=str(args.get("memo", "")),
+                signature_hex=str(args["signature_hex"]),
+            )
+            return json.dumps(wallet_transfer_to_dict(transfer))
         if name == "get_ledger_entry":
             entry = session.get(LedgerEntry, int(args["sequence"]))
             if entry is None:

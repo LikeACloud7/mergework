@@ -6,7 +6,12 @@ import json
 from typing import Any
 
 from app.db import session_scope
-from app.ledger.service import LedgerError, find_bounty_by_issue, pay_bounty
+from app.ledger.service import (
+    LedgerError,
+    find_bounty_by_issue,
+    linked_wallet_for_github,
+    pay_bounty,
+)
 from app.models import WebhookEvent
 
 ACCEPTED_LABEL = "mrwk:accepted"
@@ -74,10 +79,14 @@ def _handle_accepted_issue_label(
             )
             return {"status": "bounty_not_found"}
         try:
+            linked_wallet = linked_wallet_for_github(session, submitter)
+            to_account = (
+                linked_wallet.address if linked_wallet is not None else f"github:{submitter}"
+            )
             proof = pay_bounty(
                 session,
                 bounty_id=bounty.id,
-                to_account=f"github:{submitter}",
+                to_account=to_account,
                 submission_url=issue.get("html_url", bounty.issue_url),
                 accepted_by=accepted_by,
                 verifier_result={

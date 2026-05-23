@@ -24,6 +24,17 @@ class Account(Base):
     created_at: Mapped[datetime] = mapped_column(default=utc_now)
 
 
+class Wallet(Base):
+    __tablename__ = "wallets"
+
+    address: Mapped[str] = mapped_column(String(64), primary_key=True)
+    public_key_hex: Mapped[str] = mapped_column(String(64), unique=True)
+    label: Mapped[str | None] = mapped_column(String(160))
+    github_login: Mapped[str | None] = mapped_column(String(80), unique=True, index=True)
+    nonce: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now)
+
+
 class Bounty(Base):
     __tablename__ = "bounties"
     __table_args__ = (UniqueConstraint("repo", "issue_number", name="uq_bounty_issue"),)
@@ -65,6 +76,21 @@ class LedgerEntry(Base):
     reference: Mapped[str] = mapped_column(String(500))
     previous_hash: Mapped[str] = mapped_column(String(64))
     entry_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now)
+
+
+class WalletTransfer(Base):
+    __tablename__ = "wallet_transfers"
+
+    hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    ledger_sequence: Mapped[int] = mapped_column(ForeignKey("ledger_entries.sequence"), index=True)
+    from_address: Mapped[str] = mapped_column(String(64), index=True)
+    to_address: Mapped[str] = mapped_column(String(64), index=True)
+    amount_microunits: Mapped[int] = mapped_column(Integer)
+    nonce: Mapped[int] = mapped_column(Integer)
+    memo: Mapped[str] = mapped_column(String(240), default="")
+    signature_hex: Mapped[str] = mapped_column(String(128))
+    payload_json: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(default=utc_now)
 
 

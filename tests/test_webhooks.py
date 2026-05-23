@@ -5,7 +5,7 @@ import hmac
 import json
 
 from app.db import create_schema, session_scope
-from app.ledger.service import create_bounty, ensure_genesis, get_balance
+from app.ledger.service import create_bounty, ensure_genesis, get_balance, register_wallet
 from app.models import WebhookEvent
 from app.webhooks.github import handle_github_webhook, verify_github_signature
 
@@ -63,6 +63,53 @@ def test_accepted_label_pays_bounty_once(sqlite_url: str) -> None:
     with session_scope(sqlite_url) as session:
         assert get_balance(session, "github:alice") == 200_000_000
         assert session.query(WebhookEvent).count() == 1
+
+
+def test_accepted_label_pays_linked_wallet(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    body = json.dumps(
+        {
+            "action": "labeled",
+            "label": {"name": "mrwk:accepted"},
+            "issue": {
+                "number": 43,
+                "html_url": "https://github.com/ramimbo/mergework/issues/43",
+                "user": {"login": "alice"},
+            },
+            "repository": {"full_name": "ramimbo/mergework"},
+            "sender": {"login": "maintainer"},
+        },
+        separators=(",", ":"),
+    ).encode()
+    headers = {
+        "X-GitHub-Delivery": "delivery-3",
+        "X-GitHub-Event": "issues",
+        "X-Hub-Signature-256": _signature("secret", body),
+    }
+    public_key_hex = "11" * 32
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        wallet = register_wallet(
+            session, public_key_hex=public_key_hex, label="Alice", github_login="alice"
+        )
+        wallet_address = wallet.address
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=43,
+            issue_url="https://github.com/ramimbo/mergework/issues/43",
+            title="Accepted linked issue",
+            reward_mrwk="200",
+            acceptance="Maintainer applies mrwk:accepted",
+        )
+
+    result = handle_github_webhook(sqlite_url, headers, body, "secret")
+
+    assert result["status"] == "paid"
+    with session_scope(sqlite_url) as session:
+        assert get_balance(session, wallet_address) == 200_000_000
+        assert get_balance(session, "github:alice") == 0
 
 
 def test_webhook_rejects_bad_signature(sqlite_url: str) -> None:

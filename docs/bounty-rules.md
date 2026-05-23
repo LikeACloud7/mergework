@@ -43,3 +43,7 @@ MRWK uses work-based tiers at launch. The project does not publish a fiat peg.
 5. MergeWork creates one ledger payment and one public proof.
 
 Webhook replay must not create duplicate payments.
+
+Payouts go to a linked `mrwk1` wallet when one exists for the contributor's
+GitHub login. Otherwise, MRWK is held at `github:{login}` until the contributor
+links a wallet and signs a claim.
