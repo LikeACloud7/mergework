@@ -4,17 +4,17 @@
 <h1>Ledger</h1>
 <p class="lead">Every MRWK reserve and payout is recorded as a hash-linked ledger entry.</p>
 <table>
-  <thead><tr><th>#</th><th>Type</th><th>From</th><th>To</th><th>Amount</th><th>Proof</th><th>Hash</th></tr></thead>
+  <thead><tr><th>Entry</th><th>Type</th><th>From</th><th>To</th><th>Amount</th><th>Proof</th><th>Entry hash</th></tr></thead>
   <tbody>
     {% for entry in entries %}
     <tr>
-      <td><a href="/ledger/{{ entry.sequence }}">{{ entry.sequence }}</a></td>
+      <td><a href="/ledger/{{ entry.sequence }}">#{{ entry.sequence }}</a></td>
       <td>{{ entry.type }}</td>
       <td>{% if entry.from %}<a href="/accounts/{{ entry.from }}">{{ entry.from }}</a>{% else %}-{% endif %}</td>
       <td>{% if entry.to %}<a href="/accounts/{{ entry.to }}">{{ entry.to }}</a>{% else %}-{% endif %}</td>
       <td>{{ entry.amount_mrwk }} MRWK</td>
-      <td>{% if entry.proof_hash %}<a href="/proofs/{{ entry.proof_hash }}">proof</a>{% else %}-{% endif %}</td>
-      <td><code>{{ entry.entry_hash[:16] }}</code></td>
+      <td>{% if entry.proof_hash %}<a href="/proofs/{{ entry.proof_hash }}">View proof</a>{% else %}-{% endif %}</td>
+      <td><code class="hash">{{ entry.entry_hash[:16] }}</code></td>
     </tr>
     {% endfor %}
   </tbody>

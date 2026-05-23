@@ -5,6 +5,18 @@
   <p class="eyebrow">Ledger entry</p>
   <h1>#{{ entry.sequence }} {{ entry.type }}</h1>
   <p class="lead">{{ entry.amount_mrwk }} MRWK</p>
+  <div class="meta-grid">
+    <article>
+      <span>Entry hash</span>
+      <code class="hash">{{ entry.entry_hash }}</code>
+    </article>
+    {% if entry.proof_hash %}
+    <article>
+      <span>Proof hash</span>
+      <a href="/proofs/{{ entry.proof_hash }}"><code class="hash">{{ entry.proof_hash }}</code></a>
+    </article>
+    {% endif %}
+  </div>
   <dl>
     <dt>From</dt>
     <dd>{% if entry.from %}<a href="/accounts/{{ entry.from }}">{{ entry.from }}</a>{% else %}-{% endif %}</dd>
@@ -20,7 +32,7 @@
     <dt>Created</dt>
     <dd>{{ entry.created_at }}</dd>
     {% if entry.proof_hash %}
-    <dt>Proof</dt>
+    <dt>Proof hash</dt>
     <dd><a href="/proofs/{{ entry.proof_hash }}">{{ entry.proof_hash }}</a></dd>
     {% endif %}
   </dl>
