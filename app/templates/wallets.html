@@ -30,17 +30,18 @@
     <p>Public addresses known to this ledger.</p>
   </div>
   <table>
-    <thead><tr><th>Address</th><th>Balance</th><th>GitHub</th><th>Signed actions</th></tr></thead>
+    <thead><tr><th>Address</th><th>Label</th><th>Balance</th><th>GitHub</th><th>Signed actions</th></tr></thead>
     <tbody>
       {% for wallet in wallets %}
       <tr>
         <td><a href="/wallets/{{ wallet.address }}"><code>{{ wallet.address }}</code></a></td>
+        <td>{{ wallet.label or "-" }}</td>
         <td>{{ wallet.balance_mrwk }} MRWK</td>
         <td>{{ wallet.github_login or "-" }}</td>
         <td>{{ wallet.nonce }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="4">No registered wallets yet.</td></tr>
+      <tr><td colspan="5">No registered wallets yet.</td></tr>
       {% endfor %}
     </tbody>
   </table>

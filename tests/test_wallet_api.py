@@ -350,7 +350,8 @@ def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) ->
     assert "Private key stays in this browser" in wallets
     assert "If you lose the private key" in wallets
     assert address in detail
-    assert "Smoke wallet" in detail
+    assert "Smoke wallet" in wallets
+    assert "Smoke wallet" not in detail
     assert "Signed transfer" in transfer
     assert "both wallets are registered" in transfer
     assert "/static/wallet.js" in transfer
