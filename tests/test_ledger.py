@@ -68,6 +68,24 @@ def test_bounty_reserve_and_payout_conserve_supply(sqlite_url: str) -> None:
         assert verify_supply_conservation(session) is True
 
 
+def test_create_bounty_rejects_non_positive_issue_number(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        for issue_number in (0, -1):
+            with pytest.raises(LedgerError, match="issue_number must be positive"):
+                create_bounty(
+                    session,
+                    repo="ramimbo/mergework",
+                    issue_number=issue_number,
+                    issue_url=f"https://github.com/ramimbo/mergework/issues/{issue_number}",
+                    title="Invalid bounty",
+                    reward_mrwk="1",
+                    acceptance="Should not be created",
+                )
+
+
 def test_multi_award_bounty_pays_distinct_submissions_until_exhausted(
     sqlite_url: str,
 ) -> None:
