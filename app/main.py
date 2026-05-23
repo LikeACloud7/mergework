@@ -28,6 +28,7 @@ from app.ledger.service import (
     format_mrwk,
     get_balance,
     link_wallet_to_github,
+    public_url_or_none,
     register_wallet,
     submit_github_claim,
     submit_wallet_transfer,
@@ -37,6 +38,25 @@ from app.webhooks.github import handle_github_webhook
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+templates.env.globals["safe_public_url"] = public_url_or_none
+
+SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'self'; "
+        "base-uri 'self'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'; "
+        "connect-src 'self'; "
+        "img-src 'self' data:; "
+        "object-src 'none'; "
+        "script-src 'self'; "
+        "style-src 'self'"
+    ),
+    "Referrer-Policy": "no-referrer",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+}
 
 
 def bounty_to_dict(bounty: Bounty) -> dict[str, Any]:
@@ -152,6 +172,17 @@ def _verified_value(token: str | None, secret: str, max_age_seconds: int) -> str
     return value
 
 
+def _csrf_token(action: str, login: str, secret: str) -> str:
+    return _signed_value(f"{action}:{login}", secret)
+
+
+def _verify_csrf_token(
+    token: str | None, *, action: str, login: str, secret: str, max_age_seconds: int = 3_600
+) -> bool:
+    expected = f"{action}:{login}"
+    return _verified_value(token, secret, max_age_seconds) == expected
+
+
 def create_app(database_url: str | None = None, webhook_secret: str | None = None) -> FastAPI:
     settings = get_settings()
     db_url = database_url or settings.database_url
@@ -164,6 +195,14 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     app.state.database_url = db_url
     app.state.webhook_secret = secret
     app.state.settings = settings
+
+    @app.middleware("http")
+    async def add_security_headers(request: Request, call_next: Any) -> Any:
+        response = await call_next(request)
+        for name, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(name, value)
+        return response
+
     static_dir = BASE_DIR / "static"
     if static_dir.exists():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
@@ -192,6 +231,12 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         if login is None:
             raise HTTPException(status_code=401, detail="admin authentication required")
         return login
+
+    def require_admin_token(request: Request) -> str:
+        token = request.headers.get("x-mergework-admin-token", "")
+        if settings.admin_token and hmac.compare_digest(token, settings.admin_token):
+            return "api-token"
+        raise HTTPException(status_code=401, detail="admin token required")
 
     @app.get("/health")
     def health() -> dict[str, Any]:
@@ -225,19 +270,22 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.post("/api/v1/bounties")
     async def api_create_bounty(
-        request: Request, admin_login: str = Depends(require_admin)
+        request: Request, admin_login: str = Depends(require_admin_token)
     ) -> dict[str, Any]:
         data = await request.json()
         with session_scope(db_url) as session:
-            bounty = create_bounty(
-                session,
-                repo=data["repo"],
-                issue_number=int(data["issue_number"]),
-                issue_url=data["issue_url"],
-                title=data["title"],
-                reward_mrwk=str(data["reward_mrwk"]),
-                acceptance=data["acceptance"],
-            )
+            try:
+                bounty = create_bounty(
+                    session,
+                    repo=data["repo"],
+                    issue_number=int(data["issue_number"]),
+                    issue_url=data["issue_url"],
+                    title=data["title"],
+                    reward_mrwk=str(data["reward_mrwk"]),
+                    acceptance=data["acceptance"],
+                )
+            except LedgerError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
             result = bounty_to_dict(bounty)
             result["created_by"] = admin_login
             return result
@@ -384,7 +432,9 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             "X-GitHub-Event": headers.get("x-github-event", ""),
             "X-Hub-Signature-256": headers.get("x-hub-signature-256", ""),
         }
-        result = handle_github_webhook(db_url, normalized, body, secret)
+        result = handle_github_webhook(
+            db_url, normalized, body, secret, settings.github_accepted_labelers
+        )
         code = 401 if result["status"] == "unauthorized" else 200
         return JSONResponse(result, status_code=code)
 
@@ -436,7 +486,14 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 "id": response_id,
                 "error": {"code": -32602, "message": "tool name is required"},
             }
-        text = _call_mcp_tool(db_url, name, args)
+        try:
+            text = _call_mcp_tool(db_url, name, args)
+        except (KeyError, TypeError, ValueError, LedgerError):
+            return {
+                "jsonrpc": "2.0",
+                "id": response_id,
+                "error": {"code": -32602, "message": "invalid tool arguments"},
+            }
         return {
             "jsonrpc": "2.0",
             "id": response_id,
@@ -674,7 +731,14 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             if _oauth_configured(settings):
                 return RedirectResponse("/auth/github/login?next=/admin", status_code=302)
             raise HTTPException(status_code=503, detail="GitHub OAuth is not configured")
-        return templates.TemplateResponse(request, "admin.html", {"login": login})
+        return templates.TemplateResponse(
+            request,
+            "admin.html",
+            {
+                "login": login,
+                "csrf_token": _csrf_token("admin-bounty", login, settings.cookie_secret),
+            },
+        )
 
     @app.post("/admin/bounties")
     def admin_create_bounty(
@@ -685,19 +749,30 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         title: str = Form(...),
         reward_mrwk: str = Form(...),
         acceptance: str = Form(...),
+        csrf_token: str | None = Form(None),
         admin_login: str = Depends(require_admin),
     ) -> RedirectResponse:
-        del request, admin_login
+        del request
+        if admin_login != "api-token" and not _verify_csrf_token(
+            csrf_token,
+            action="admin-bounty",
+            login=admin_login,
+            secret=settings.cookie_secret,
+        ):
+            raise HTTPException(status_code=403, detail="invalid CSRF token")
         with session_scope(db_url) as session:
-            bounty = create_bounty(
-                session,
-                repo=repo,
-                issue_number=issue_number,
-                issue_url=issue_url,
-                title=title,
-                reward_mrwk=reward_mrwk,
-                acceptance=acceptance,
-            )
+            try:
+                bounty = create_bounty(
+                    session,
+                    repo=repo,
+                    issue_number=issue_number,
+                    issue_url=issue_url,
+                    title=title,
+                    reward_mrwk=reward_mrwk,
+                    acceptance=acceptance,
+                )
+            except LedgerError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
             bounty_id = bounty.id
         return RedirectResponse(f"/bounties/{bounty_id}", status_code=303)
 

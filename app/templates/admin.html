@@ -6,6 +6,7 @@
   <h1>Post a bounty</h1>
   <p class="lead">Signed in as {{ login }}.</p>
   <form method="post" action="/admin/bounties">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label>Repository <input name="repo" placeholder="ramimbo/mergework" required></label>
     <label>Issue number <input name="issue_number" type="number" min="1" required></label>
     <label>Issue URL <input name="issue_url" type="url" required></label>

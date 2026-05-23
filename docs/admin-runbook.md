@@ -12,9 +12,10 @@
 
 1. Review the submission and test evidence.
 2. Confirm the work matches the bounty acceptance text.
-3. Apply `mrwk:accepted`.
-4. Confirm the webhook records one ledger payment.
-5. Add `mrwk:paid` after the explorer/API shows the proof.
+3. Confirm the labeler is listed in `MERGEWORK_GITHUB_ACCEPTED_LABELERS`.
+4. Apply `mrwk:accepted`.
+5. Confirm the webhook records one ledger payment.
+6. Add `mrwk:paid` after the explorer/API shows the proof.
 
 If the contributor linked a wallet, the payout goes directly to that `mrwk1`
 address. If not, it goes to `github:{login}` and can be claimed later after
@@ -40,3 +41,23 @@ the repository and restart Docker Compose.
 - Backups: `/srv/mergework/backups`.
 - Health check: `GET /health`.
 - Logs: `docker compose logs -f app caddy`.
+
+## Pre-Bounty Readiness
+
+Generate `MERGEWORK_GITHUB_WEBHOOK_SECRET`, `MERGEWORK_ADMIN_TOKEN`, and
+`MERGEWORK_COOKIE_SECRET` with at least 32 random characters. Keep them outside
+the repository.
+
+Run the deploy gate before posting a bounty:
+
+```bash
+docker compose run --rm app python scripts/check_deploy_ready.py
+```
+
+Run a staging webhook payout dry run against a staging host:
+
+```bash
+MERGEWORK_STAGING_BASE_URL=https://staging.mrwk.example.test \
+MERGEWORK_DRY_RUN_REPO=ramimbo/mergework \
+docker compose run --rm app python scripts/staging_webhook_dry_run.py
+```

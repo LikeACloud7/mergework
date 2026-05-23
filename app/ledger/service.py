@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, cast
+from urllib.parse import urlparse
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -31,6 +34,7 @@ from app.wallets import (
 TREASURY_ACCOUNT = "treasury:mrwk"
 MICRO_UNITS = 1_000_000
 GENESIS_SUPPLY_MICRO = 100_000_000 * MICRO_UNITS
+GITHUB_LOGIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$")
 
 
 class LedgerError(RuntimeError):
@@ -42,11 +46,19 @@ def parse_mrwk_amount(amount: str | int | Decimal) -> int:
         value = Decimal(str(amount))
     except (InvalidOperation, ValueError) as exc:
         raise LedgerError("invalid MRWK amount") from exc
+    if not value.is_finite():
+        raise LedgerError("invalid MRWK amount")
     if value <= 0:
         raise LedgerError("amount must be positive")
-    microunits = int(value * MICRO_UNITS)
-    if Decimal(microunits) / MICRO_UNITS != value:
+    if value > Decimal(GENESIS_SUPPLY_MICRO) / MICRO_UNITS:
+        raise LedgerError("amount exceeds fixed supply")
+    scaled = value * MICRO_UNITS
+    if scaled != scaled.to_integral_value():
         raise LedgerError("MRWK supports at most 6 decimal places")
+    try:
+        microunits = int(scaled)
+    except (OverflowError, ValueError) as exc:
+        raise LedgerError("invalid MRWK amount") from exc
     return microunits
 
 
@@ -61,15 +73,52 @@ def canonical_json(data: dict[str, Any]) -> str:
     return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
+def validate_public_url(url: str) -> str:
+    clean = url.strip()
+    if len(clean) > 500:
+        raise LedgerError("URL is too long")
+    parsed = urlparse(clean)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise LedgerError("URL must use http or https")
+    return clean
+
+
+def public_url_or_none(url: str | None) -> str | None:
+    if not url:
+        return None
+    try:
+        return validate_public_url(url)
+    except LedgerError:
+        return None
+
+
 def reserve_account_for_bounty(bounty_id: int) -> str:
     return f"reserve:bounty:{bounty_id}"
 
 
 def _normalize_github_login(github_login: str) -> str:
     normalized = github_login.strip().lower()
-    if not normalized:
-        raise LedgerError("github login is required")
+    if not GITHUB_LOGIN_RE.fullmatch(normalized):
+        raise LedgerError("invalid github login")
     return normalized
+
+
+def _clean_optional_text(value: str | None, field: str, max_length: int) -> str | None:
+    if value is None:
+        return None
+    clean = value.strip()
+    if len(clean) > max_length:
+        raise LedgerError(f"{field} is too long")
+    return clean or None
+
+
+def _clean_required_text(value: str, field: str, max_length: int) -> str:
+    clean = value.strip()
+    if not clean:
+        raise LedgerError(f"{field} is required")
+    if len(clean) > max_length:
+        raise LedgerError(f"{field} is too long")
+    return clean
 
 
 def wallet_transfer_payload(
@@ -157,6 +206,7 @@ def register_wallet(
     public_key = public_key_hex.strip().lower()
     existing = session.get(Wallet, address)
     normalized_login = _normalize_github_login(github_login) if github_login else None
+    clean_label = _clean_optional_text(label, "wallet label", 160)
     if normalized_login:
         linked = session.scalar(
             select(Wallet).where(Wallet.github_login == normalized_login, Wallet.address != address)
@@ -167,7 +217,7 @@ def register_wallet(
         if existing.public_key_hex != public_key:
             raise LedgerError("wallet address public key mismatch")
         if label is not None:
-            existing.label = label
+            existing.label = clean_label
         if normalized_login is not None:
             existing.github_login = normalized_login
         ensure_account(session, address)
@@ -175,7 +225,7 @@ def register_wallet(
     wallet = Wallet(
         address=address,
         public_key_hex=public_key,
-        label=label,
+        label=clean_label,
         github_login=normalized_login,
         nonce=0,
     )
@@ -291,17 +341,21 @@ def create_bounty(
 ) -> Bounty:
     ensure_genesis(session)
     reward = parse_mrwk_amount(reward_mrwk)
+    clean_repo = _clean_required_text(repo, "repo", 200)
+    clean_issue_url = validate_public_url(issue_url)
+    clean_title = _clean_required_text(title, "title", 300)
+    clean_acceptance = _clean_required_text(acceptance, "acceptance", 5_000)
     if get_balance(session, TREASURY_ACCOUNT) < reward:
         raise LedgerError("treasury balance too low")
     bounty = Bounty(
-        repo=repo,
+        repo=clean_repo,
         issue_number=issue_number,
-        issue_url=issue_url,
-        title=title,
+        issue_url=clean_issue_url,
+        title=clean_title,
         reward_microunits=reward,
         reserved_microunits=reward,
         status="open",
-        acceptance=acceptance,
+        acceptance=clean_acceptance,
     )
     session.add(bounty)
     session.flush()
@@ -311,7 +365,7 @@ def create_bounty(
         from_account=TREASURY_ACCOUNT,
         to_account=reserve_account_for_bounty(bounty.id),
         amount_microunits=reward,
-        reference=issue_url,
+        reference=clean_issue_url,
     )
     return bounty
 
@@ -467,14 +521,26 @@ def pay_bounty(
         raise LedgerError("bounty not found")
     if bounty.status == "paid":
         raise LedgerError("bounty already paid")
+    clean_submission_url = validate_public_url(submission_url)
     reserve_account = reserve_account_for_bounty(bounty.id)
     if get_balance(session, reserve_account) < bounty.reward_microunits:
         raise LedgerError("bounty reserve balance too low")
+    claimed = cast(
+        CursorResult[Any],
+        session.execute(
+            update(Bounty)
+            .where(Bounty.id == bounty.id, Bounty.status != "paid")
+            .values(status="paid")
+        ),
+    )
+    if claimed.rowcount != 1:
+        raise LedgerError("bounty already paid")
+    bounty.status = "paid"
 
     submission = Submission(
         bounty_id=bounty.id,
         submitter_account=to_account,
-        url=submission_url,
+        url=clean_submission_url,
         status="accepted",
         verifier_result=canonical_json(verifier_result),
     )
@@ -486,15 +552,14 @@ def pay_bounty(
         from_account=reserve_account,
         to_account=to_account,
         amount_microunits=bounty.reward_microunits,
-        reference=submission_url,
+        reference=clean_submission_url,
     )
-    bounty.status = "paid"
     proof_payload = {
         "kind": "bounty_payment",
         "bounty_id": bounty.id,
         "repo": bounty.repo,
         "issue_number": bounty.issue_number,
-        "submission_url": submission_url,
+        "submission_url": clean_submission_url,
         "accepted_by": accepted_by,
         "to_account": to_account,
         "amount_mrwk": format_mrwk(bounty.reward_microunits),

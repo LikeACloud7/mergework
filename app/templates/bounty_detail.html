@@ -9,7 +9,8 @@
     <dt>Repository</dt>
     <dd>{{ bounty.repo }}</dd>
     <dt>GitHub issue</dt>
-    <dd><a href="{{ bounty.issue_url }}">{{ bounty.repo }} #{{ bounty.issue_number }}</a></dd>
+    {% set issue_url = safe_public_url(bounty.issue_url) %}
+    <dd>{% if issue_url %}<a href="{{ issue_url }}">{{ bounty.repo }} #{{ bounty.issue_number }}</a>{% else %}{{ bounty.repo }} #{{ bounty.issue_number }}{% endif %}</dd>
     <dt>Acceptance</dt>
     <dd>{{ bounty.acceptance }}</dd>
   </dl>

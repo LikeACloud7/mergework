@@ -52,6 +52,7 @@ def _handle_accepted_issue_label(
     event_type: str,
     delivery_id: str,
     payload_hash: str,
+    accepted_labelers: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     issue = payload.get("issue") or payload.get("pull_request") or {}
     repo = (payload.get("repository") or {}).get("full_name")
@@ -65,7 +66,10 @@ def _handle_accepted_issue_label(
         return {"status": "missing_issue"}
 
     submitter = ((issue.get("user") or {}).get("login") or "unknown").strip()
-    accepted_by = ((payload.get("sender") or {}).get("login") or "maintainer").strip()
+    accepted_by = ((payload.get("sender") or {}).get("login") or "maintainer").strip().lower()
+    if accepted_labelers and accepted_by not in accepted_labelers:
+        _record_event(database_url, delivery_id, event_type, payload_hash, "unauthorized_labeler")
+        return {"status": "unauthorized_labeler"}
     with session_scope(database_url) as session:
         bounty = find_bounty_by_issue(session, repo, issue_number)
         if bounty is None:
@@ -121,6 +125,7 @@ def handle_github_webhook(
     headers: dict[str, str],
     body: bytes,
     webhook_secret: str,
+    accepted_labelers: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     signature = headers.get("X-Hub-Signature-256")
     if not verify_github_signature(body, signature, webhook_secret):
@@ -134,11 +139,22 @@ def handle_github_webhook(
     with session_scope(database_url) as session:
         existing = session.get(WebhookEvent, delivery_id)
         if existing is not None:
+            if existing.payload_hash != hashed:
+                return {"status": "delivery_payload_mismatch"}
             return {"status": "duplicate", "processed_status": existing.processed_status}
 
-    payload = json.loads(body.decode())
+    try:
+        payload = json.loads(body.decode())
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        _record_event(database_url, delivery_id, event_type, hashed, "invalid_payload")
+        return {"status": "invalid_payload"}
+    if not isinstance(payload, dict):
+        _record_event(database_url, delivery_id, event_type, hashed, "invalid_payload")
+        return {"status": "invalid_payload"}
     if event_type in {"issues", "pull_request", "label", "check_suite", "push"}:
-        return _handle_accepted_issue_label(database_url, payload, event_type, delivery_id, hashed)
+        return _handle_accepted_issue_label(
+            database_url, payload, event_type, delivery_id, hashed, accepted_labelers
+        )
 
     _record_event(database_url, delivery_id, event_type, hashed, "ignored")
     return {"status": "ignored"}

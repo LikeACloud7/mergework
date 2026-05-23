@@ -45,6 +45,17 @@ def test_wallet_address_is_derived_from_public_key() -> None:
     assert address_from_public_key_hex(public_hex) == address
 
 
+def test_wallet_registration_rejects_oversized_label(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    _, public_hex, _ = _keypair()
+
+    with (
+        session_scope(sqlite_url) as session,
+        pytest.raises(LedgerError, match="wallet label is too long"),
+    ):
+        register_wallet(session, public_key_hex=public_hex, label="x" * 161)
+
+
 def test_signed_wallet_transfer_moves_balance_and_rejects_replay(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     sender_key, sender_public, sender_address = _keypair()
