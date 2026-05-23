@@ -287,7 +287,7 @@ def test_ledger_page_highlights_bounty_payment_and_release(sqlite_url: str) -> N
     assert f"/proofs/{proof.hash}" in ledger
 
 
-def test_ledger_page_has_responsive_table_structure(sqlite_url: str) -> None:
+def test_ledger_page_uses_wrapping_entry_cards(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
         ensure_genesis(session)
@@ -313,10 +313,12 @@ def test_ledger_page_has_responsive_table_structure(sqlite_url: str) -> None:
 
     ledger = client.get("/ledger").text
 
-    assert 'class="table-scroll ledger-table-wrap"' in ledger
-    assert 'data-label="Entry"' in ledger
-    assert 'data-label="Reference"' in ledger
-    assert 'data-label="Proof"' in ledger
+    assert 'class="ledger-list"' in ledger
+    assert 'class="ledger-row ledger-row--bounty-payment"' in ledger
+    assert 'class="ledger-entry-card"' in ledger
+    assert 'class="ledger-card-grid"' in ledger
+    assert 'class="ledger-field ledger-field--reference reference-cell"' in ledger
+    assert 'class="table-scroll ledger-table-wrap"' not in ledger
 
 
 def test_mcp_can_register_and_fetch_wallet(sqlite_url: str) -> None:
