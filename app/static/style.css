@@ -69,6 +69,32 @@ table { width: 100%; border-collapse: collapse; background: var(--panel); }
 th, td { border-bottom: 1px solid var(--line); padding: 10px; text-align: left; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 code.hash { overflow-wrap: anywhere; }
+.ledger-table td { vertical-align: top; }
+.ledger-row--bounty-reserve,
+.ledger-row--bounty-payment,
+.ledger-row--bounty-release {
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+}
+.ledger-type {
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: .85rem;
+  font-weight: 700;
+  padding: 3px 8px;
+}
+.ledger-type--bounty-payment {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  color: var(--accent);
+}
+.ledger-scan-note {
+  display: block;
+  color: var(--muted);
+  font-size: .85rem;
+  margin-top: 4px;
+}
 .lead { color: var(--muted); font-size: 1.15rem; }
 .eyebrow { color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 .detail dl { display: grid; grid-template-columns: 160px 1fr; gap: 10px 18px; }

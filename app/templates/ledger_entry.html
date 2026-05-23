@@ -3,9 +3,26 @@
 {% block content %}
 <section class="detail">
   <p class="eyebrow">Ledger entry</p>
-  <h1>#{{ entry.sequence }} {{ entry.type }}</h1>
+  {% set type_class = entry.type | replace("_", "-") %}
+  <h1>#{{ entry.sequence }} <span class="ledger-type ledger-type--{{ type_class }}">{{ entry.type | replace("_", " ") | title }}</span></h1>
   <p class="lead">{{ entry.amount_mrwk }} MRWK</p>
   <div class="meta-grid">
+    {% if entry.type == "bounty_reserve" %}
+    <article>
+      <span>Bounty scan status</span>
+      <strong>Funds reserved</strong>
+    </article>
+    {% elif entry.type == "bounty_payment" %}
+    <article>
+      <span>Bounty scan status</span>
+      <strong>Award paid</strong>
+    </article>
+    {% elif entry.type == "bounty_release" %}
+    <article>
+      <span>Bounty scan status</span>
+      <strong>Unused reserve released</strong>
+    </article>
+    {% endif %}
     <article>
       <span>Entry hash</span>
       <code class="hash">{{ entry.entry_hash }}</code>
