@@ -95,6 +95,39 @@ function setField(id, value) {
   }
 }
 
+async function getWallet(address) {
+  const clean = address.trim().toLowerCase();
+  if (!clean) {
+    throw new Error("wallet address is required");
+  }
+  return apiJson(`/api/v1/wallets/${encodeURIComponent(clean)}`);
+}
+
+async function getNextNonce(address, statusSelector) {
+  const wallet = await getWallet(address);
+  setText(statusSelector, `Transaction number ${wallet.next_nonce} will be used automatically.`);
+  return wallet.next_nonce;
+}
+
+function setupNoncePreview(form, addressName, statusSelector) {
+  const addressInput = form.querySelector(`[name="${addressName}"]`);
+  if (!addressInput) {
+    return;
+  }
+  addressInput.addEventListener("change", async () => {
+    const address = String(addressInput.value || "").trim();
+    if (!address) {
+      setText(statusSelector, "Transaction number is handled automatically.");
+      return;
+    }
+    try {
+      await getNextNonce(address, statusSelector);
+    } catch (error) {
+      setText(statusSelector, error.message);
+    }
+  });
+}
+
 async function generateWallet() {
   const keyPair = await crypto.subtle.generateKey({name: "Ed25519"}, true, ["sign", "verify"]);
   const publicKeyHex = bytesToHex(await crypto.subtle.exportKey("raw", keyPair.publicKey));
@@ -144,15 +177,16 @@ function setupTransfer() {
   if (!form) {
     return;
   }
+  setupNoncePreview(form, "from_address", "[data-transfer-nonce-status]");
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = new FormData(form);
     const fromAddress = String(data.get("from_address") || "").trim().toLowerCase();
     const toAddress = String(data.get("to_address") || "").trim().toLowerCase();
     const amount = String(data.get("amount_mrwk") || "").trim();
-    const nonce = Number.parseInt(String(data.get("nonce") || ""), 10);
     const memo = String(data.get("memo") || "").trim();
     try {
+      const nonce = await getNextNonce(fromAddress, "[data-transfer-nonce-status]");
       const payload = {
         type: "mrwk_transfer_v1",
         from_address: fromAddress,
@@ -174,6 +208,7 @@ function setupTransfer() {
         }),
       });
       setText("[data-transfer-result]", transfer);
+      await getNextNonce(fromAddress, "[data-transfer-nonce-status]");
     } catch (error) {
       setText("[data-transfer-result]", error.message);
     }
@@ -191,15 +226,18 @@ function setupGithubActions() {
     if (!form) {
       continue;
     }
+    const statusSelector =
+      action === "link-github" ? "[data-link-nonce-status]" : "[data-claim-nonce-status]";
+    setupNoncePreview(form, "address", statusSelector);
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const data = new FormData(form);
       const address = String(data.get("address") || "").trim().toLowerCase();
-      const nonce = Number.parseInt(String(data.get("nonce") || ""), 10);
       const type = action === "link-github" ? "mrwk_link_github_v1" : "mrwk_claim_github_v1";
       const resultSelector = action === "link-github" ? "[data-link-result]" : "[data-claim-result]";
       const url = action === "link-github" ? "/api/v1/wallets/link-github" : "/api/v1/github/claim";
       try {
+        const nonce = await getNextNonce(address, statusSelector);
         const payload = {type, address, github_login: githubLogin, nonce};
         const signature = await signPayload(String(data.get("private_key_hex") || ""), payload);
         const result = await apiJson(url, {
@@ -207,6 +245,7 @@ function setupGithubActions() {
           body: JSON.stringify({address, nonce, signature_hex: signature}),
         });
         setText(resultSelector, result);
+        await getNextNonce(address, statusSelector);
       } catch (error) {
         setText(resultSelector, error.message);
       }

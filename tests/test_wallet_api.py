@@ -217,3 +217,20 @@ def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) ->
     assert "Signed transfer" in transfer
     assert "/static/wallet.js" in transfer
     assert "Link a wallet" in me
+
+
+def test_wallet_pages_do_not_require_manual_nonce(sqlite_url: str, monkeypatch) -> None:
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "test-cookie-secret")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    client.cookies.set("mrwk_user", _signed_value("alice", "test-cookie-secret"))
+
+    transfer = client.get("/transfer").text
+    me = client.get("/me").text
+
+    assert 'name="nonce"' not in transfer
+    assert 'name="nonce"' not in me
+    assert "Transaction number is handled automatically" in transfer
+    assert "Transaction number is handled automatically" in me

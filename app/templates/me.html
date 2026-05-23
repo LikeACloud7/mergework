@@ -23,8 +23,8 @@
   <h2>Link a wallet</h2>
   <form data-action="link-github">
     <label>Wallet address <input name="address" placeholder="mrwk1..." required></label>
-    <label>Nonce <input name="nonce" type="number" min="1" required></label>
     <label>Private key <textarea name="private_key_hex" rows="5" required></textarea></label>
+    <p class="notice" data-link-nonce-status>Transaction number is handled automatically.</p>
     <button type="submit">Sign and link</button>
   </form>
   <pre class="result" data-link-result></pre>
@@ -32,8 +32,8 @@
   <h2>Claim GitHub balance</h2>
   <form data-action="claim-github">
     <label>Wallet address <input name="address" placeholder="mrwk1..." required></label>
-    <label>Nonce <input name="nonce" type="number" min="1" required></label>
     <label>Private key <textarea name="private_key_hex" rows="5" required></textarea></label>
+    <p class="notice" data-claim-nonce-status>Transaction number is handled automatically.</p>
     <button type="submit">Sign and claim</button>
   </form>
   <pre class="result" data-claim-result></pre>
