@@ -28,6 +28,8 @@ def test_health_status_and_bounty_api(sqlite_url: str) -> None:
     assert status["ticker"] == "MRWK"
     assert status["ledger_height"] == 2
     assert status["active_bounties"] == 1
+    assert status["future_path"] == "public snapshots, bridges, and onchain claims"
+    assert "if the network grows" not in status["future_path"]
     bounties = client.get("/api/v1/bounties").json()
     assert bounties[0]["title"] == "First bounty"
 
@@ -65,6 +67,7 @@ def test_host_specific_homepages(sqlite_url: str) -> None:
     assert "MRWK from LTC Lab" in lab
     assert "Open-source work, recorded as MRWK" in mrwk
     assert "MRWK from LTC Lab" in mrwk
+    assert "if the network grows" not in mrwk
 
 
 def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:

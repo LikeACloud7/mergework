@@ -1,8 +1,7 @@
 # MRWK Ledger
 
 MRWK starts as a native project coin on the MergeWork ledger. The ledger is
-designed for future public snapshots, bridges, or onchain claims if the network
-grows enough to support them.
+designed for future public snapshots, bridges, and onchain claims.
 
 ## Units
 
@@ -39,9 +38,8 @@ the stored `entry_hash` must recompute from the entry payload.
 
 ## Future Snapshot Path
 
-If MergeWork grows enough, public ledger state can be snapshotted for bridge or
-onchain-claim experiments. The public ledger and proof hashes are designed to
-make that process auditable.
+Public ledger state can be snapshotted for bridge or onchain-claim experiments.
+The public ledger and proof hashes are designed to make that process auditable.
 
 ## Wallets and Sending
 

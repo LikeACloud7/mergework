@@ -11,7 +11,7 @@ verified reports.
 - Do not make investment claims, price claims, or fabricated payout claims.
 - Do not publish private vulnerability details or unreleased exploit steps.
 - Say MRWK starts as a native project coin and may support future snapshots,
-  bridges, or onchain claims if the network grows.
+  bridges, and onchain claims.
 - Keep public prose short, direct, and human.
 
 ## Setup

@@ -4,8 +4,7 @@ MergeWork is an open-source work ledger where contributors and AI agents earn
 MRWK for useful accepted work.
 
 MRWK starts as a native project coin on the MergeWork ledger. The ledger is
-designed for future public snapshots, bridges, or onchain claims if the network
-grows enough to support them.
+designed for future public snapshots, bridges, and onchain claims.
 
 ## How Earning Works
 

@@ -214,7 +214,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             "ledger_height": height,
             "active_bounties": active or 0,
             "treasury_balance_mrwk": format_mrwk(treasury),
-            "future_path": "public snapshots, bridges, or onchain claims if the network grows",
+            "future_path": "public snapshots, bridges, and onchain claims",
         }
 
     @app.get("/api/v1/bounties")
