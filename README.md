@@ -57,6 +57,10 @@ python3.12 -m venv .venv
 
 ## Project Links
 
+- Live LTC Lab: [https://ltclab.site](https://ltclab.site)
+- Live MergeWork: [https://mrwk.ltclab.site](https://mrwk.ltclab.site)
+- API host: [https://api.mrwk.ltclab.site](https://api.mrwk.ltclab.site)
+- MCP host: [https://mcp.mrwk.ltclab.site](https://mcp.mrwk.ltclab.site)
 - Bounty rules: [docs/bounty-rules.md](docs/bounty-rules.md)
 - Agent API and MCP usage: [docs/agents.md](docs/agents.md)
 - Ledger details: [docs/ledger.md](docs/ledger.md)

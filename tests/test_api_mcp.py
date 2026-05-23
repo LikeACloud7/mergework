@@ -63,8 +63,26 @@ def test_host_specific_homepages(sqlite_url: str) -> None:
 
     assert "LTC Lab" in lab
     assert "MRWK from LTC Lab" in lab
+    assert "https://api.mrwk.ltclab.site" in lab
+    assert "https://mcp.mrwk.ltclab.site" in lab
     assert "Open-source work, recorded as MRWK" in mrwk
     assert "MRWK from LTC Lab" in mrwk
+    assert "https://api.mrwk.ltclab.site" in mrwk
+    assert "https://mcp.mrwk.ltclab.site" in mrwk
+
+
+def test_docs_page_lists_live_ltclab_urls(sqlite_url: str) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    docs = client.get("/docs").text
+    api_docs = client.get("/api/docs").text
+
+    assert "https://ltclab.site" in docs
+    assert "https://mrwk.ltclab.site" in docs
+    assert "https://api.mrwk.ltclab.site" in docs
+    assert "https://mcp.mrwk.ltclab.site" in docs
+    assert "OpenAPI docs" in docs
+    assert "SwaggerUIBundle" in api_docs
 
 
 def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:

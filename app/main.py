@@ -191,7 +191,12 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     with session_scope(db_url) as session:
         ensure_genesis(session)
 
-    app = FastAPI(title="MergeWork", version="0.1.0")
+    app = FastAPI(
+        title="MergeWork",
+        version="0.1.0",
+        docs_url="/api/docs",
+        redoc_url="/api/redoc",
+    )
     app.state.database_url = db_url
     app.state.webhook_secret = secret
     app.state.settings = settings
@@ -514,7 +519,19 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                             "tagline": "MRWK from LTC Lab",
                             "href": "https://mrwk.ltclab.site",
                             "status": "live",
-                        }
+                        },
+                        {
+                            "name": "MergeWork API",
+                            "tagline": "Public MRWK status, bounty, ledger, and proof endpoints",
+                            "href": "https://api.mrwk.ltclab.site",
+                            "status": "live",
+                        },
+                        {
+                            "name": "MergeWork MCP",
+                            "tagline": "Tool endpoint for bounty and ledger queries",
+                            "href": "https://mcp.mrwk.ltclab.site",
+                            "status": "live",
+                        },
                     ],
                 },
             )
