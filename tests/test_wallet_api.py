@@ -230,6 +230,19 @@ def test_wallet_api_malformed_transfer_requests_return_4xx(sqlite_url: str) -> N
     assert malformed_nonce.status_code == 400
     assert malformed_nonce.json()["detail"] == "nonce must be an integer"
 
+    fractional_nonce = client.post(
+        "/api/v1/transfers",
+        json={
+            "from_address": sender_address,
+            "to_address": receiver_address,
+            "amount_mrwk": "1",
+            "nonce": 1.5,
+            "signature_hex": "00" * 64,
+        },
+    )
+    assert fractional_nonce.status_code == 400
+    assert fractional_nonce.json()["detail"] == "nonce must be an integer"
+
 
 def test_wallet_api_malformed_link_and_claim_requests_return_4xx(
     sqlite_url: str, monkeypatch

@@ -181,6 +181,41 @@ def test_admin_bounty_api_returns_400_for_malformed_json(
     assert missing_field.json()["detail"] == "repo is required"
 
 
+def test_admin_bounty_api_rejects_fractional_integer_fields(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    payload = {
+        "repo": "ramimbo/mergework",
+        "issue_number": 77,
+        "issue_url": "https://github.com/ramimbo/mergework/issues/77",
+        "title": "Strict integer validation",
+        "reward_mrwk": "10",
+        "max_awards": 1,
+        "acceptance": "Maintainer applies mrwk:accepted",
+    }
+
+    fractional_issue = client.post(
+        "/api/v1/bounties",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json={**payload, "issue_number": 77.9},
+    )
+    fractional_awards = client.post(
+        "/api/v1/bounties",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json={**payload, "max_awards": 1.5},
+    )
+
+    assert fractional_issue.status_code == 400
+    assert fractional_issue.json()["detail"] == "issue_number must be an integer"
+    assert fractional_awards.status_code == 400
+    assert fractional_awards.json()["detail"] == "max_awards must be an integer"
+
+
 def test_admin_payout_api_requires_admin_token_not_cookie_auth(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
