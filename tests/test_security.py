@@ -59,6 +59,38 @@ def test_browser_responses_set_security_headers(sqlite_url: str) -> None:
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
 
 
+@pytest.mark.parametrize(
+    ("path", "expected_asset_url"),
+    (
+        ("/api/docs", "https://cdn.jsdelivr.net/npm/swagger-ui-dist"),
+        ("/api/redoc", "https://cdn.jsdelivr.net/npm/redoc"),
+    ),
+)
+def test_api_docs_allow_external_assets_under_csp(
+    sqlite_url: str, path: str, expected_asset_url: str
+) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get(path)
+
+    assert response.status_code == 200
+    assert expected_asset_url in response.text
+    csp = response.headers["content-security-policy"]
+    assert "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net" in csp
+    assert "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net" in csp
+    assert "img-src 'self' data: https://fastapi.tiangolo.com" in csp
+
+
+def test_regular_pages_keep_strict_csp(sqlite_url: str) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get("/")
+
+    csp = response.headers["content-security-policy"]
+    assert "https://cdn.jsdelivr.net" not in csp
+    assert "'unsafe-inline'" not in csp
+
+
 def test_admin_bounty_form_requires_csrf_for_cookie_auth(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
