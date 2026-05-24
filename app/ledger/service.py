@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import re
 from datetime import UTC, datetime
@@ -86,6 +87,17 @@ def validate_public_url(url: str) -> str:
         raise LedgerError("URL must use http or https")
     if parsed.username or parsed.password:
         raise LedgerError("URL must not include credentials")
+    hostname = parsed.hostname
+    if hostname and hostname.lower() == "localhost":
+        raise LedgerError("URL must use a public host")
+    if hostname:
+        try:
+            ip_address = ipaddress.ip_address(hostname)
+        except ValueError:
+            pass
+        else:
+            if ip_address.is_loopback or ip_address.is_private or ip_address.is_link_local:
+                raise LedgerError("URL must use a public host")
     return clean
 
 

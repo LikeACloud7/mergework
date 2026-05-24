@@ -527,6 +527,52 @@ def test_bounty_urls_reject_embedded_credentials(sqlite_url: str) -> None:
             )
 
 
+def test_bounty_urls_reject_non_public_hosts(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        for issue_number, issue_url in enumerate(
+            (
+                "https://localhost/ramimbo/mergework/issues/21",
+                "https://127.0.0.1/ramimbo/mergework/issues/21",
+                "https://10.0.0.5/ramimbo/mergework/issues/21",
+                "https://169.254.10.20/ramimbo/mergework/issues/21",
+                "https://[::1]/ramimbo/mergework/issues/21",
+                "https://[fd00::1]/ramimbo/mergework/issues/21",
+            ),
+            start=21,
+        ):
+            with pytest.raises(LedgerError, match="URL must use a public host"):
+                create_bounty(
+                    session,
+                    repo="ramimbo/mergework",
+                    issue_number=issue_number,
+                    issue_url=issue_url,
+                    title="Non-public URL",
+                    reward_mrwk="1",
+                    acceptance="Maintainer applies mrwk:accepted",
+                )
+
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=27,
+            issue_url="https://github.com/ramimbo/mergework/issues/27",
+            title="Safe URL",
+            reward_mrwk="1",
+            acceptance="Maintainer applies mrwk:accepted",
+        )
+        with pytest.raises(LedgerError, match="URL must use a public host"):
+            pay_bounty(
+                session,
+                bounty_id=bounty.id,
+                to_account="github:alice",
+                submission_url="https://192.168.1.20/ramimbo/mergework/pull/27",
+                accepted_by="maintainer",
+                verifier_result={"label": "mrwk:accepted"},
+            )
+
+
 def test_bounty_payment_proof_rejects_control_character_metadata(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
@@ -675,6 +721,7 @@ def test_close_bounty_rejects_control_character_reference(sqlite_url: str) -> No
 
 def test_public_url_or_none_omits_control_character_urls() -> None:
     assert public_url_or_none("https://github.com/ramimbo/mergework/issues/14\nextra") is None
+    assert public_url_or_none("https://127.0.0.1/ramimbo/mergework/issues/14") is None
     assert (
         public_url_or_none(" https://github.com/ramimbo/mergework/issues/14 ")
         == "https://github.com/ramimbo/mergework/issues/14"
