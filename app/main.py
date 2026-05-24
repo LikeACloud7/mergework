@@ -69,10 +69,12 @@ API_DOCS_CSP = (
     "frame-ancestors 'none'; "
     "form-action 'self'; "
     "connect-src 'self'; "
-    "img-src 'self' data: https://fastapi.tiangolo.com; "
+    "font-src 'self' data: https://fonts.gstatic.com; "
+    "img-src 'self' data: https://fastapi.tiangolo.com https://cdn.redoc.ly; "
     "object-src 'none'; "
     "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net"
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+    "worker-src 'self' blob:"
 )
 API_DOCS_PATHS = {"/api/docs", "/api/redoc"}
 

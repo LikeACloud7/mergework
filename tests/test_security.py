@@ -77,8 +77,12 @@ def test_api_docs_allow_external_assets_under_csp(
     assert expected_asset_url in response.text
     csp = response.headers["content-security-policy"]
     assert "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net" in csp
-    assert "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net" in csp
-    assert "img-src 'self' data: https://fastapi.tiangolo.com" in csp
+    assert (
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com"
+    ) in csp
+    assert ("img-src 'self' data: https://fastapi.tiangolo.com https://cdn.redoc.ly") in csp
+    assert "font-src 'self' data: https://fonts.gstatic.com" in csp
+    assert "worker-src 'self' blob:" in csp
 
 
 def test_regular_pages_keep_strict_csp(sqlite_url: str) -> None:
