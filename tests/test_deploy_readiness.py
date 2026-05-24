@@ -113,6 +113,49 @@ def test_deploy_readiness_rejects_public_base_url_userinfo() -> None:
     assert "MERGEWORK_PUBLIC_BASE_URL must not include userinfo" in errors
 
 
+def test_deploy_readiness_rejects_malformed_public_base_url_hosts() -> None:
+    empty_host_errors = validate_deploy_settings(_settings(public_base_url="https://:443"))
+    invalid_port_errors = validate_deploy_settings(
+        _settings(public_base_url="https://api.example:notaport")
+    )
+    out_of_range_port_errors = validate_deploy_settings(
+        _settings(public_base_url="https://api.example:70000")
+    )
+    unbracketed_ipv6_errors = validate_deploy_settings(
+        _settings(public_base_url="https://2001:db8::1")
+    )
+    unmatched_bracket_errors = validate_deploy_settings(_settings(public_base_url="https://[::1"))
+    empty_bracket_errors = validate_deploy_settings(_settings(public_base_url="https://[]"))
+    bracketed_dns_errors = validate_deploy_settings(
+        _settings(public_base_url="https://[api.example]")
+    )
+    dot_host_errors = validate_deploy_settings(_settings(public_base_url="https://."))
+    empty_label_errors = validate_deploy_settings(_settings(public_base_url="https://api..example"))
+    leading_hyphen_errors = validate_deploy_settings(
+        _settings(public_base_url="https://-api.example")
+    )
+    trailing_hyphen_errors = validate_deploy_settings(
+        _settings(public_base_url="https://api-.example")
+    )
+    underscore_errors = validate_deploy_settings(
+        _settings(public_base_url="https://api_host.example")
+    )
+
+    expected = "MERGEWORK_PUBLIC_BASE_URL must include a valid host"
+    assert expected in empty_host_errors
+    assert expected in invalid_port_errors
+    assert expected in out_of_range_port_errors
+    assert expected in unbracketed_ipv6_errors
+    assert expected in unmatched_bracket_errors
+    assert expected in empty_bracket_errors
+    assert expected in bracketed_dns_errors
+    assert expected in dot_host_errors
+    assert expected in empty_label_errors
+    assert expected in leading_hyphen_errors
+    assert expected in trailing_hyphen_errors
+    assert expected in underscore_errors
+
+
 def test_deploy_readiness_script_runs_directly_from_source() -> None:
     env = {
         **os.environ,
