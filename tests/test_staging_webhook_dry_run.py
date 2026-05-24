@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.staging_webhook_dry_run import _enforce_staging_target
+from scripts.staging_webhook_dry_run import _enforce_staging_target, _validate_http_url
 
 
 def test_staging_webhook_dry_run_allows_loopback_hosts() -> None:
@@ -18,3 +18,16 @@ def test_staging_webhook_dry_run_rejects_non_staging_public_hosts(
 
     with pytest.raises(RuntimeError, match="MERGEWORK_STAGING_BASE_URL"):
         _enforce_staging_target("https://mrwk.example.test")
+
+
+def test_staging_webhook_dry_run_rejects_url_credentials() -> None:
+    with pytest.raises(RuntimeError, match="must not include username or password"):
+        _validate_http_url("https://operator:secret@staging.mrwk.example.test")
+    with pytest.raises(RuntimeError, match="must not include username or password"):
+        _validate_http_url("https://operator@staging.mrwk.example.test")
+    with pytest.raises(RuntimeError, match="must not include username or password"):
+        _validate_http_url("https://:secret@staging.mrwk.example.test")
+    with pytest.raises(RuntimeError, match="must not include username or password"):
+        _validate_http_url("ftp://operator:secret@staging.mrwk.example.test")
+
+    _validate_http_url("https://staging.mrwk.example.test")
