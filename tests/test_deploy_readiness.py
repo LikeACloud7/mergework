@@ -137,3 +137,24 @@ def test_deploy_readiness_rejects_loopback_public_base_url() -> None:
     assert "MERGEWORK_PUBLIC_BASE_URL must not use a loopback host" in localhost_errors
     assert "MERGEWORK_PUBLIC_BASE_URL must not use a loopback host" in ipv4_errors
     assert "MERGEWORK_PUBLIC_BASE_URL must not use a loopback host" in ipv6_errors
+
+
+def test_deploy_readiness_rejects_private_public_base_url_ip_literals() -> None:
+    private_ipv4_errors = validate_deploy_settings(_settings(public_base_url="https://10.0.0.5"))
+    rfc1918_errors = validate_deploy_settings(_settings(public_base_url="https://192.168.1.20"))
+    rfc1918_midblock_errors = validate_deploy_settings(
+        _settings(public_base_url="https://172.16.2.3")
+    )
+    link_local_errors = validate_deploy_settings(_settings(public_base_url="https://169.254.10.20"))
+    private_ipv6_errors = validate_deploy_settings(_settings(public_base_url="https://[fd00::1]"))
+
+    expected = "MERGEWORK_PUBLIC_BASE_URL must not use a private or link-local host"
+    assert expected in private_ipv4_errors
+    assert expected in rfc1918_errors
+    assert expected in rfc1918_midblock_errors
+    assert expected in link_local_errors
+    assert expected in private_ipv6_errors
+
+
+def test_deploy_readiness_allows_global_public_base_url_ip_literal() -> None:
+    assert validate_deploy_settings(_settings(public_base_url="https://8.8.8.8")) == []
