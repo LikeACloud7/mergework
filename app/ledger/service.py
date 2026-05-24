@@ -37,6 +37,7 @@ MICRO_UNITS = 1_000_000
 GENESIS_SUPPLY_MICRO = 100_000_000 * MICRO_UNITS
 GITHUB_LOGIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$")
 CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
+MRWK_AMOUNT_RE = re.compile(r"^-?\d+(?:\.\d+)?$")
 
 
 class LedgerError(RuntimeError):
@@ -44,8 +45,11 @@ class LedgerError(RuntimeError):
 
 
 def parse_mrwk_amount(amount: str | int | Decimal) -> int:
+    amount_text = str(amount).strip()
+    if not MRWK_AMOUNT_RE.fullmatch(amount_text):
+        raise LedgerError("invalid MRWK amount")
     try:
-        value = Decimal(str(amount))
+        value = Decimal(amount_text)
     except (InvalidOperation, ValueError) as exc:
         raise LedgerError("invalid MRWK amount") from exc
     if not value.is_finite():

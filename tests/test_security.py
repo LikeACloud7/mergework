@@ -428,6 +428,16 @@ def test_amount_parser_rejects_non_finite_values() -> None:
             parse_mrwk_amount(amount)
 
 
+def test_amount_parser_rejects_non_decimal_notation() -> None:
+    for amount in ("1e3", "1E-3", "+1"):
+        with pytest.raises(LedgerError, match="invalid MRWK amount"):
+            parse_mrwk_amount(amount)
+
+    assert parse_mrwk_amount("1.5") == 1_500_000
+    with pytest.raises(LedgerError, match="amount must be positive"):
+        parse_mrwk_amount("-1")
+
+
 def test_amount_parser_rejects_values_above_fixed_supply() -> None:
     with pytest.raises(LedgerError, match="amount exceeds fixed supply"):
         parse_mrwk_amount("100000001")
