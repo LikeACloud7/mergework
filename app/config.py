@@ -39,6 +39,10 @@ def _csv_env(name: str, default: str = "") -> tuple[str, ...]:
 def _secret_errors(name: str, value: str) -> list[str]:
     if not value:
         return [f"{name} is required"]
+    if value != value.strip():
+        return [f"{name} must not include leading or trailing whitespace"]
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+        return [f"{name} must not include control characters"]
     if len(value) < 32 or value.strip().lower() in WEAK_SECRET_VALUES:
         return [f"{name} must be at least 32 characters"]
     if len(set(value)) < 12:

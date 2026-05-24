@@ -64,6 +64,27 @@ def test_deploy_readiness_rejects_reused_secret_values() -> None:
     assert "deploy secrets must use distinct values" in errors
 
 
+def test_deploy_readiness_rejects_secret_whitespace_and_control_characters() -> None:
+    errors = validate_deploy_settings(
+        _settings(
+            github_webhook_secret=" webhook-8efc3925bb8746b8a8fd3392c4c48e32",
+            github_oauth_client_secret="oauth-7818e79f9d3a4a1d82ff0e1b9f0b8e42 ",
+            admin_token="admin-14dcaab83bb245f2bfb5d5c21a9bb55b\nextra",
+            cookie_secret="cookie-27fd1c41324a4bdcb2e4014adc3a6108\x7f",
+        )
+    )
+
+    assert (
+        "MERGEWORK_GITHUB_WEBHOOK_SECRET must not include leading or trailing whitespace" in errors
+    )
+    assert (
+        "MERGEWORK_GITHUB_OAUTH_CLIENT_SECRET must not include leading or trailing whitespace"
+        in errors
+    )
+    assert "MERGEWORK_ADMIN_TOKEN must not include control characters" in errors
+    assert "MERGEWORK_COOKIE_SECRET must not include control characters" in errors
+
+
 def test_deploy_readiness_requires_https_oauth_and_allowed_labelers() -> None:
     errors = validate_deploy_settings(
         _settings(
