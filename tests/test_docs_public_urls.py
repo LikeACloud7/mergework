@@ -23,6 +23,9 @@ def test_api_examples_document_internal_bounty_ids() -> None:
     assert "https://api.mrwk.ltclab.site" in examples
     assert "https://mcp.mrwk.ltclab.site" in examples
     assert "/api/v1/bounties/<bounty_id>" in examples
+    assert '"name":"get_bounty"' in examples
+    assert '"arguments":{"id":11}' in examples
+    assert '"id":4' in examples
     assert "not the GitHub issue" in examples
     assert "public_key_hex" in examples
 
