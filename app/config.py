@@ -53,6 +53,15 @@ def validate_deploy_settings(settings: Settings) -> list[str]:
     )
     errors.extend(_secret_errors("MERGEWORK_ADMIN_TOKEN", settings.admin_token))
     errors.extend(_secret_errors("MERGEWORK_COOKIE_SECRET", settings.cookie_secret))
+    deploy_secrets = [
+        settings.github_webhook_secret,
+        settings.github_oauth_client_secret,
+        settings.admin_token,
+        settings.cookie_secret,
+    ]
+    present_secrets = [secret for secret in deploy_secrets if secret]
+    if len(set(present_secrets)) != len(present_secrets):
+        errors.append("deploy secrets must use distinct values")
     if not settings.github_oauth_client_id:
         errors.append("MERGEWORK_GITHUB_OAUTH_CLIENT_ID is required")
     if not settings.admin_logins:
