@@ -181,6 +181,32 @@ def test_admin_bounty_api_returns_400_for_malformed_json(
     assert missing_field.json()["detail"] == "repo is required"
 
 
+def test_admin_bounty_api_rejects_duplicate_repo_issue(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    payload = _admin_bounty_form_data()
+
+    first = client.post(
+        "/api/v1/bounties",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json=payload,
+    )
+    duplicate = client.post(
+        "/api/v1/bounties",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json=payload,
+    )
+
+    assert first.status_code == 200
+    assert duplicate.status_code == 400
+    assert duplicate.json()["detail"] == "bounty already exists for issue"
+
+
 def test_admin_bounty_api_rejects_fractional_integer_fields(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

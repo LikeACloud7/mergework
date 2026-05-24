@@ -98,6 +98,33 @@ def test_create_bounty_rejects_non_positive_issue_number(sqlite_url: str) -> Non
                 )
 
 
+def test_create_bounty_rejects_duplicate_repo_issue(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=7,
+            issue_url="https://github.com/ramimbo/mergework/issues/7",
+            title="Original bounty",
+            reward_mrwk="25",
+            acceptance="First bounty for this issue.",
+        )
+
+        with pytest.raises(LedgerError, match="bounty already exists for issue"):
+            create_bounty(
+                session,
+                repo="ramimbo/mergework",
+                issue_number=7,
+                issue_url="https://github.com/ramimbo/mergework/issues/7",
+                title="Duplicate bounty",
+                reward_mrwk="25",
+                acceptance="Second bounty for this issue should be rejected cleanly.",
+            )
+
+
 def test_multi_award_bounty_pays_distinct_submissions_until_exhausted(
     sqlite_url: str,
 ) -> None:
