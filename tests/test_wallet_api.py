@@ -448,3 +448,22 @@ def test_reject_self_transfer(sqlite_url: str) -> None:
             memo="",
             signature_hex="a" * 128,
         )
+
+
+def test_me_page_prefills_claim_address_for_linked_wallet(sqlite_url: str, monkeypatch) -> None:
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "test-cookie-secret")
+    create_schema(sqlite_url)
+    _, public_hex, address = _keypair()
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        register_wallet(session, public_key_hex=public_hex, github_login="alice")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    client.cookies.set("mrwk_user", _signed_value("alice", "test-cookie-secret"))
+
+    me = client.get("/me").text
+
+    assert f'value="{address}"' in me
+    assert "Claim form is prefilled with your linked wallet." in me
