@@ -30,6 +30,20 @@ def test_api_examples_document_internal_bounty_ids() -> None:
     assert "public_key_hex" in examples
 
 
+def test_api_examples_document_bounty_list_response_shape() -> None:
+    examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
+
+    assert "/api/v1/bounties?status=open" in examples
+    assert "status` can be omitted or set to" in examples
+    assert '"id": 36' in examples
+    assert '"repo": "ramimbo/mergework"' in examples
+    assert '"issue_number": 164' in examples
+    assert '"reward_mrwk": "100"' in examples
+    assert '"reserved_mrwk": "500"' in examples
+    assert '"awards_remaining": 5' in examples
+    assert "Use `id` for the single-bounty API path" in examples
+
+
 def test_agent_guide_explains_internal_bounty_ids() -> None:
     guide = Path("docs/agent-guide.md").read_text(encoding="utf-8")
 

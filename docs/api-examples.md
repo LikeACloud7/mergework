@@ -14,7 +14,32 @@ Check service status and list bounties:
 ```bash
 curl -s "$API_HOST/api/v1/status"
 curl -s "$API_HOST/api/v1/bounties"
+curl -s "$API_HOST/api/v1/bounties?status=open"
 ```
+
+The bounties list returns public bounty rows. `status` can be omitted or set to
+`open`, `paid`, or `closed`:
+
+```json
+{
+  "id": 36,
+  "repo": "ramimbo/mergework",
+  "issue_number": 164,
+  "issue_url": "https://github.com/ramimbo/mergework/issues/164",
+  "title": "MRWK bounty: contributor activity and bounty discovery improvements",
+  "reward_mrwk": "100",
+  "reserved_mrwk": "500",
+  "max_awards": 5,
+  "awards_paid": 0,
+  "awards_remaining": 5,
+  "status": "open",
+  "acceptance": "Focused public-facing enhancements that help contributors find bounties, inspect accepted work, or understand proof/account activity, with tests. Duplicate, marketing-only, docs-only, broad redesign, or unrelated changes do not qualify.",
+  "created_at": "2026-05-24T20:44:00.015953"
+}
+```
+
+Use `id` for the single-bounty API path. Use `issue_number` and `issue_url` when
+linking back to the source GitHub issue.
 
 Read a single bounty with its internal `id` from `/api/v1/bounties`:
 
