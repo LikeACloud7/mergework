@@ -85,8 +85,12 @@ def validate_deploy_settings(settings: Settings) -> list[str]:
     )
     if not settings.admin_logins:
         errors.append("MERGEWORK_ADMIN_LOGINS must list admin GitHub logins")
+    elif len(set(settings.admin_logins)) != len(settings.admin_logins):
+        errors.append("MERGEWORK_ADMIN_LOGINS must not include duplicate logins")
     if not settings.github_accepted_labelers:
         errors.append("MERGEWORK_GITHUB_ACCEPTED_LABELERS must list maintainer logins")
+    elif len(set(settings.github_accepted_labelers)) != len(settings.github_accepted_labelers):
+        errors.append("MERGEWORK_GITHUB_ACCEPTED_LABELERS must not include duplicate logins")
     if settings.admin_logins and settings.github_accepted_labelers:
         non_admin_labelers = sorted(
             set(settings.github_accepted_labelers) - set(settings.admin_logins)

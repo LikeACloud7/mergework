@@ -120,6 +120,18 @@ def test_deploy_readiness_rejects_non_admin_accepted_labelers() -> None:
     assert "MERGEWORK_GITHUB_ACCEPTED_LABELERS must be included in MERGEWORK_ADMIN_LOGINS" in errors
 
 
+def test_deploy_readiness_rejects_duplicate_admin_or_labeler_logins() -> None:
+    errors = validate_deploy_settings(
+        _settings(
+            admin_logins=("alice", "alice"),
+            github_accepted_labelers=("alice", "alice"),
+        )
+    )
+
+    assert "MERGEWORK_ADMIN_LOGINS must not include duplicate logins" in errors
+    assert "MERGEWORK_GITHUB_ACCEPTED_LABELERS must not include duplicate logins" in errors
+
+
 def test_deploy_readiness_rejects_public_base_url_path_query_or_fragment() -> None:
     path_errors = validate_deploy_settings(
         _settings(public_base_url="https://mrwk.example.test/app")
