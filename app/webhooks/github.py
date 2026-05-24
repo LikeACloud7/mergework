@@ -105,7 +105,13 @@ def _handle_accepted_issue_label(
     if not repo or not isinstance(labeled_item, dict):
         return _record_status(database_url, delivery_id, event_type, payload_hash, "missing_issue")
 
-    submitter = ((labeled_item.get("user") or {}).get("login") or "unknown").strip()
+    user = labeled_item.get("user") or {}
+    submitter_login = user.get("login") if isinstance(user, dict) else None
+    if not isinstance(submitter_login, str) or not submitter_login.strip():
+        return _record_status(
+            database_url, delivery_id, event_type, payload_hash, "missing_submitter"
+        )
+    submitter = submitter_login.strip()
     accepted_by = ((payload.get("sender") or {}).get("login") or "maintainer").strip().lower()
     if accepted_labelers and accepted_by not in accepted_labelers:
         return _record_status(
