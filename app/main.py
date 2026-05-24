@@ -1108,6 +1108,22 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
                 return int(clean)
         raise ValueError(f"{field} must be an integer")
 
+    def str_arg(field: str, *, allow_empty: bool = False) -> str:
+        value = args[field]
+        if not isinstance(value, str):
+            raise ValueError(f"{field} must be a string")
+        if not allow_empty and value == "":
+            raise ValueError(f"{field} must not be empty")
+        return value
+
+    def optional_str_arg(field: str, default: str = "") -> str:
+        value = args.get(field, default)
+        if value is None:
+            return default
+        if not isinstance(value, str):
+            raise ValueError(f"{field} must be a string")
+        return value
+
     with session_scope(database_url) as session:
         if name == "list_bounties":
             bounties = session.scalars(
@@ -1120,29 +1136,29 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
                 return "bounty not found"
             return json.dumps(bounty_to_dict(bounty))
         if name == "get_balance":
-            account = _normalized_account(str(args["account"]))
+            account = _normalized_account(str_arg("account"))
             return f"{account}: {format_mrwk(get_balance(session, account))} MRWK"
         if name == "register_wallet":
             wallet = register_wallet(
                 session,
-                public_key_hex=str(args["public_key_hex"]),
-                label=str(args["label"]) if args.get("label") is not None else None,
+                public_key_hex=str_arg("public_key_hex"),
+                label=optional_str_arg("label") if args.get("label") is not None else None,
             )
             return json.dumps(wallet_to_dict(session, wallet))
         if name == "get_wallet":
-            wallet_row = session.get(Wallet, str(args["address"]).lower())
+            wallet_row = session.get(Wallet, str_arg("address").lower())
             if wallet_row is None:
                 return "wallet not found"
             return json.dumps(wallet_to_dict(session, wallet_row))
         if name == "submit_wallet_transfer":
             transfer = submit_wallet_transfer(
                 session,
-                from_address=str(args["from_address"]),
-                to_address=str(args["to_address"]),
-                amount_mrwk=str(args["amount_mrwk"]),
+                from_address=str_arg("from_address"),
+                to_address=str_arg("to_address"),
+                amount_mrwk=str_arg("amount_mrwk"),
                 nonce=int_arg("nonce"),
-                memo=str(args.get("memo", "")),
-                signature_hex=str(args["signature_hex"]),
+                memo=optional_str_arg("memo"),
+                signature_hex=str_arg("signature_hex"),
             )
             return json.dumps(wallet_transfer_to_dict(transfer))
         if name == "get_ledger_entry":
@@ -1154,7 +1170,7 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
             )
             return json.dumps(ledger_to_dict(entry, proof.hash if proof else None))
         if name == "get_proof":
-            proof = session.get(Proof, str(args["hash"]))
+            proof = session.get(Proof, str_arg("hash"))
             if proof is None:
                 return "proof not found"
             public_payload = json.loads(proof.public_json)
