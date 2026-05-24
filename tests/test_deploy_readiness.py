@@ -131,6 +131,37 @@ def test_deploy_readiness_accepts_absolute_sqlite_and_external_database_urls() -
         )
         == []
     )
+    assert (
+        validate_deploy_settings(
+            _settings(
+                database_url="postgresql+psycopg://mergework:password@db.example.test/mergework"
+            )
+        )
+        == []
+    )
+    assert (
+        validate_deploy_settings(
+            _settings(
+                database_url="postgres+psycopg://mergework:password@db.example.test/mergework"
+            )
+        )
+        == []
+    )
+
+
+def test_deploy_readiness_rejects_malformed_database_url_schemes() -> None:
+    missing_scheme_errors = validate_deploy_settings(_settings(database_url="not-a-url"))
+    unsupported_scheme_errors = validate_deploy_settings(
+        _settings(database_url="ftp://db.example.test/mergework")
+    )
+    sqlite_lookalike_errors = validate_deploy_settings(
+        _settings(database_url="sqlitefoo:////srv/mergework/data/app.sqlite3")
+    )
+
+    expected = "MERGEWORK_DATABASE_URL must use sqlite, postgresql, or postgres"
+    assert expected in missing_scheme_errors
+    assert expected in unsupported_scheme_errors
+    assert expected in sqlite_lookalike_errors
 
 
 def test_deploy_readiness_requires_https_oauth_and_allowed_labelers() -> None:
