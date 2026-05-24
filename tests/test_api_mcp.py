@@ -238,6 +238,37 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     assert "100000000" in balance["result"]["content"][0]["text"]
 
 
+def test_mcp_rejects_malformed_requests_without_500(sqlite_url: str) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    malformed = client.post("/mcp", data="not-json", headers={"content-type": "application/json"})
+    assert malformed.status_code == 400
+    assert malformed.json() == {
+        "jsonrpc": "2.0",
+        "id": None,
+        "error": {"code": -32700, "message": "parse error"},
+    }
+
+    non_object = client.post("/mcp", json=[])
+    assert non_object.status_code == 400
+    assert non_object.json() == {
+        "jsonrpc": "2.0",
+        "id": None,
+        "error": {"code": -32600, "message": "invalid request"},
+    }
+
+    bad_params = client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": []},
+    )
+    assert bad_params.status_code == 200
+    assert bad_params.json() == {
+        "jsonrpc": "2.0",
+        "id": 7,
+        "error": {"code": -32602, "message": "invalid params"},
+    }
+
+
 def test_mcp_get_proof_returns_public_proof_details(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
