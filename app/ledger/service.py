@@ -108,11 +108,12 @@ def _normalize_github_login(github_login: str) -> str:
 
 def resolve_payout_account(session: Session, to_account: str) -> str:
     clean = _clean_required_text(to_account, "to_account", 128)
-    if clean.startswith("github:"):
-        login = _normalize_github_login(clean.removeprefix("github:"))
+    lower = clean.lower()
+    if lower.startswith("github:"):
+        login = _normalize_github_login(clean.split(":", 1)[1])
         linked_wallet = linked_wallet_for_github(session, login)
         return linked_wallet.address if linked_wallet is not None else f"github:{login}"
-    if clean.startswith("mrwk1"):
+    if lower.startswith("mrwk1"):
         try:
             address = normalize_wallet_address(clean)
         except WalletError as exc:
