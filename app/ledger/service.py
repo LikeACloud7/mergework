@@ -378,6 +378,9 @@ def create_bounty(
         raise LedgerError("max_awards is too large")
     reserved = reward * max_awards
     clean_repo = _clean_required_text(repo, "repo", 200)
+    existing_bounty = find_bounty_by_issue(session, clean_repo, issue_number)
+    if existing_bounty is not None:
+        raise LedgerError("bounty already exists for issue")
     clean_issue_url = validate_public_url(issue_url)
     clean_title = _clean_required_text(title, "title", 300)
     clean_acceptance = _clean_required_text(acceptance, "acceptance", 5_000)
