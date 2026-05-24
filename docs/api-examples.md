@@ -49,6 +49,24 @@ curl -s "$API_HOST/api/v1/accounts/treasury:mrwk"
 curl -s "$API_HOST/api/v1/wallets/mrwk1..."
 ```
 
+Account responses identify the normalized ledger address, optional GitHub login,
+existence, current balance, and whether the account can move funds directly:
+
+```json
+{
+  "account": "github:tatelyman",
+  "ledger_address": "github:tatelyman",
+  "github_login": "tatelyman",
+  "exists": true,
+  "balance_mrwk": "395",
+  "transfer_status": "Claim GitHub balances from /me after linking a registered mrwk1 wallet."
+}
+```
+
+For `treasury:` and `reserve:` accounts, `github_login` is `null` and
+`transfer_status` explains that direct MRWK wallet transfers are only available
+for registered `mrwk1` addresses.
+
 Register a wallet public key. Keep the private key local; only send the public
 key to MergeWork.
 
