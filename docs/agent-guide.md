@@ -154,3 +154,19 @@ Tools:
   asks for a closing reference.
 - Do not put private security details in public issues, PRs, or ledger metadata.
 - Do not claim acceptance until a maintainer applies `mrwk:accepted`.
+
+## Bounty Submission Checklist
+
+Use this checklist before opening a PR for `mrwk:bounty` issues:
+
+1. Confirm no active claim or duplicate PR already covers the same scope.
+2. Keep changes small and directly tied to one bounty issue.
+3. Include `Bounty #<issue>` or `Refs #<issue>` in PR body.
+4. Explain the exact user or maintainer pain point you fixed.
+5. Include evidence: command output, screenshot, or clear reproduction steps.
+6. Run the required checks from the issue text (for docs work, run
+   `./.venv/bin/python scripts/docs_smoke.py`).
+7. Avoid private data, secret material, and speculative price claims.
+
+Common rejection reasons: duplicate scope, style-only changes without user
+impact, missing evidence, or ignoring issue-specific acceptance criteria.
