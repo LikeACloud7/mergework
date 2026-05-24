@@ -111,6 +111,24 @@ def test_deploy_readiness_rejects_non_persistent_sqlite_database_urls() -> None:
     assert "MERGEWORK_DATABASE_URL must use a persistent sqlite file" in empty_errors
 
 
+def test_deploy_readiness_rejects_database_url_missing_whitespace_or_control() -> None:
+    missing_errors = validate_deploy_settings(_settings(database_url=""))
+    blank_errors = validate_deploy_settings(_settings(database_url="   "))
+    whitespace_errors = validate_deploy_settings(
+        _settings(database_url=" postgresql://mergework:password@db.example.test/mergework")
+    )
+    control_errors = validate_deploy_settings(
+        _settings(database_url="postgresql://mergework:password@db.example.test/mergework\nextra")
+    )
+
+    assert "MERGEWORK_DATABASE_URL is required" in missing_errors
+    assert "MERGEWORK_DATABASE_URL is required" in blank_errors
+    assert "MERGEWORK_DATABASE_URL must not include leading or trailing whitespace" in (
+        whitespace_errors
+    )
+    assert "MERGEWORK_DATABASE_URL must not include control characters" in control_errors
+
+
 def test_deploy_readiness_accepts_absolute_sqlite_and_external_database_urls() -> None:
     assert (
         validate_deploy_settings(
