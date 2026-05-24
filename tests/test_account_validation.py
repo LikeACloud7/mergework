@@ -42,6 +42,13 @@ def test_api_account_accepts_valid(sqlite_url: str) -> None:
     assert resp.json()["account"] == "github:alice"
 
 
+def test_api_account_rejects_empty_github_login(sqlite_url: str) -> None:
+    client = _setup_app(sqlite_url)
+    resp = client.get("/api/v1/accounts/github:%20")
+    assert resp.status_code == 400
+    assert "github login" in resp.json()["detail"].lower()
+
+
 def test_mcp_get_balance_rejects_empty_account(sqlite_url: str) -> None:
     client = _setup_app(sqlite_url)
     resp = client.post(
@@ -51,6 +58,23 @@ def test_mcp_get_balance_rejects_empty_account(sqlite_url: str) -> None:
             "method": "tools/call",
             "id": 1,
             "params": {"name": "get_balance", "arguments": {"account": ""}},
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "error" in body
+    assert body["error"]["code"] == -32602
+
+
+def test_mcp_get_balance_rejects_empty_github_login(sqlite_url: str) -> None:
+    client = _setup_app(sqlite_url)
+    resp = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "id": 1,
+            "params": {"name": "get_balance", "arguments": {"account": "github: "}},
         },
     )
     assert resp.status_code == 200
@@ -79,4 +103,10 @@ def test_mcp_get_balance_rejects_null_byte_account(sqlite_url: str) -> None:
 def test_account_page_rejects_null_byte(sqlite_url: str) -> None:
     client = _setup_app(sqlite_url)
     resp = client.get("/accounts/test%00account")
+    assert resp.status_code == 400
+
+
+def test_account_page_rejects_empty_github_login(sqlite_url: str) -> None:
+    client = _setup_app(sqlite_url)
+    resp = client.get("/accounts/github:%20")
     assert resp.status_code == 400
