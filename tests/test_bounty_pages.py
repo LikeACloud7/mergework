@@ -145,4 +145,6 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert "Bounty payment proof" in proof_page.text
     assert "Accepted bounty payment" in proof_page.text
     assert "Bounty issue" in proof_page.text
+    assert "MergeWork bounty" in proof_page.text
+    assert f'href="/bounties/{bounty.id}"' in proof_page.text
     assert f'href="/ledger/{payment_sequence}"' in proof_page.text
