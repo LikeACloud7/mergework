@@ -20,6 +20,52 @@
 
 <section>
   <div class="section-head">
+    <h2>Accepted work</h2>
+    <p>Proof-backed bounty payments made to this account.</p>
+  </div>
+  {% if accepted_work %}
+  <div class="ledger-list">
+    {% for work in accepted_work %}
+    <article class="ledger-row ledger-row--bounty-payment">
+      <div class="ledger-entry-card">
+        <div class="ledger-card-head">
+          <div class="ledger-card-title">
+            <a class="ledger-entry-link" href="{{ work.ledger_url }}">#{{ work.ledger_sequence }}</a>
+            <span class="ledger-type ledger-type--bounty-payment">Accepted</span>
+          </div>
+          <strong class="ledger-amount">{{ work.amount_mrwk }} MRWK</strong>
+        </div>
+        <dl class="ledger-card-grid">
+          <div class="ledger-field ledger-field--reference reference-cell">
+            <dt>Bounty</dt>
+            {% set issue_url = safe_public_url(work.issue_url) %}
+            <dd>{% if issue_url %}<a href="{{ issue_url }}">{{ work.repo }} #{{ work.issue_number }}</a>{% else %}-{% endif %}</dd>
+          </div>
+          <div class="ledger-field ledger-field--reference reference-cell">
+            <dt>Submission</dt>
+            {% set submission_url = safe_public_url(work.submission_url) %}
+            <dd>{% if submission_url %}<a href="{{ submission_url }}">{{ work.submission_url | replace("https://github.com/", "") }}</a>{% elif work.submission_url %}<code>{{ work.submission_url }}</code>{% else %}-{% endif %}</dd>
+          </div>
+          <div class="ledger-field ledger-field--proof">
+            <dt>Proof</dt>
+            <dd><a href="{{ work.proof_url }}">{{ work.proof_hash[:12] }}</a></dd>
+          </div>
+          <div class="ledger-field">
+            <dt>Accepted by</dt>
+            <dd>{{ work.accepted_by or "-" }}</dd>
+          </div>
+        </dl>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p>No proof-backed accepted work for this account yet.</p>
+  {% endif %}
+</section>
+
+<section>
+  <div class="section-head">
     <h2>Transactions</h2>
     <p>Credits and debits involving this account.</p>
   </div>

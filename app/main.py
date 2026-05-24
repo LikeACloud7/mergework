@@ -215,6 +215,45 @@ def activity_to_dict(session: Session) -> dict[str, Any]:
     }
 
 
+def accepted_work_for_account(session: Session, account: str) -> list[dict[str, Any]]:
+    rows = session.execute(
+        select(Proof, LedgerEntry)
+        .join(LedgerEntry, LedgerEntry.sequence == Proof.ledger_sequence)
+        .where(
+            Proof.kind == "bounty_payment",
+            LedgerEntry.entry_type == "bounty_payment",
+            LedgerEntry.to_account == account,
+        )
+        .order_by(LedgerEntry.sequence.desc())
+    ).all()
+    accepted_work: list[dict[str, Any]] = []
+    for proof, entry in rows:
+        data = json.loads(proof.public_json)
+        if not isinstance(data, dict) or data.get("kind") != "bounty_payment":
+            continue
+        repo = data.get("repo")
+        issue_number = data.get("issue_number")
+        issue_url = None
+        if isinstance(repo, str) and isinstance(issue_number, int):
+            issue_url = f"https://github.com/{repo}/issues/{issue_number}"
+        accepted_work.append(
+            {
+                "ledger_sequence": entry.sequence,
+                "ledger_url": f"/ledger/{entry.sequence}",
+                "proof_hash": proof.hash,
+                "proof_url": f"/proofs/{proof.hash}",
+                "amount_mrwk": format_mrwk(entry.amount_microunits),
+                "submission_url": data.get("submission_url"),
+                "issue_url": issue_url,
+                "repo": repo,
+                "issue_number": issue_number,
+                "accepted_by": data.get("accepted_by"),
+                "created_at": entry.created_at.isoformat(),
+            }
+        )
+    return accepted_work
+
+
 def _wallet_timestamp(value: datetime) -> str:
     if value.tzinfo is not None:
         value = value.replace(tzinfo=None)
@@ -967,8 +1006,15 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             ).all()
             proofs = _proof_hashes_by_sequence(session, [entry.sequence for entry in entries])
             transactions = [ledger_to_dict(entry, proofs.get(entry.sequence)) for entry in entries]
+            accepted_work = accepted_work_for_account(session, account)
         return templates.TemplateResponse(
-            request, "account.html", {"account": account_data, "transactions": transactions}
+            request,
+            "account.html",
+            {
+                "account": account_data,
+                "accepted_work": accepted_work,
+                "transactions": transactions,
+            },
         )
 
     @app.get("/wallets", response_class=HTMLResponse)
