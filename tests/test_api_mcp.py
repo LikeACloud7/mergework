@@ -226,6 +226,68 @@ def test_bounty_api_keeps_terminal_multi_awards_visible_but_inactive(sqlite_url:
     assert status["active_bounties"] == 0
 
 
+def test_bounty_api_filters_by_status(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        open_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=40,
+            issue_url="https://github.com/ramimbo/mergework/issues/40",
+            title="Open status filter bounty",
+            reward_mrwk="5",
+            acceptance="Open rows should be filterable.",
+        )
+        paid_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=41,
+            issue_url="https://github.com/ramimbo/mergework/issues/41",
+            title="Paid status filter bounty",
+            reward_mrwk="5",
+            acceptance="Paid rows should be filterable.",
+        )
+        closed_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=42,
+            issue_url="https://github.com/ramimbo/mergework/issues/42",
+            title="Closed status filter bounty",
+            reward_mrwk="5",
+            acceptance="Closed rows should be filterable.",
+        )
+        pay_bounty(
+            session,
+            bounty_id=paid_bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/41",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        close_bounty(
+            session,
+            bounty_id=closed_bounty.id,
+            closed_by="maintainer",
+            reference="https://github.com/ramimbo/mergework/issues/42#close",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    assert [item["id"] for item in client.get("/api/v1/bounties?status=open").json()] == [
+        open_bounty.id
+    ]
+    assert [item["id"] for item in client.get("/api/v1/bounties?status=paid").json()] == [
+        paid_bounty.id
+    ]
+    assert [item["id"] for item in client.get("/api/v1/bounties?status=closed").json()] == [
+        closed_bounty.id
+    ]
+    invalid = client.get("/api/v1/bounties?status=bogus")
+    assert invalid.status_code == 400
+    assert invalid.json()["detail"] == "status must be one of: open, paid, closed"
+
+
 def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
