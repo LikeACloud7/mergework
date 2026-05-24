@@ -546,6 +546,47 @@ def test_account_page_rejects_empty_account_path(sqlite_url: str) -> None:
     assert response.status_code == 404
 
 
+def test_wallet_account_views_normalize_mixed_case_addresses(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    wallet_address = "mrwk1" + "a" * 40
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        proof = pay_bounty(
+            session,
+            bounty_id=create_bounty(
+                session,
+                repo="ramimbo/mergework",
+                issue_number=50,
+                issue_url="https://github.com/ramimbo/mergework/issues/50",
+                title="Normalize wallet account links",
+                reward_mrwk="50",
+                acceptance="Wallet account views normalize address casing.",
+            ).id,
+            to_account=wallet_address,
+            submission_url="https://github.com/ramimbo/mergework/pull/50",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    mixed_case_address = "MRWK1" + "A" * 40
+
+    account = client.get(f"/accounts/{mixed_case_address}").text
+    balance = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "get_balance", "arguments": {"account": mixed_case_address}},
+        },
+    ).json()
+
+    assert "50 MRWK" in account
+    assert f"/proofs/{proof.hash}" in account
+    assert f"{wallet_address}: 50 MRWK" in balance["result"]["content"][0]["text"]
+
+
 def test_ledger_page_highlights_bounty_payment_and_release(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
