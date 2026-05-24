@@ -4,7 +4,12 @@
 <section class="detail">
   <p class="eyebrow">Wallet</p>
   <h1><code>{{ wallet.address }}</code></h1>
-  <p class="lead">{{ wallet.balance_mrwk }} MRWK</p>
+  <p class="lead wallet-balance">
+    {{ wallet.balance_mrwk }} MRWK
+    {% if wallet.balance_mrwk == "0" and not transactions %}
+    <span class="status-pill wallet-empty-pill">No activity yet</span>
+    {% endif %}
+  </p>
   <dl>
     {% if wallet.label %}
     <dt>Label</dt>

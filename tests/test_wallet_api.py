@@ -338,11 +338,15 @@ def test_github_login_redirects_when_oauth_is_configured(sqlite_url: str, monkey
 def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     _, public_hex, address = _keypair()
+    _, funded_public, funded_address = _keypair()
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
     _register_wallet(client, public_hex, "Main smoke wallet")
+    _register_wallet(client, funded_public, "Funded smoke wallet")
+    _fund_wallet(sqlite_url, funded_address)
 
     wallets = client.get("/wallets").text
     detail = client.get(f"/wallets/{address}").text
+    funded_detail = client.get(f"/wallets/{funded_address}").text
     transfer = client.get("/transfer").text
     me = client.get("/me").text
 
@@ -352,6 +356,8 @@ def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) ->
     assert address in detail
     assert "Main smoke wallet" in wallets
     assert "Main smoke wallet" in detail
+    assert "No activity yet" in detail
+    assert "No activity yet" not in funded_detail
     assert "Signed transfer" in transfer
     assert "both wallets are registered" in transfer
     assert "/static/wallet.js" in transfer
