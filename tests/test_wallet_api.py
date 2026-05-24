@@ -376,6 +376,32 @@ def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) ->
     assert "Link a wallet" in me
 
 
+def test_me_page_shows_signed_in_github_claim_balance(sqlite_url: str, monkeypatch) -> None:
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "test-cookie-secret")
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        add_ledger_entry(
+            session,
+            entry_type="test_github_balance",
+            from_account=TREASURY_ACCOUNT,
+            to_account="github:alice",
+            amount_microunits=4_000_000,
+            reference="test-github-balance",
+        )
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    client.cookies.set("mrwk_user", _signed_value("alice", "test-cookie-secret"))
+
+    me = client.get("/me").text
+
+    assert "Signed in as alice." in me
+    assert "github:alice" in me
+    assert "4 MRWK available to claim" in me
+
+
 def test_wallet_pages_do_not_require_manual_nonce(sqlite_url: str, monkeypatch) -> None:
     monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "test-cookie-secret")
     client = TestClient(

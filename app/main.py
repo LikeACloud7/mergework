@@ -983,7 +983,15 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     @app.get("/me", response_class=HTMLResponse)
     def me_page(request: Request) -> HTMLResponse:
         login = github_login_from_request(request)
-        return templates.TemplateResponse(request, "me.html", {"github_login": login})
+        github_balance_mrwk = "0"
+        if login:
+            with session_scope(db_url) as session:
+                github_balance_mrwk = format_mrwk(get_balance(session, f"github:{login}"))
+        return templates.TemplateResponse(
+            request,
+            "me.html",
+            {"github_login": login, "github_balance_mrwk": github_balance_mrwk},
+        )
 
     @app.post("/admin/logout")
     def admin_logout() -> RedirectResponse:
