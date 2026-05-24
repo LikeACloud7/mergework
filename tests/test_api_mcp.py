@@ -841,28 +841,32 @@ def test_github_account_views_normalize_mixed_case_logins(sqlite_url: str) -> No
         )
 
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
-    mixed_case_account = "github:Alice"
+    account_cases = (
+        ("github:Alice", "/api/v1/accounts/github:Alice", "/accounts/github:Alice"),
+        ("GitHub:Alice", "/api/v1/accounts/GitHub:Alice", "/accounts/GitHub:Alice"),
+        (" GitHub:Alice ", "/api/v1/accounts/%20GitHub:Alice%20", "/accounts/%20GitHub:Alice%20"),
+    )
+    for mcp_account, api_path, page_path in account_cases:
+        account_api = client.get(api_path).json()
+        account = client.get(page_path).text
+        balance = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "get_balance", "arguments": {"account": mcp_account}},
+            },
+        ).json()
 
-    account_api = client.get(f"/api/v1/accounts/{mixed_case_account}").json()
-    account = client.get(f"/accounts/{mixed_case_account}").text
-    balance = client.post(
-        "/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/call",
-            "params": {"name": "get_balance", "arguments": {"account": mixed_case_account}},
-        },
-    ).json()
-
-    assert account_api["account"] == "github:alice"
-    assert account_api["github_login"] == "alice"
-    assert account_api["exists"] is True
-    assert account_api["balance_mrwk"] == "50"
-    assert "50 MRWK" in account
-    assert f"/proofs/{proof.hash}" in account
-    assert 'href="https://github.com/alice">@alice</a>' in account
-    assert "github:alice: 50 MRWK" in balance["result"]["content"][0]["text"]
+        assert account_api["account"] == "github:alice"
+        assert account_api["github_login"] == "alice"
+        assert account_api["exists"] is True
+        assert account_api["balance_mrwk"] == "50"
+        assert "50 MRWK" in account
+        assert f"/proofs/{proof.hash}" in account
+        assert 'href="https://github.com/alice">@alice</a>' in account
+        assert "github:alice: 50 MRWK" in balance["result"]["content"][0]["text"]
 
 
 def test_ledger_page_highlights_bounty_payment_and_release(sqlite_url: str) -> None:
