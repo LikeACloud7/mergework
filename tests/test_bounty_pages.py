@@ -50,6 +50,12 @@ def test_bounties_page_renders_and_filters_by_status(sqlite_url: str) -> None:
         in all_rows.text
     )
     assert "ramimbo/mergework #50" in all_rows.text
+    assert "Bounty list summary" in all_rows.text
+    assert "Bounties shown" in all_rows.text
+    assert "Awards open" in all_rows.text
+    assert "Open reward pool" in all_rows.text
+    assert "1</strong>" in all_rows.text
+    assert "50 MRWK</strong>" in all_rows.text
 
     paid_rows = client.get("/bounties?status=paid")
     assert paid_rows.status_code == 200
@@ -57,6 +63,7 @@ def test_bounties_page_renders_and_filters_by_status(sqlite_url: str) -> None:
     assert "Open public bounty" not in paid_rows.text
     assert f'href="/bounties/{paid_bounty.id}"' in paid_rows.text
     assert 'href="/bounties?status=paid"' in paid_rows.text
+    assert "0 MRWK</strong>" in paid_rows.text
 
     paid_rows_uppercase = client.get("/bounties?status=PAID")
     assert paid_rows_uppercase.status_code == 200

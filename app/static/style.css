@@ -224,6 +224,28 @@ code.hash { overflow-wrap: anywhere; }
   padding: 4px 10px;
   text-transform: capitalize;
 }
+.bounty-list-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 24px 0;
+}
+.bounty-list-summary article {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 14px;
+}
+.bounty-list-summary span {
+  display: block;
+  color: var(--muted);
+  font-size: .9rem;
+  margin-bottom: 6px;
+}
+.bounty-list-summary strong {
+  display: block;
+  font-size: 1.25rem;
+}
 .acceptance-card h2 {
   margin: 0 0 10px;
 }
