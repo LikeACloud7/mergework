@@ -435,7 +435,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 "ledger_sequence": release.sequence if release else None,
             }
 
-    @app.get("/api/v1/accounts/{account:path}")
+    @app.get("/api/v1/accounts/{account}")
     def api_account(account: str) -> dict[str, Any]:
         with session_scope(db_url) as session:
             account_row = session.get(Account, account)
