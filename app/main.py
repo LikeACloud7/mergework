@@ -156,6 +156,12 @@ def _safe_next_path(next_path: str | None) -> str:
     return next_path
 
 
+def _normalized_account(account: str) -> str:
+    if account.lower().startswith("mrwk1"):
+        return account.lower()
+    return account
+
+
 def _signed_value(value: str, secret: str) -> str:
     timestamp = str(int(time.time()))
     body = f"{value}|{timestamp}"
@@ -430,6 +436,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.get("/api/v1/accounts/{account:path}")
     def api_account(account: str) -> dict[str, Any]:
+        account = _normalized_account(account)
         with session_scope(db_url) as session:
             account_row = session.get(Account, account)
             return {
@@ -693,6 +700,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.get("/accounts/{account:path}", response_class=HTMLResponse)
     def account_page(request: Request, account: str) -> HTMLResponse:
+        account = _normalized_account(account)
         with session_scope(db_url) as session:
             account_data = api_account(account)
             entries = session.scalars(
@@ -939,7 +947,7 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
                 return "bounty not found"
             return json.dumps(bounty_to_dict(bounty))
         if name == "get_balance":
-            account = str(args["account"])
+            account = _normalized_account(str(args["account"]))
             return f"{account}: {format_mrwk(get_balance(session, account))} MRWK"
         if name == "register_wallet":
             wallet = register_wallet(
