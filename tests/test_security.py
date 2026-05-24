@@ -113,6 +113,38 @@ def test_admin_bounty_api_requires_admin_token_not_cookie_auth(
     assert token_auth.status_code == 200
 
 
+def test_admin_bounty_api_returns_400_for_malformed_json(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+
+    non_object = client.post(
+        "/api/v1/bounties",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json=["not", "an", "object"],
+    )
+    missing_field = client.post(
+        "/api/v1/bounties",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json={
+            "issue_number": 77,
+            "issue_url": "https://github.com/ramimbo/mergework/issues/77",
+            "title": "Missing repo",
+            "reward_mrwk": "10",
+            "acceptance": "Maintainer applies mrwk:accepted",
+        },
+    )
+
+    assert non_object.status_code == 400
+    assert non_object.json()["detail"] == "json body must be an object"
+    assert missing_field.status_code == 400
+    assert missing_field.json()["detail"] == "repo is required"
+
+
 def test_admin_payout_api_requires_admin_token_not_cookie_auth(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
