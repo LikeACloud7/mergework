@@ -256,6 +256,13 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     app.state.webhook_secret = secret
     app.state.settings = settings
 
+    def post_only_route() -> None:
+        raise HTTPException(
+            status_code=405,
+            detail="Method Not Allowed",
+            headers={"Allow": "POST"},
+        )
+
     @app.middleware("http")
     async def add_security_headers(request: Request, call_next: Any) -> Any:
         response = await call_next(request)
@@ -460,6 +467,14 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             except LedgerError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             return wallet_to_dict(session, wallet)
+
+    @app.get("/api/v1/wallets/register")
+    def api_register_wallet_get() -> None:
+        post_only_route()
+
+    @app.get("/api/v1/wallets/link-github")
+    def api_link_wallet_github_get() -> None:
+        post_only_route()
 
     @app.get("/api/v1/wallets/{address}")
     def api_wallet(address: str) -> dict[str, Any]:
