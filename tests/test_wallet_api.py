@@ -245,6 +245,17 @@ def test_wallet_action_get_routes_report_method_not_allowed(sqlite_url: str, pat
     assert response.json()["detail"] == "Method Not Allowed"
 
 
+def test_wallet_method_boundary_routes_are_hidden_from_openapi(sqlite_url: str) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    paths = client.get("/openapi.json").json()["paths"]
+
+    assert "post" in paths["/api/v1/wallets/register"]
+    assert "get" not in paths["/api/v1/wallets/register"]
+    assert "post" in paths["/api/v1/wallets/link-github"]
+    assert "get" not in paths["/api/v1/wallets/link-github"]
+
+
 def test_wallet_api_malformed_transfer_requests_return_4xx(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     _, sender_public, sender_address = _keypair()
