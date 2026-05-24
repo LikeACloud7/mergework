@@ -40,6 +40,7 @@ from app.ledger.service import (
     submit_wallet_transfer,
 )
 from app.models import Account, Bounty, LedgerEntry, Proof, Wallet, WalletTransfer
+from app.wallets import normalize_wallet_address
 from app.webhooks.github import handle_github_webhook
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -1257,7 +1258,8 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
             )
             return json.dumps(wallet_to_dict(session, wallet))
         if name == "get_wallet":
-            wallet_row = session.get(Wallet, str_arg("address").lower())
+            address = normalize_wallet_address(str_arg("address"))
+            wallet_row = session.get(Wallet, address)
             if wallet_row is None:
                 return "wallet not found"
             return json.dumps(wallet_to_dict(session, wallet_row))
