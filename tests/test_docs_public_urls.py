@@ -30,6 +30,13 @@ def test_api_examples_document_internal_bounty_ids() -> None:
     assert "public_key_hex" in examples
 
 
+def test_agent_guide_explains_internal_bounty_ids() -> None:
+    guide = Path("docs/agent-guide.md").read_text(encoding="utf-8")
+
+    assert "/api/v1/bounties/<bounty_id>" in guide
+    assert "not the GitHub issue number" in guide
+
+
 def test_docs_smoke_covers_public_api_examples() -> None:
     assert "docs/api-examples.md" in REQUIRED
 

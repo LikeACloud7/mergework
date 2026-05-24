@@ -36,10 +36,13 @@ curl -s "$API_HOST/api/v1/bounties"
 Inspect one bounty, a ledger page, and a proof:
 
 ```bash
-curl -s "$API_HOST/api/v1/bounties/11"
+curl -s "$API_HOST/api/v1/bounties/<bounty_id>"
 curl -s "$API_HOST/api/v1/ledger?limit=10"
 curl -s "$API_HOST/api/v1/proofs/<proof_hash>"
 ```
+
+The `<bounty_id>` value is the internal MergeWork bounty id returned by
+`/api/v1/bounties`, not the GitHub issue number.
 
 Inspect an account or registered wallet:
 
