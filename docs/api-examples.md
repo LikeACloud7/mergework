@@ -35,6 +35,12 @@ curl -s "$API_HOST/api/v1/ledger?limit=10"
 curl -s "$API_HOST/api/v1/ledger/<sequence>"
 ```
 
+Read accepted-work activity summarized from proof-backed bounty payments:
+
+```bash
+curl -s "$API_HOST/api/v1/activity"
+```
+
 Inspect a proof, account, or registered wallet:
 
 ```bash
