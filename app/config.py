@@ -69,6 +69,14 @@ def validate_deploy_settings(settings: Settings) -> list[str]:
         errors.append("MERGEWORK_ADMIN_LOGINS must list admin GitHub logins")
     if not settings.github_accepted_labelers:
         errors.append("MERGEWORK_GITHUB_ACCEPTED_LABELERS must list maintainer logins")
+    if settings.admin_logins and settings.github_accepted_labelers:
+        non_admin_labelers = sorted(
+            set(settings.github_accepted_labelers) - set(settings.admin_logins)
+        )
+        if non_admin_labelers:
+            errors.append(
+                "MERGEWORK_GITHUB_ACCEPTED_LABELERS must be included in MERGEWORK_ADMIN_LOGINS"
+            )
     parsed_base_url = urlparse(settings.public_base_url)
     if parsed_base_url.scheme != "https":
         errors.append("MERGEWORK_PUBLIC_BASE_URL must use https")
