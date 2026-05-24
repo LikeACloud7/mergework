@@ -429,6 +429,8 @@ def submit_wallet_transfer(
     ensure_genesis(session)
     sender = _wallet_for_update(session, from_address)
     receiver = _wallet_for_update(session, to_address)
+    if sender.address == receiver.address:
+        raise LedgerError("sender and receiver must be different")
     amount = parse_mrwk_amount(amount_mrwk)
     clean_memo = memo.strip()
     if len(clean_memo) > 240:

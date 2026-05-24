@@ -8,8 +8,11 @@ from fastapi.testclient import TestClient
 from app.db import create_schema, session_scope
 from app.ledger.service import (
     TREASURY_ACCOUNT,
+    LedgerError,
     add_ledger_entry,
     ensure_genesis,
+    register_wallet,
+    submit_wallet_transfer,
     wallet_claim_payload,
     wallet_link_payload,
 )
@@ -375,3 +378,28 @@ def test_wallet_pages_do_not_require_manual_nonce(sqlite_url: str, monkeypatch) 
     assert "Transaction number is handled automatically" in me
     assert "different key will be rejected" in me
     assert "GitHub account is linked to the wallet" in me
+
+
+def test_reject_self_transfer(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    _, public_hex, address = _keypair()
+
+    with session_scope(sqlite_url) as session:
+        register_wallet(session, public_key_hex=public_hex)
+
+    with (
+        pytest.raises(LedgerError, match="sender and receiver must be different"),
+        session_scope(sqlite_url) as session,
+    ):
+        submit_wallet_transfer(
+            session,
+            from_address=address,
+            to_address=address,
+            amount_mrwk="1",
+            nonce=1,
+            memo="",
+            signature_hex="a" * 128,
+        )
