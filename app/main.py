@@ -64,6 +64,7 @@ SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
 }
 GITHUB_LOGIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$")
+HEX_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 API_DOCS_CSP = (
     "default-src 'self'; "
     "base-uri 'self'; "
@@ -302,6 +303,15 @@ def _github_login_from_account(account: str) -> str | None:
     if not GITHUB_LOGIN_RE.fullmatch(login):
         return None
     return login
+
+
+def _proof_hash_from_path(proof_hash: str) -> str:
+    if proof_hash != proof_hash.strip():
+        raise HTTPException(status_code=400, detail="proof hash must be 64 hex characters")
+    clean = proof_hash.lower()
+    if not HEX_HASH_RE.fullmatch(clean):
+        raise HTTPException(status_code=400, detail="proof hash must be 64 hex characters")
+    return clean
 
 
 def _signed_value(value: str, secret: str) -> str:
@@ -757,6 +767,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.get("/api/v1/proofs/{proof_hash}")
     def api_proof(proof_hash: str) -> dict[str, Any]:
+        proof_hash = _proof_hash_from_path(proof_hash)
         with session_scope(db_url) as session:
             proof = session.get(Proof, proof_hash)
             if proof is None:
@@ -1281,7 +1292,7 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
             )
             return json.dumps(ledger_to_dict(entry, proof.hash if proof else None))
         if name == "get_proof":
-            proof = session.get(Proof, str_arg("hash"))
+            proof = session.get(Proof, _proof_hash_from_path(str_arg("hash")))
             if proof is None:
                 return "proof not found"
             public_payload = json.loads(proof.public_json)

@@ -146,3 +146,8 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert "Accepted bounty payment" in proof_page.text
     assert "Bounty issue" in proof_page.text
     assert f'href="/ledger/{payment_sequence}"' in proof_page.text
+
+    missing_proof = client.get(f"/api/v1/proofs/{'0' * 64}")
+    assert missing_proof.status_code == 404
+    assert client.get("/api/v1/proofs/not-a-proof-hash").status_code == 400
+    assert client.get("/proofs/not-a-proof-hash").status_code == 400
