@@ -174,6 +174,10 @@ def _safe_next_path(next_path: str | None) -> str:
 
 
 def _normalized_account(account: str) -> str:
+    if not account or not account.strip():
+        raise HTTPException(status_code=400, detail="account must not be empty")
+    if re.search(r"[\x00-\x1f\x7f]", account):
+        raise HTTPException(status_code=400, detail="account must not contain control characters")
     if account.lower().startswith("mrwk1"):
         return account.lower()
     return account
@@ -743,7 +747,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             }
         try:
             text = _call_mcp_tool(db_url, name, args)
-        except (KeyError, TypeError, ValueError, LedgerError):
+        except (KeyError, TypeError, ValueError, LedgerError, HTTPException):
             return {
                 "jsonrpc": "2.0",
                 "id": response_id,
