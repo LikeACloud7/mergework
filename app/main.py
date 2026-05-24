@@ -340,9 +340,11 @@ async def _json_object(request: Request) -> dict[str, Any]:
 
 
 def _required_str(data: dict[str, Any], field: str) -> str:
-    value = data.get(field)
-    if not isinstance(value, str):
+    if field not in data or data[field] is None:
         raise HTTPException(status_code=400, detail=f"{field} is required")
+    value = data[field]
+    if not isinstance(value, str):
+        raise HTTPException(status_code=400, detail=f"{field} must be a string")
     return value
 
 
@@ -558,19 +560,22 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     ) -> dict[str, Any]:
         data = await _json_object(request)
         try:
-            requested_account = str(data["to_account"])
-            submission_url = str(data["submission_url"])
-        except KeyError as exc:
-            raise HTTPException(
-                status_code=400, detail=f"missing required field: {exc.args[0]}"
-            ) from exc
-        accepted_by = str(data.get("accepted_by") or admin_login)
+            requested_account = _required_str(data, "to_account")
+            submission_url = _required_str(data, "submission_url")
+        except HTTPException as exc:
+            if str(exc.detail).endswith(" is required"):
+                field = str(exc.detail).removesuffix(" is required")
+                raise HTTPException(
+                    status_code=400, detail=f"missing required field: {field}"
+                ) from exc
+            raise
+        accepted_by = _optional_str(data, "accepted_by", admin_login) or admin_login
         verifier_result = {
             "source": "admin_api",
             "accepted_by": accepted_by,
         }
         if data.get("note") is not None:
-            verifier_result["note"] = str(data["note"])[:240]
+            verifier_result["note"] = _optional_str(data, "note")[:240]
         with session_scope(db_url) as session:
             try:
                 to_account = resolve_payout_account(session, requested_account)
