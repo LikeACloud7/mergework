@@ -123,9 +123,14 @@ def resolve_payout_account(session: Session, to_account: str) -> str:
     raise LedgerError("to_account must be a github:<login> account or registered mrwk1 wallet")
 
 
+CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
 def _clean_optional_text(value: str | None, field: str, max_length: int) -> str | None:
     if value is None:
         return None
+    if CONTROL_CHAR_RE.search(value):
+        raise LedgerError(f"{field} must not contain control characters")
     clean = value.strip()
     if len(clean) > max_length:
         raise LedgerError(f"{field} is too long")
@@ -133,6 +138,8 @@ def _clean_optional_text(value: str | None, field: str, max_length: int) -> str 
 
 
 def _clean_required_text(value: str, field: str, max_length: int) -> str:
+    if CONTROL_CHAR_RE.search(value):
+        raise LedgerError(f"{field} must not contain control characters")
     clean = value.strip()
     if not clean:
         raise LedgerError(f"{field} is required")
