@@ -159,6 +159,42 @@ def test_admin_payout_api_requires_admin_token_not_cookie_auth(
         assert get_balance(session, wallet_address) == 25_000_000
 
 
+def test_admin_payout_api_returns_400_for_malformed_json(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create_schema(sqlite_url)
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+        raise_server_exceptions=False,
+    )
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=3,
+            issue_url="https://github.com/ramimbo/mergework/issues/3",
+            title="Malformed payout JSON",
+            reward_mrwk="25",
+            acceptance="Maintainer verifies payout.",
+        )
+        bounty_id = bounty.id
+
+    invalid_json = client.post(
+        f"/api/v1/bounties/{bounty_id}/pay",
+        content="{",
+        headers={
+            "x-mergework-admin-token": "admin-token-for-tests",
+            "content-type": "application/json",
+        },
+    )
+
+    assert invalid_json.status_code == 400
+    assert invalid_json.json()["detail"] == "invalid json body"
+
+
 def test_admin_close_bounty_api_releases_remaining_reserve(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -379,9 +379,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         request: Request,
         admin_login: str = Depends(require_admin_token),
     ) -> dict[str, Any]:
-        data = await request.json()
-        if not isinstance(data, dict):
-            raise HTTPException(status_code=400, detail="json body must be an object")
+        data = await _json_object(request)
         try:
             requested_account = str(data["to_account"])
             submission_url = str(data["submission_url"])
