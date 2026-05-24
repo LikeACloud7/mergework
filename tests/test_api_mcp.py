@@ -45,6 +45,34 @@ def test_account_api_rejects_empty_account_path(sqlite_url: str) -> None:
     assert account.json()["account"] == "github:alice"
 
 
+def test_account_api_reports_internal_ledger_account_transfer_status(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=1,
+            issue_url="https://github.com/ramimbo/mergework/issues/1",
+            title="First bounty",
+            reward_mrwk="75",
+            acceptance="Accepted label",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    treasury = client.get("/api/v1/accounts/treasury:mrwk").json()
+    reserve = client.get("/api/v1/accounts/reserve:bounty:1").json()
+
+    assert treasury["exists"] is True
+    assert reserve["exists"] is True
+    assert treasury["transfer_status"] == (
+        "Internal ledger account. MRWK wallet transfers are only available "
+        "for registered mrwk1 addresses."
+    )
+    assert reserve["transfer_status"] == treasury["transfer_status"]
+
+
 def test_bounty_api_reports_multi_award_capacity(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
