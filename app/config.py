@@ -76,8 +76,27 @@ def _is_valid_dns_hostname(hostname: str) -> bool:
     return all(DNS_LABEL_RE.fullmatch(label) for label in labels)
 
 
+def _sqlite_database_errors(database_url: str) -> list[str]:
+    parsed = urlparse(database_url)
+    if not parsed.scheme.startswith("sqlite"):
+        return []
+
+    sqlite_path = parsed.path
+    is_memory = database_url == "sqlite:///:memory:" or sqlite_path == "/:memory:"
+    if is_memory or sqlite_path in ("", "/", "//"):
+        return ["MERGEWORK_DATABASE_URL must use a persistent sqlite file"]
+
+    is_posix_absolute = sqlite_path.startswith("//") and len(sqlite_path) > 2
+    is_windows_absolute = len(sqlite_path) > 3 and sqlite_path[0] == "/" and sqlite_path[2] == ":"
+    if not (is_posix_absolute or is_windows_absolute):
+        return ["MERGEWORK_DATABASE_URL sqlite paths must be absolute for deploys"]
+
+    return []
+
+
 def validate_deploy_settings(settings: Settings) -> list[str]:
     errors: list[str] = []
+    errors.extend(_sqlite_database_errors(settings.database_url))
     errors.extend(_secret_errors("MERGEWORK_GITHUB_WEBHOOK_SECRET", settings.github_webhook_secret))
     errors.extend(
         _secret_errors("MERGEWORK_GITHUB_OAUTH_CLIENT_SECRET", settings.github_oauth_client_secret)
