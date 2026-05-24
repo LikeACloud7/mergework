@@ -169,6 +169,54 @@ def test_wallet_transfer_api_returns_validation_error(sqlite_url: str) -> None:
     assert response.json()["detail"] in {"invalid signature", "insufficient balance"}
 
 
+def test_wallet_register_api_rejects_label_control_characters(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    _, public_hex, _ = _keypair()
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/api/v1/wallets/register",
+        json={"public_key_hex": public_hex, "label": "Main\nWallet"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "wallet label must not contain control characters"
+
+
+def test_wallet_transfer_api_rejects_memo_control_characters(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    sender_key, sender_public, sender_address = _keypair()
+    _, receiver_public, receiver_address = _keypair()
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    _register_wallet(client, sender_public)
+    _register_wallet(client, receiver_public)
+    _fund_wallet(sqlite_url, sender_address)
+    memo = "line1\nline2"
+    payload = {
+        "type": "mrwk_transfer_v1",
+        "from_address": sender_address,
+        "to_address": receiver_address,
+        "amount_microunits": 1_000_000,
+        "nonce": 1,
+        "memo": memo,
+    }
+
+    response = client.post(
+        "/api/v1/transfers",
+        json={
+            "from_address": sender_address,
+            "to_address": receiver_address,
+            "amount_mrwk": "1",
+            "nonce": 1,
+            "memo": memo,
+            "signature_hex": _sign(sender_key, payload),
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "memo must not contain control characters"
+
+
 def test_wallet_api_malformed_register_requests_return_4xx(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
