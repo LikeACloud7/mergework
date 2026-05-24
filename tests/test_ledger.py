@@ -15,6 +15,7 @@ from app.ledger.service import (
     close_bounty,
     create_bounty,
     ensure_genesis,
+    find_bounty_by_issue,
     get_balance,
     pay_bounty,
     register_wallet,
@@ -117,15 +118,17 @@ def test_create_bounty_rejects_duplicate_repo_issue(sqlite_url: str) -> None:
 
     with session_scope(sqlite_url) as session:
         ensure_genesis(session)
-        create_bounty(
+        bounty = create_bounty(
             session,
-            repo="ramimbo/mergework",
+            repo="Ramimbo/MergeWork",
             issue_number=7,
             issue_url="https://github.com/ramimbo/mergework/issues/7",
             title="Original bounty",
             reward_mrwk="25",
             acceptance="First bounty for this issue.",
         )
+        assert bounty.repo == "ramimbo/mergework"
+        assert find_bounty_by_issue(session, "RAMIMBO/MERGEWORK", 7) == bounty
 
         with pytest.raises(LedgerError, match="bounty already exists for issue"):
             create_bounty(

@@ -149,6 +149,10 @@ def _clean_required_text(value: str, field: str, max_length: int) -> str:
     return clean
 
 
+def _normalize_repo_name(repo: str) -> str:
+    return _clean_required_text(repo, "repo", 200).lower()
+
+
 def _clean_proof_metadata(verifier_result: dict[str, Any]) -> dict[str, Any]:
     clean = dict(verifier_result)
     for key, value in clean.items():
@@ -385,7 +389,7 @@ def create_bounty(
     if max_awards > 1_000:
         raise LedgerError("max_awards is too large")
     reserved = reward * max_awards
-    clean_repo = _clean_required_text(repo, "repo", 200)
+    clean_repo = _normalize_repo_name(repo)
     existing_bounty = find_bounty_by_issue(session, clean_repo, issue_number)
     if existing_bounty is not None:
         raise LedgerError("bounty already exists for issue")
@@ -420,8 +424,11 @@ def create_bounty(
 
 
 def find_bounty_by_issue(session: Session, repo: str, issue_number: int) -> Bounty | None:
+    clean_repo = _normalize_repo_name(repo)
     return session.scalar(
-        select(Bounty).where(Bounty.repo == repo, Bounty.issue_number == issue_number).limit(1)
+        select(Bounty)
+        .where(Bounty.repo == clean_repo, Bounty.issue_number == issue_number)
+        .limit(1)
     )
 
 
