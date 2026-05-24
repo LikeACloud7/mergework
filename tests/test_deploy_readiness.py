@@ -47,6 +47,19 @@ def test_deploy_readiness_rejects_low_diversity_secrets() -> None:
     assert "MERGEWORK_GITHUB_WEBHOOK_SECRET must look randomly generated" in errors
 
 
+def test_deploy_readiness_rejects_reused_secret_values() -> None:
+    reused_secret = "shared-secret-8efc3925bb8746b8a8fd3392c4c48e32"
+
+    errors = validate_deploy_settings(
+        _settings(
+            github_webhook_secret=reused_secret,
+            cookie_secret=reused_secret,
+        )
+    )
+
+    assert "deploy secrets must use distinct values" in errors
+
+
 def test_deploy_readiness_requires_https_oauth_and_allowed_labelers() -> None:
     errors = validate_deploy_settings(
         _settings(
