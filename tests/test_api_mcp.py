@@ -464,6 +464,43 @@ def test_mcp_get_bounty_rejects_fractional_id(sqlite_url: str) -> None:
     }
 
 
+@pytest.mark.parametrize(
+    ("tool_name", "arguments", "request_id"),
+    [
+        ("get_balance", {"account": True}, 13),
+        ("get_balance", {"account": 123}, 14),
+        ("get_balance", {"account": ""}, 15),
+        ("get_wallet", {"address": 123}, 16),
+        ("get_proof", {"hash": 123}, 17),
+    ],
+)
+def test_mcp_rejects_invalid_string_arguments(
+    sqlite_url: str, tool_name: str, arguments: dict[str, object], request_id: int
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/call",
+            "params": {"name": tool_name, "arguments": arguments},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "error": {"code": -32602, "message": "invalid tool arguments"},
+    }
+
+
 def test_mcp_get_ledger_entry_includes_payment_proof_hash(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
