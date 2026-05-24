@@ -8,7 +8,7 @@ import secrets
 import time
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import httpx
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
@@ -77,6 +77,27 @@ API_DOCS_CSP = (
     "worker-src 'self' blob:"
 )
 API_DOCS_PATHS = {"/api/docs", "/api/redoc"}
+
+
+def _request_was_forwarded_https(request: Request) -> bool:
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    if forwarded_proto:
+        return forwarded_proto.split(",", 1)[0].strip().lower() == "https"
+    return request.url.scheme == "https"
+
+
+def _preserve_forwarded_https_redirect(request: Request, response: Response) -> None:
+    if response.status_code not in {307, 308} or not _request_was_forwarded_https(request):
+        return
+    location = response.headers.get("location")
+    if not location:
+        return
+    parsed = urlsplit(location)
+    if parsed.scheme != "http" or parsed.netloc != request.url.netloc:
+        return
+    response.headers["location"] = urlunsplit(
+        ("https", parsed.netloc, parsed.path, parsed.query, parsed.fragment)
+    )
 
 
 def bounty_to_dict(bounty: Bounty) -> dict[str, Any]:
@@ -320,6 +341,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             )
         if request.url.path in API_DOCS_PATHS:
             response.headers["Content-Security-Policy"] = API_DOCS_CSP
+        _preserve_forwarded_https_redirect(request, response)
         for name, value in SECURITY_HEADERS.items():
             response.headers.setdefault(name, value)
         return response

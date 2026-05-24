@@ -61,6 +61,55 @@ def test_head_requests_match_get_routes_without_body(sqlite_url: str) -> None:
     assert post_only.headers["allow"] == "POST"
 
 
+def test_trailing_slash_redirects_keep_forwarded_https_scheme(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=103,
+            issue_url="https://github.com/ramimbo/mergework/issues/103",
+            title="Public UX bounty",
+            reward_mrwk="75",
+            acceptance="Trailing slash redirects should keep HTTPS on public hosts.",
+        )
+
+    public_client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="http://mrwk.ltclab.site",
+    )
+    api_client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="http://api.mrwk.ltclab.site",
+    )
+
+    public_page = public_client.get(
+        f"/bounties/{bounty.id}/",
+        headers={"x-forwarded-proto": "https"},
+        follow_redirects=False,
+    )
+    public_api = public_client.get(
+        f"/api/v1/bounties/{bounty.id}/",
+        headers={"x-forwarded-proto": "https"},
+        follow_redirects=False,
+    )
+    api_host = api_client.get(
+        f"/api/v1/bounties/{bounty.id}/",
+        headers={"x-forwarded-proto": "https"},
+        follow_redirects=False,
+    )
+
+    assert public_page.status_code == 307
+    assert public_page.headers["location"] == f"https://mrwk.ltclab.site/bounties/{bounty.id}"
+    assert public_api.status_code == 307
+    assert public_api.headers["location"] == f"https://mrwk.ltclab.site/api/v1/bounties/{bounty.id}"
+    assert api_host.status_code == 307
+    assert (
+        api_host.headers["location"] == f"https://api.mrwk.ltclab.site/api/v1/bounties/{bounty.id}"
+    )
+
+
 def test_account_api_rejects_empty_account_path(sqlite_url: str) -> None:
     create_schema(sqlite_url)
 
