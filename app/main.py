@@ -206,11 +206,12 @@ def _normalized_account(account: str) -> str:
         raise HTTPException(status_code=400, detail="account must not be empty")
     if re.search(r"[\x00-\x1f\x7f]", account):
         raise HTTPException(status_code=400, detail="account must not contain control characters")
-    if account.lower().startswith("mrwk1"):
-        return account.lower()
-    if account.startswith("github:"):
-        return f"github:{account.removeprefix('github:').lower()}"
-    return account
+    clean = account.strip()
+    if clean.lower().startswith("mrwk1"):
+        return clean.lower()
+    if clean.lower().startswith("github:"):
+        return f"github:{clean.split(':', 1)[1].lower()}"
+    return clean
 
 
 def _github_login_from_account(account: str) -> str | None:
