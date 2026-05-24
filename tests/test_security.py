@@ -59,13 +59,22 @@ def test_browser_responses_set_security_headers(sqlite_url: str) -> None:
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
 
 
-def test_api_docs_allow_swagger_ui_assets_under_csp(sqlite_url: str) -> None:
+@pytest.mark.parametrize(
+    ("path", "expected_asset_url"),
+    (
+        ("/api/docs", "https://cdn.jsdelivr.net/npm/swagger-ui-dist"),
+        ("/api/redoc", "https://cdn.jsdelivr.net/npm/redoc"),
+    ),
+)
+def test_api_docs_allow_external_assets_under_csp(
+    sqlite_url: str, path: str, expected_asset_url: str
+) -> None:
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 
-    response = client.get("/api/docs")
+    response = client.get(path)
 
     assert response.status_code == 200
-    assert "https://cdn.jsdelivr.net/npm/swagger-ui-dist" in response.text
+    assert expected_asset_url in response.text
     csp = response.headers["content-security-policy"]
     assert "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net" in csp
     assert "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net" in csp
