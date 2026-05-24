@@ -68,6 +68,10 @@ main { max-width: 980px; margin: 0 auto; padding: 48px 20px; }
 table { width: 100%; border-collapse: collapse; background: var(--panel); }
 th, td { border-bottom: 1px solid var(--line); padding: 10px; text-align: left; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+main h1 code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 code.hash { overflow-wrap: anywhere; }
 .ledger-list {
   display: grid;
