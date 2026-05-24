@@ -55,6 +55,8 @@ def _post_webhook(
 
 def _validate_http_url(url: str) -> None:
     parsed = urlparse(url)
+    if parsed.username or parsed.password:
+        raise RuntimeError("staging dry-run URL must not include username or password")
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise RuntimeError(f"{url} must use http or https")
 
