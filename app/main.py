@@ -137,6 +137,84 @@ def ledger_to_dict(entry: LedgerEntry, proof_hash: str | None = None) -> dict[st
     }
 
 
+def _activity_row(entry: LedgerEntry, proof: Proof) -> dict[str, Any] | None:
+    data = json.loads(proof.public_json)
+    if not isinstance(data, dict) or data.get("kind") != "bounty_payment":
+        return None
+    submission_url = str(data.get("submission_url") or entry.reference)
+    return {
+        "ledger_sequence": entry.sequence,
+        "account": entry.to_account,
+        "amount_mrwk": format_mrwk(entry.amount_microunits),
+        "amount_microunits": entry.amount_microunits,
+        "submission_url": submission_url,
+        "proof_hash": proof.hash,
+        "proof_url": f"/proofs/{proof.hash}",
+        "bounty_id": proof.bounty_id,
+        "bounty_issue_number": data.get("issue_number"),
+        "created_at": entry.created_at.isoformat(),
+    }
+
+
+def activity_to_dict(session: Session) -> dict[str, Any]:
+    rows = session.execute(
+        select(LedgerEntry, Proof)
+        .join(Proof, Proof.ledger_sequence == LedgerEntry.sequence)
+        .where(LedgerEntry.entry_type == "bounty_payment", Proof.kind == "bounty_payment")
+        .order_by(LedgerEntry.sequence.desc())
+    ).all()
+    recent: list[dict[str, Any]] = []
+    seen_sequences: set[int] = set()
+    for entry, proof in rows:
+        if entry.sequence in seen_sequences:
+            continue
+        row = _activity_row(entry, proof)
+        if row is None or row["account"] is None:
+            continue
+        seen_sequences.add(entry.sequence)
+        recent.append(row)
+
+    by_account: dict[str, dict[str, Any]] = {}
+    for row in recent:
+        account = str(row["account"])
+        contributor = by_account.setdefault(
+            account,
+            {
+                "account": account,
+                "accepted_awards": 0,
+                "accepted_microunits": 0,
+                "accepted_mrwk": "0",
+                "latest_submission_url": row["submission_url"],
+                "latest_proof_hash": row["proof_hash"],
+                "latest_proof_url": row["proof_url"],
+            },
+        )
+        contributor["accepted_awards"] += 1
+        contributor["accepted_microunits"] += int(row["amount_microunits"])
+        contributor["accepted_mrwk"] = format_mrwk(contributor["accepted_microunits"])
+
+    contributors = sorted(
+        by_account.values(),
+        key=lambda item: (-int(item["accepted_microunits"]), str(item["account"])),
+    )
+    for contributor in contributors:
+        del contributor["accepted_microunits"]
+
+    total_microunits = sum(int(row["amount_microunits"]) for row in recent)
+    for row in recent:
+        del row["amount_microunits"]
+
+    return {
+        "totals": {
+            "accepted_awards": len(recent),
+            "accepted_mrwk": format_mrwk(total_microunits),
+            "contributors": len(contributors),
+        },
+        "contributors": contributors,
+        "recent": recent[:100],
+    }
+
+
 def _wallet_timestamp(value: datetime) -> str:
     if value.tzinfo is not None:
         value = value.replace(tzinfo=None)
@@ -680,6 +758,11 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 raise HTTPException(status_code=500, detail="invalid proof payload")
             return data
 
+    @app.get("/api/v1/activity")
+    def api_activity() -> dict[str, Any]:
+        with session_scope(db_url) as session:
+            return activity_to_dict(session)
+
     @app.post("/webhooks/github")
     async def github_webhook(request: Request) -> JSONResponse:
         body = await request.body()
@@ -858,6 +941,10 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         return templates.TemplateResponse(
             request, "ledger_entry.html", {"entry": api_ledger_entry(sequence)}
         )
+
+    @app.get("/activity", response_class=HTMLResponse)
+    def activity_page(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(request, "activity.html", api_activity())
 
     @app.get("/accounts/{account}", response_class=HTMLResponse)
     def account_page(request: Request, account: str) -> HTMLResponse:
