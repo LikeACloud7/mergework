@@ -298,6 +298,61 @@ def test_admin_payout_api_returns_400_for_malformed_json(
     assert invalid_json.json()["detail"] == "invalid json body"
 
 
+def test_admin_payout_api_rejects_non_string_metadata_fields(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create_schema(sqlite_url)
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        accepted_by_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=122,
+            issue_url="https://github.com/ramimbo/mergework/issues/122",
+            title="Strict payout accepted_by metadata",
+            reward_mrwk="25",
+            acceptance="Maintainer verifies payout metadata.",
+        )
+        note_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=123,
+            issue_url="https://github.com/ramimbo/mergework/issues/123",
+            title="Strict payout note metadata",
+            reward_mrwk="25",
+            acceptance="Maintainer verifies payout metadata.",
+        )
+
+    accepted_by = client.post(
+        f"/api/v1/bounties/{accepted_by_bounty.id}/pay",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json={
+            "to_account": "github:alice",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/122",
+            "accepted_by": 123,
+        },
+    )
+    note = client.post(
+        f"/api/v1/bounties/{note_bounty.id}/pay",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json={
+            "to_account": "github:bob",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/123",
+            "note": ["not", "text"],
+        },
+    )
+
+    assert accepted_by.status_code == 400
+    assert accepted_by.json()["detail"] == "accepted_by must be a string"
+    assert note.status_code == 400
+    assert note.json()["detail"] == "note must be a string"
+
+
 def test_admin_close_bounty_api_releases_remaining_reserve(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
