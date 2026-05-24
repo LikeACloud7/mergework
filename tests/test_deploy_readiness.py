@@ -66,8 +66,14 @@ def test_deploy_readiness_rejects_reused_secret_values() -> None:
 
 def test_deploy_readiness_rejects_non_persistent_sqlite_database_urls() -> None:
     memory_errors = validate_deploy_settings(_settings(database_url="sqlite:///:memory:"))
+    driver_memory_errors = validate_deploy_settings(
+        _settings(database_url="sqlite+pysqlite:///:memory:")
+    )
     relative_errors = validate_deploy_settings(
         _settings(database_url="sqlite:///mergework.sqlite3")
+    )
+    driver_relative_errors = validate_deploy_settings(
+        _settings(database_url="sqlite+pysqlite:///mergework.sqlite3")
     )
     dot_relative_errors = validate_deploy_settings(
         _settings(database_url="sqlite:///./mergework.sqlite3")
@@ -75,7 +81,11 @@ def test_deploy_readiness_rejects_non_persistent_sqlite_database_urls() -> None:
     empty_errors = validate_deploy_settings(_settings(database_url="sqlite:////"))
 
     assert "MERGEWORK_DATABASE_URL must use a persistent sqlite file" in memory_errors
+    assert "MERGEWORK_DATABASE_URL must use a persistent sqlite file" in driver_memory_errors
     assert "MERGEWORK_DATABASE_URL sqlite paths must be absolute for deploys" in relative_errors
+    assert (
+        "MERGEWORK_DATABASE_URL sqlite paths must be absolute for deploys" in driver_relative_errors
+    )
     assert "MERGEWORK_DATABASE_URL sqlite paths must be absolute for deploys" in dot_relative_errors
     assert "MERGEWORK_DATABASE_URL must use a persistent sqlite file" in empty_errors
 
@@ -84,6 +94,12 @@ def test_deploy_readiness_accepts_absolute_sqlite_and_external_database_urls() -
     assert (
         validate_deploy_settings(
             _settings(database_url="sqlite:////srv/mergework/data/app.sqlite3")
+        )
+        == []
+    )
+    assert (
+        validate_deploy_settings(
+            _settings(database_url="sqlite+pysqlite:////srv/mergework/data/app.sqlite3")
         )
         == []
     )

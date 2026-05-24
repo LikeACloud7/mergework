@@ -47,10 +47,10 @@ def _secret_errors(name: str, value: str) -> list[str]:
 
 
 def _sqlite_database_errors(database_url: str) -> list[str]:
-    if not database_url.startswith("sqlite:"):
+    parsed = urlparse(database_url)
+    if not parsed.scheme.startswith("sqlite"):
         return []
 
-    parsed = urlparse(database_url)
     sqlite_path = parsed.path
     is_memory = database_url == "sqlite:///:memory:" or sqlite_path == "/:memory:"
     if is_memory or sqlite_path in ("", "/", "//"):
