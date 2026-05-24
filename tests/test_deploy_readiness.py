@@ -64,6 +64,38 @@ def test_deploy_readiness_rejects_reused_secret_values() -> None:
     assert "deploy secrets must use distinct values" in errors
 
 
+def test_deploy_readiness_rejects_non_persistent_sqlite_database_urls() -> None:
+    memory_errors = validate_deploy_settings(_settings(database_url="sqlite:///:memory:"))
+    relative_errors = validate_deploy_settings(
+        _settings(database_url="sqlite:///mergework.sqlite3")
+    )
+    dot_relative_errors = validate_deploy_settings(
+        _settings(database_url="sqlite:///./mergework.sqlite3")
+    )
+    empty_errors = validate_deploy_settings(_settings(database_url="sqlite:////"))
+
+    assert "MERGEWORK_DATABASE_URL must use a persistent sqlite file" in memory_errors
+    assert "MERGEWORK_DATABASE_URL sqlite paths must be absolute for deploys" in relative_errors
+    assert "MERGEWORK_DATABASE_URL sqlite paths must be absolute for deploys" in dot_relative_errors
+    assert "MERGEWORK_DATABASE_URL must use a persistent sqlite file" in empty_errors
+
+
+def test_deploy_readiness_accepts_absolute_sqlite_and_external_database_urls() -> None:
+    assert (
+        validate_deploy_settings(
+            _settings(database_url="sqlite:////srv/mergework/data/app.sqlite3")
+        )
+        == []
+    )
+    assert validate_deploy_settings(_settings(database_url="sqlite:///C:/data/app.sqlite3")) == []
+    assert (
+        validate_deploy_settings(
+            _settings(database_url="postgresql://mergework:password@db.example.test/mergework")
+        )
+        == []
+    )
+
+
 def test_deploy_readiness_requires_https_oauth_and_allowed_labelers() -> None:
     errors = validate_deploy_settings(
         _settings(
