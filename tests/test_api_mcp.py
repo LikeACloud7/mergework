@@ -34,6 +34,32 @@ def test_health_status_and_bounty_api(sqlite_url: str) -> None:
     assert bounties[0]["title"] == "First bounty"
 
 
+def test_head_requests_match_get_routes_without_body(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=1,
+            issue_url="https://github.com/ramimbo/mergework/issues/1",
+            title="First bounty",
+            reward_mrwk="75",
+            acceptance="Accepted label",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    for path in ("/", "/docs", "/api/v1/status", "/api/v1/bounties"):
+        response = client.head(path)
+        assert response.status_code == 200
+        assert response.content == b""
+
+    post_only = client.head("/api/v1/bounties/1/pay")
+    assert post_only.status_code == 405
+    assert post_only.headers["allow"] == "POST"
+
+
 def test_account_api_rejects_empty_account_path(sqlite_url: str) -> None:
     create_schema(sqlite_url)
 

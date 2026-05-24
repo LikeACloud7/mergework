@@ -12,7 +12,7 @@ from urllib.parse import urlencode
 
 import httpx
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
@@ -294,7 +294,21 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.middleware("http")
     async def add_security_headers(request: Request, call_next: Any) -> Any:
-        response = await call_next(request)
+        original_method = request.scope["method"]
+        if original_method == "HEAD":
+            request.scope["method"] = "GET"
+        try:
+            response = await call_next(request)
+        finally:
+            request.scope["method"] = original_method
+        if original_method == "HEAD":
+            headers = dict(response.headers)
+            headers["content-length"] = "0"
+            response = Response(
+                status_code=response.status_code,
+                headers=headers,
+                media_type=response.media_type,
+            )
         if request.url.path in API_DOCS_PATHS:
             response.headers["Content-Security-Policy"] = API_DOCS_CSP
         for name, value in SECURITY_HEADERS.items():
