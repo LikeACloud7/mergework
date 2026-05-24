@@ -454,6 +454,17 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     @app.get("/api/v1/accounts/{account}")
     def api_account(account: str) -> dict[str, Any]:
         account = _normalized_account(account)
+        if account.startswith("github:"):
+            transfer_status = (
+                "Claim GitHub balances from /me after linking a registered mrwk1 wallet."
+            )
+        elif account.startswith(("treasury:", "reserve:")):
+            transfer_status = (
+                "Internal ledger account. MRWK wallet transfers are only available "
+                "for registered mrwk1 addresses."
+            )
+        else:
+            transfer_status = "MRWK wallet transfers are enabled for registered mrwk1 addresses."
         with session_scope(db_url) as session:
             account_row = session.get(Account, account)
             return {
@@ -461,11 +472,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 "ledger_address": account,
                 "exists": account_row is not None,
                 "balance_mrwk": format_mrwk(get_balance(session, account)),
-                "transfer_status": (
-                    "Claim GitHub balances from /me after linking a registered mrwk1 wallet."
-                    if account.startswith("github:")
-                    else "MRWK wallet transfers are enabled for registered mrwk1 addresses."
-                ),
+                "transfer_status": transfer_status,
             }
 
     @app.get("/api/v1/auth/me")
