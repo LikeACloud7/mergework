@@ -46,7 +46,24 @@ Inspect a proof, account, or registered wallet:
 ```bash
 curl -s "$API_HOST/api/v1/proofs/<proof_hash>"
 curl -s "$API_HOST/api/v1/accounts/treasury:mrwk"
-curl -s "$API_HOST/api/v1/wallets/mrwk1..."
+curl -s "$API_HOST/api/v1/wallets/<wallet_address>"
+```
+
+The wallet endpoint is a read-only wallet lookup. It returns the registered
+address, public key, optional label and linked GitHub login, current balance,
+current nonce, next nonce to sign with, and registration timestamp:
+
+```json
+{
+  "address": "mrwk1fb1437aec45b46ec640f44b2e2aced55dc23556e",
+  "public_key_hex": "d88d3edf935ba932ee2737ee5500c795f21caeb4a2fdeacb55a4ff63c52c9d51",
+  "label": null,
+  "github_login": "prettyboyvic",
+  "balance_mrwk": "50",
+  "nonce": 2,
+  "next_nonce": 3,
+  "created_at": "2026-05-24T17:50:56.118158"
+}
 ```
 
 Register a wallet public key. Keep the private key local; only send the public
