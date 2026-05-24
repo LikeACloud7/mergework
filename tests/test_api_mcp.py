@@ -35,6 +35,19 @@ def test_health_status_and_bounty_api(sqlite_url: str) -> None:
     assert bounties[0]["title"] == "First bounty"
 
 
+@pytest.mark.parametrize("limit", ["0", "-1", "201"])
+def test_ledger_api_rejects_out_of_range_limits(sqlite_url: str, limit: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get(f"/api/v1/ledger?limit={limit}")
+
+    assert response.status_code == 422
+
+
 def test_head_requests_match_get_routes_without_body(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:

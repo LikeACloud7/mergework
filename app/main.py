@@ -7,7 +7,7 @@ import re
 import secrets
 import time
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import urlencode
 
 import httpx
@@ -615,8 +615,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             return wallet_transfer_to_dict(transfer)
 
     @app.get("/api/v1/ledger")
-    def api_ledger(limit: int = 50) -> list[dict[str, Any]]:
-        limit = max(1, min(limit, 200))
+    def api_ledger(limit: Annotated[int, Query(ge=1, le=200)] = 50) -> list[dict[str, Any]]:
         with session_scope(db_url) as session:
             entries = session.scalars(
                 select(LedgerEntry).order_by(LedgerEntry.sequence.desc()).limit(limit)
