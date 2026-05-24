@@ -338,6 +338,12 @@ def test_bounty_api_filters_by_status(sqlite_url: str) -> None:
     assert [item["id"] for item in client.get("/api/v1/bounties?status=closed").json()] == [
         closed_bounty.id
     ]
+    assert [item["id"] for item in client.get("/api/v1/bounties?status=OPEN").json()] == [
+        open_bounty.id
+    ]
+    assert [item["id"] for item in client.get("/api/v1/bounties?status= Paid ").json()] == [
+        paid_bounty.id
+    ]
     invalid = client.get("/api/v1/bounties?status=bogus")
     assert invalid.status_code == 400
     assert invalid.json()["detail"] == "status must be one of: open, paid, closed"
