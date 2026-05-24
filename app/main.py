@@ -569,8 +569,27 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         return JSONResponse(result, status_code=code)
 
     @app.post("/mcp")
-    async def mcp(request: Request) -> dict[str, Any]:
-        payload = await request.json()
+    async def mcp(request: Request) -> Any:
+        try:
+            payload = await request.json()
+        except ValueError:
+            return JSONResponse(
+                {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {"code": -32700, "message": "parse error"},
+                },
+                status_code=400,
+            )
+        if not isinstance(payload, dict):
+            return JSONResponse(
+                {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {"code": -32600, "message": "invalid request"},
+                },
+                status_code=400,
+            )
         response_id = payload.get("id")
         method = payload.get("method")
         if method == "tools/list":
@@ -606,7 +625,15 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 "id": response_id,
                 "error": {"code": -32601, "message": "unknown method"},
             }
-        params = payload.get("params") or {}
+        params = payload.get("params")
+        if params is None:
+            params = {}
+        if not isinstance(params, dict):
+            return {
+                "jsonrpc": "2.0",
+                "id": response_id,
+                "error": {"code": -32602, "message": "invalid params"},
+            }
         name = params.get("name")
         args = params.get("arguments") or {}
         if not isinstance(args, dict):

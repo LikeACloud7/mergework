@@ -38,6 +38,18 @@ def test_genesis_creates_fixed_supply_once(sqlite_url: str) -> None:
         assert verify_supply_conservation(session) is True
 
 
+def test_make_engine_accepts_windows_absolute_sqlite_url(tmp_path) -> None:
+    database_path = tmp_path / "nested" / "mergework.sqlite3"
+    engine = make_engine(f"sqlite:///{database_path}")
+    try:
+        with engine.begin() as connection:
+            connection.exec_driver_sql("SELECT 1")
+    finally:
+        engine.dispose()
+
+    assert database_path.parent.exists()
+
+
 def test_bounty_reserve_and_payout_conserve_supply(sqlite_url: str) -> None:
     create_schema(sqlite_url)
 
