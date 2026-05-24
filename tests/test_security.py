@@ -582,6 +582,28 @@ def test_bounty_fields_reject_oversized_values(sqlite_url: str) -> None:
             )
 
 
+def test_bounty_text_fields_reject_control_characters(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        for field, value in (
+            ("repo", "ramimbo/mergework\nmalformed"),
+            ("title", "Control\tTitle"),
+            ("acceptance", "Maintainer applies mrwk:accepted\x7f"),
+        ):
+            payload = {
+                "repo": "ramimbo/mergework",
+                "issue_number": 7,
+                "issue_url": "https://github.com/ramimbo/mergework/issues/7",
+                "title": "Control character hardening",
+                "reward_mrwk": "1",
+                "acceptance": "Maintainer applies mrwk:accepted",
+            }
+            payload[field] = value
+            with pytest.raises(LedgerError, match=f"{field} must not contain control characters"):
+                create_bounty(session, **payload)
+
+
 def test_ledger_reference_unsafe_urls_are_not_rendered_as_links(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
