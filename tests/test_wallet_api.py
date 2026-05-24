@@ -179,6 +179,21 @@ def test_wallet_api_malformed_register_requests_return_4xx(sqlite_url: str) -> N
     assert non_object.json()["detail"] == "json body must be an object"
 
 
+@pytest.mark.parametrize(
+    "path",
+    ["/api/v1/wallets/register", "/api/v1/wallets/link-github"],
+)
+def test_wallet_action_get_routes_report_method_not_allowed(sqlite_url: str, path: str) -> None:
+    create_schema(sqlite_url)
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get(path)
+
+    assert response.status_code == 405
+    assert response.headers["allow"] == "POST"
+    assert response.json()["detail"] == "Method Not Allowed"
+
+
 def test_wallet_api_malformed_transfer_requests_return_4xx(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     _, sender_public, sender_address = _keypair()
