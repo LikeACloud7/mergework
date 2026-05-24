@@ -84,7 +84,7 @@ def validate_public_url(url: str) -> str:
     parsed = urlparse(clean)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise LedgerError("URL must use http or https")
-    if parsed.username or parsed.password:
+    if parsed.username is not None or parsed.password is not None:
         raise LedgerError("URL must not include credentials")
     return clean
 
