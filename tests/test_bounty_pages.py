@@ -57,6 +57,7 @@ def test_bounties_page_renders_and_filters_by_status(sqlite_url: str) -> None:
     assert paid_rows_uppercase.status_code == 200
     assert "Paid public bounty" in paid_rows_uppercase.text
     assert "Open public bounty" not in paid_rows_uppercase.text
+    assert 'href="/bounties?status=paid" aria-current="page"' in paid_rows_uppercase.text
 
 
 def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:

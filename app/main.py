@@ -825,12 +825,13 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.get("/bounties", response_class=HTMLResponse)
     def bounties_page(request: Request, status: str | None = Query(None)) -> HTMLResponse:
+        selected_status = status.strip().lower() if status is not None else None
         return templates.TemplateResponse(
             request,
             "bounties.html",
             {
                 "bounties": list_bounties_by_status(status),
-                "selected_status": status,
+                "selected_status": selected_status,
             },
         )
 
