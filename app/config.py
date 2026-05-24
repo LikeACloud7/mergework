@@ -78,6 +78,8 @@ def validate_deploy_settings(settings: Settings) -> list[str]:
         errors.append("MERGEWORK_PUBLIC_BASE_URL must be an origin without a path")
     if parsed_base_url.query or parsed_base_url.fragment:
         errors.append("MERGEWORK_PUBLIC_BASE_URL must not include query or fragment")
+    if parsed_base_url.username or parsed_base_url.password:
+        errors.append("MERGEWORK_PUBLIC_BASE_URL must not include userinfo")
     if parsed_base_url.hostname:
         try:
             is_loopback = ipaddress.ip_address(parsed_base_url.hostname).is_loopback

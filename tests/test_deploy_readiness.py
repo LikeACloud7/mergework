@@ -94,6 +94,14 @@ def test_deploy_readiness_rejects_public_base_url_path_query_or_fragment() -> No
     assert "MERGEWORK_PUBLIC_BASE_URL must not include query or fragment" in fragment_errors
 
 
+def test_deploy_readiness_rejects_public_base_url_userinfo() -> None:
+    errors = validate_deploy_settings(
+        _settings(public_base_url="https://operator:secret@mrwk.example.test")
+    )
+
+    assert "MERGEWORK_PUBLIC_BASE_URL must not include userinfo" in errors
+
+
 def test_deploy_readiness_script_runs_directly_from_source() -> None:
     env = {
         **os.environ,
