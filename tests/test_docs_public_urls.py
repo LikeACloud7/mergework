@@ -30,6 +30,23 @@ def test_api_examples_document_internal_bounty_ids() -> None:
     assert "public_key_hex" in examples
 
 
+def test_api_examples_document_ledger_response_shape() -> None:
+    examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
+
+    assert "/api/v1/ledger?limit=10" in examples
+    assert "/api/v1/ledger/<sequence>" in examples
+    assert '"sequence": 329' in examples
+    assert '"type": "bounty_reserve"' in examples
+    assert '"from": "treasury:mrwk"' in examples
+    assert '"to": "reserve:bounty:36"' in examples
+    assert (
+        '"entry_hash": "248e1e38f90ac42897486a2b52a938ad51f31849250c4a979358e9721ec7c64e"'
+        in examples
+    )
+    assert '"proof_hash": null' in examples
+    assert "bounty-payment ledger entries" in examples
+
+
 def test_agent_guide_explains_internal_bounty_ids() -> None:
     guide = Path("docs/agent-guide.md").read_text(encoding="utf-8")
 
