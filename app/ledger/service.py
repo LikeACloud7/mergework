@@ -84,11 +84,12 @@ def validate_public_url(url: str) -> str:
     try:
         parsed = urlparse(clean)
         has_empty_port = parsed.port is None and parsed.netloc.endswith(":")
+        has_host = bool(parsed.hostname)
     except ValueError as exc:
         raise LedgerError("URL must include a valid host") from exc
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise LedgerError("URL must use http or https")
-    if has_empty_port:
+    if not has_host or has_empty_port:
         raise LedgerError("URL must include a valid host")
     if parsed.username or parsed.password:
         raise LedgerError("URL must not include credentials")
