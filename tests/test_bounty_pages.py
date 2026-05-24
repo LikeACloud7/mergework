@@ -7,6 +7,53 @@ from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_
 from app.main import create_app
 
 
+def test_bounties_page_renders_and_filters_by_status(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        open_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=50,
+            issue_url="https://github.com/ramimbo/mergework/issues/50",
+            title="Open public bounty",
+            reward_mrwk="50",
+            acceptance="Open bounty should appear on the public list.",
+        )
+        paid_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=51,
+            issue_url="https://github.com/ramimbo/mergework/issues/51",
+            title="Paid public bounty",
+            reward_mrwk="50",
+            acceptance="Paid bounty should appear when filtering paid rows.",
+        )
+        pay_bounty(
+            session,
+            bounty_id=paid_bounty.id,
+            to_account="github:contributor",
+            submission_url="https://github.com/ramimbo/mergework/pull/51",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    all_rows = client.get("/bounties")
+    assert all_rows.status_code == 200
+    assert "Open public bounty" in all_rows.text
+    assert "Paid public bounty" in all_rows.text
+    assert f'href="/bounties/{open_bounty.id}"' in all_rows.text
+
+    paid_rows = client.get("/bounties?status=paid")
+    assert paid_rows.status_code == 200
+    assert "Paid public bounty" in paid_rows.text
+    assert "Open public bounty" not in paid_rows.text
+    assert f'href="/bounties/{paid_bounty.id}"' in paid_rows.text
+    assert 'href="/bounties?status=paid"' in paid_rows.text
+
+
 def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
