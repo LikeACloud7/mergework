@@ -342,6 +342,50 @@ def test_mcp_rejects_malformed_requests_without_500(sqlite_url: str) -> None:
     }
 
 
+def test_mcp_get_ledger_entry_includes_payment_proof_hash(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=45,
+            issue_url="https://github.com/ramimbo/mergework/issues/45",
+            title="MCP ledger proof hash",
+            reward_mrwk="75",
+            acceptance="MCP ledger entry agrees with REST ledger detail.",
+        )
+        proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/54",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        ledger_sequence = proof.ledger_sequence
+        proof_hash = proof.hash
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "get_ledger_entry",
+                "arguments": {"sequence": ledger_sequence},
+            },
+        },
+    ).json()
+    payload = json.loads(result["result"]["content"][0]["text"])
+
+    assert payload["sequence"] == ledger_sequence
+    assert payload["proof_hash"] == proof_hash
+
+
 def test_mcp_get_proof_returns_public_proof_details(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
