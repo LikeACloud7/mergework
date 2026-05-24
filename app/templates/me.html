@@ -6,6 +6,7 @@
   <h1>Contributor account</h1>
   {% if github_login %}
   <p class="lead">Signed in as {{ github_login }}.</p>
+  <p class="notice"><code>github:{{ github_login }}</code> has {{ github_balance_mrwk }} MRWK available to claim.</p>
   <form method="post" action="/auth/logout" class="inline-form">
     <button type="submit">Sign out</button>
   </form>
