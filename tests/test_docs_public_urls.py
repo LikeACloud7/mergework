@@ -30,6 +30,19 @@ def test_api_examples_document_internal_bounty_ids() -> None:
     assert "public_key_hex" in examples
 
 
+def test_api_examples_document_mcp_get_proof_response_shape() -> None:
+    examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
+
+    assert '"name":"get_proof"' in examples
+    assert '"arguments":{"hash":"<proof_hash>"}' in examples
+    assert '"result": {' in examples
+    assert '"content": [' in examples
+    assert '"type": "text"' in examples
+    assert '\\"hash\\":\\"<proof_hash>\\"' in examples
+    assert '\\"kind\\":\\"bounty_payment\\"' in examples
+    assert "proof.issue_number" in examples
+
+
 def test_agent_guide_explains_internal_bounty_ids() -> None:
     guide = Path("docs/agent-guide.md").read_text(encoding="utf-8")
 
