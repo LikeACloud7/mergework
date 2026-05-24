@@ -691,7 +691,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             request, "ledger_entry.html", {"entry": api_ledger_entry(sequence)}
         )
 
-    @app.get("/accounts/{account:path}", response_class=HTMLResponse)
+    @app.get("/accounts/{account}", response_class=HTMLResponse)
     def account_page(request: Request, account: str) -> HTMLResponse:
         with session_scope(db_url) as session:
             account_data = api_account(account)
