@@ -427,7 +427,7 @@ def find_bounty_by_issue(session: Session, repo: str, issue_number: int) -> Boun
     clean_repo = _normalize_repo_name(repo)
     return session.scalar(
         select(Bounty)
-        .where(Bounty.repo == clean_repo, Bounty.issue_number == issue_number)
+        .where(func.lower(Bounty.repo) == clean_repo, Bounty.issue_number == issue_number)
         .limit(1)
     )
 

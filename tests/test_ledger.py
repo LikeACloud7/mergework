@@ -142,6 +142,30 @@ def test_create_bounty_rejects_duplicate_repo_issue(sqlite_url: str) -> None:
             )
 
 
+def test_find_bounty_by_issue_matches_legacy_mixed_case_repo(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = Bounty(
+            repo="Ramimbo/MergeWork",
+            issue_number=77,
+            issue_url="https://github.com/ramimbo/mergework/issues/77",
+            title="Legacy mixed-case bounty",
+            reward_microunits=25_000_000,
+            reserved_microunits=25_000_000,
+            max_awards=1,
+            awards_paid=0,
+            status="open",
+            acceptance="Legacy rows should still match GitHub repo identity.",
+        )
+        session.add(bounty)
+        session.flush()
+
+        assert find_bounty_by_issue(session, "ramimbo/mergework", 77) == bounty
+        assert find_bounty_by_issue(session, "RAMIMBO/MERGEWORK", 77) == bounty
+
+
 def test_multi_award_bounty_pays_distinct_submissions_until_exhausted(
     sqlite_url: str,
 ) -> None:
