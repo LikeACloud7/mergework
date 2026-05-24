@@ -34,6 +34,28 @@ MRWK uses work-based tiers at launch. The project does not publish a fiat peg.
 - `mrwk:rejected`: submission was not accepted.
 - `mrwk:needs-info`: maintainer needs more detail.
 
+## How Claims Are Reviewed
+
+Maintainers approve useful accepted work that matches the bounty text and has
+enough evidence to review. Good submissions are specific: they link the issue,
+PR, review, comment, report, or proof; explain what changed or was checked; and
+include test output, screenshots, reproduction steps, or other relevant evidence.
+
+Duplicate, vague, misleading, self-review, or unrelated claims are not accepted.
+If a claim is close but missing reviewable evidence, a maintainer may ask for
+more detail with `mrwk:needs-info`. Claims that do not meet the bounty criteria
+may be marked `mrwk:rejected`.
+
+Review and smoke-check bounties are judged on the submitted evidence, not on
+volume. A useful review should identify what was inspected and what checks were
+run, or include a concrete actionable finding. A useful smoke check should state
+the checked URL or command, expected behavior, observed behavior, and a concise
+result.
+
+After accepted work is paid, MergeWork records a public ledger proof. Public
+payment updates should point to those proofs and keep any private security or
+operational details out of public metadata.
+
 ## Payout Flow
 
 1. A maintainer posts a bounty and MRWK is reserved from treasury.
