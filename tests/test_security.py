@@ -560,6 +560,8 @@ def test_close_bounty_rejects_control_character_reference(sqlite_url: str) -> No
 
 def test_public_url_or_none_omits_control_character_urls() -> None:
     assert public_url_or_none("https://github.com/ramimbo/mergework/issues/14\nextra") is None
+    assert public_url_or_none("\nhttps://github.com/ramimbo/mergework/issues/14") is None
+    assert public_url_or_none("https://github.com/ramimbo/mergework/issues/14\n") is None
     assert (
         public_url_or_none(" https://github.com/ramimbo/mergework/issues/14 ")
         == "https://github.com/ramimbo/mergework/issues/14"
