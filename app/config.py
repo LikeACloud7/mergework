@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import re
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
@@ -28,6 +29,7 @@ WEAK_SECRET_VALUES = {
     "admin",
     "mergework",
 }
+GITHUB_LOGIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$")
 
 
 def _csv_env(name: str, default: str = "") -> tuple[str, ...]:
@@ -61,6 +63,10 @@ def _required_env_value_errors(name: str, value: str) -> list[str]:
     return errors
 
 
+def _invalid_github_logins(logins: tuple[str, ...]) -> list[str]:
+    return sorted({login for login in logins if not GITHUB_LOGIN_RE.fullmatch(login)})
+
+
 def validate_deploy_settings(settings: Settings) -> list[str]:
     errors: list[str] = []
     errors.extend(_secret_errors("MERGEWORK_GITHUB_WEBHOOK_SECRET", settings.github_webhook_secret))
@@ -85,12 +91,18 @@ def validate_deploy_settings(settings: Settings) -> list[str]:
     )
     if not settings.admin_logins:
         errors.append("MERGEWORK_ADMIN_LOGINS must list admin GitHub logins")
-    elif len(set(settings.admin_logins)) != len(settings.admin_logins):
-        errors.append("MERGEWORK_ADMIN_LOGINS must not include duplicate logins")
+    else:
+        if len(set(settings.admin_logins)) != len(settings.admin_logins):
+            errors.append("MERGEWORK_ADMIN_LOGINS must not include duplicate logins")
+        if _invalid_github_logins(settings.admin_logins):
+            errors.append("MERGEWORK_ADMIN_LOGINS must contain valid GitHub logins")
     if not settings.github_accepted_labelers:
         errors.append("MERGEWORK_GITHUB_ACCEPTED_LABELERS must list maintainer logins")
-    elif len(set(settings.github_accepted_labelers)) != len(settings.github_accepted_labelers):
-        errors.append("MERGEWORK_GITHUB_ACCEPTED_LABELERS must not include duplicate logins")
+    else:
+        if len(set(settings.github_accepted_labelers)) != len(settings.github_accepted_labelers):
+            errors.append("MERGEWORK_GITHUB_ACCEPTED_LABELERS must not include duplicate logins")
+        if _invalid_github_logins(settings.github_accepted_labelers):
+            errors.append("MERGEWORK_GITHUB_ACCEPTED_LABELERS must contain valid GitHub logins")
     if settings.admin_logins and settings.github_accepted_labelers:
         non_admin_labelers = sorted(
             set(settings.github_accepted_labelers) - set(settings.admin_logins)
