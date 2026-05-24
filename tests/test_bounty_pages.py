@@ -53,6 +53,11 @@ def test_bounties_page_renders_and_filters_by_status(sqlite_url: str) -> None:
     assert f'href="/bounties/{paid_bounty.id}"' in paid_rows.text
     assert 'href="/bounties?status=paid"' in paid_rows.text
 
+    paid_rows_uppercase = client.get("/bounties?status=PAID")
+    assert paid_rows_uppercase.status_code == 200
+    assert "Paid public bounty" in paid_rows_uppercase.text
+    assert "Open public bounty" not in paid_rows_uppercase.text
+
 
 def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     create_schema(sqlite_url)

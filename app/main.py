@@ -415,11 +415,12 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         with session_scope(db_url) as session:
             query = select(Bounty)
             if status is not None:
-                if status not in {"open", "paid", "closed"}:
+                normalized_status = status.strip().lower()
+                if normalized_status not in {"open", "paid", "closed"}:
                     raise HTTPException(
                         status_code=400, detail="status must be one of: open, paid, closed"
                     )
-                query = query.where(Bounty.status == status)
+                query = query.where(Bounty.status == normalized_status)
             bounties = session.scalars(query.order_by(Bounty.id.desc())).all()
             return [bounty_to_dict(bounty) for bounty in bounties]
 
