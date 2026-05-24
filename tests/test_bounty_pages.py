@@ -89,6 +89,61 @@ def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     assert "Focused PR improves status, reward, issue link, and acceptance text." in response.text
 
 
+def test_bounty_detail_shows_accepted_award_history(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=164,
+            issue_url="https://github.com/ramimbo/mergework/issues/164",
+            title="Improve bounty discovery pages",
+            reward_mrwk="100",
+            max_awards=3,
+            acceptance="Bounty detail pages should show accepted work and proofs.",
+        )
+        first_proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/201",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        second_proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:bob",
+            submission_url="https://github.com/ramimbo/mergework/pull/202",
+            accepted_by="reviewer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        bounty_id = bounty.id
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    api_detail = client.get(f"/api/v1/bounties/{bounty_id}").json()
+    page = client.get(f"/bounties/{bounty_id}")
+
+    assert [award["proof_hash"] for award in api_detail["accepted_awards"]] == [
+        second_proof.hash,
+        first_proof.hash,
+    ]
+    assert api_detail["accepted_awards"][0]["account"] == "github:bob"
+    assert api_detail["accepted_awards"][0]["submission_url"] == (
+        "https://github.com/ramimbo/mergework/pull/202"
+    )
+    assert page.status_code == 200
+    assert "Accepted work" in page.text
+    assert "2/3 awards paid" in page.text
+    assert "1 still open" in page.text
+    assert 'href="https://github.com/ramimbo/mergework/pull/202"' in page.text
+    assert f'href="/proofs/{second_proof.hash}"' in page.text
+    assert f'href="/ledger/{second_proof.ledger_sequence}"' in page.text
+    assert "/accounts/github:bob" in page.text
+
+
 def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
