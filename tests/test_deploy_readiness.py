@@ -4,7 +4,7 @@ import os
 import subprocess
 import sys
 
-from app.config import Settings, validate_deploy_settings
+from app.config import Settings, get_settings, validate_deploy_settings
 
 
 def _settings(**overrides: object) -> Settings:
@@ -190,6 +190,32 @@ def test_deploy_readiness_rejects_invalid_admin_or_labeler_logins() -> None:
 
     assert "MERGEWORK_ADMIN_LOGINS must contain valid GitHub logins" in errors
     assert "MERGEWORK_GITHUB_ACCEPTED_LABELERS must contain valid GitHub logins" in errors
+
+
+def test_deploy_readiness_rejects_empty_login_csv_entries(monkeypatch) -> None:
+    monkeypatch.setenv("MERGEWORK_DATABASE_URL", "sqlite:////srv/mergework/data/app.sqlite3")
+    monkeypatch.setenv("MERGEWORK_PUBLIC_BASE_URL", "https://staging.mrwk.example.test")
+    monkeypatch.setenv(
+        "MERGEWORK_GITHUB_WEBHOOK_SECRET", "webhook-8efc3925bb8746b8a8fd3392c4c48e32"
+    )
+    monkeypatch.setenv("MERGEWORK_GITHUB_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setenv(
+        "MERGEWORK_GITHUB_OAUTH_CLIENT_SECRET", "oauth-7818e79f9d3a4a1d82ff0e1b9f0b8e42"
+    )
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-14dcaab83bb245f2bfb5d5c21a9bb55b")
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "cookie-27fd1c41324a4bdcb2e4014adc3a6108")
+    monkeypatch.setenv("MERGEWORK_ADMIN_LOGINS", "alice,")
+    monkeypatch.setenv("MERGEWORK_GITHUB_ACCEPTED_LABELERS", "alice,,")
+
+    errors = validate_deploy_settings(get_settings())
+
+    assert "MERGEWORK_ADMIN_LOGINS must not include empty entries" in errors
+    assert "MERGEWORK_GITHUB_ACCEPTED_LABELERS must not include empty entries" in errors
+    assert "MERGEWORK_ADMIN_LOGINS must not include duplicate logins" not in errors
+    assert "MERGEWORK_GITHUB_ACCEPTED_LABELERS must not include duplicate logins" not in errors
+    assert "MERGEWORK_GITHUB_ACCEPTED_LABELERS must be included in MERGEWORK_ADMIN_LOGINS" not in (
+        errors
+    )
 
 
 def test_deploy_readiness_rejects_public_base_url_path_query_or_fragment() -> None:
