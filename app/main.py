@@ -288,7 +288,10 @@ def _normalized_account(account: str) -> str:
     if clean.lower().startswith("mrwk1"):
         return clean.lower()
     if clean.lower().startswith("github:"):
-        return f"github:{clean.split(':', 1)[1].lower()}"
+        login = clean.split(":", 1)[1].lower()
+        if not GITHUB_LOGIN_RE.fullmatch(login):
+            raise HTTPException(status_code=400, detail="github login must be valid")
+        return f"github:{login}"
     return clean
 
 
