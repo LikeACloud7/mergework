@@ -34,6 +34,17 @@ def test_health_status_and_bounty_api(sqlite_url: str) -> None:
     assert bounties[0]["title"] == "First bounty"
 
 
+def test_account_api_rejects_empty_account_path(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    assert client.get("/api/v1/accounts/").status_code == 404
+    account = client.get("/api/v1/accounts/github:alice")
+    assert account.status_code == 200
+    assert account.json()["account"] == "github:alice"
+
+
 def test_bounty_api_reports_multi_award_capacity(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
