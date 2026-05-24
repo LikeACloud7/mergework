@@ -39,3 +39,10 @@ def test_contributing_names_docs_smoke_for_public_docs_changes() -> None:
 
     assert "python scripts/docs_smoke.py" in contributing
     assert "docs, templates, examples, or onboarding" in contributing
+
+
+def test_agent_guide_documents_activity_endpoint() -> None:
+    guide = Path("docs/agent-guide.md").read_text(encoding="utf-8")
+
+    assert "GET /api/v1/activity" in guide
+    assert "accepted-work activity" in guide
