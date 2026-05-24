@@ -142,16 +142,23 @@ def _activity_row(entry: LedgerEntry, proof: Proof) -> dict[str, Any] | None:
     if not isinstance(data, dict) or data.get("kind") != "bounty_payment":
         return None
     submission_url = str(data.get("submission_url") or entry.reference)
+    repo = data.get("repo")
+    issue_number = data.get("issue_number")
+    issue_url = None
+    if isinstance(repo, str) and isinstance(issue_number, int):
+        issue_url = f"https://github.com/{repo}/issues/{issue_number}"
     return {
         "ledger_sequence": entry.sequence,
         "account": entry.to_account,
         "amount_mrwk": format_mrwk(entry.amount_microunits),
         "amount_microunits": entry.amount_microunits,
         "submission_url": submission_url,
+        "bounty_repo": repo,
+        "bounty_issue_number": issue_number,
+        "bounty_issue_url": issue_url,
         "proof_hash": proof.hash,
         "proof_url": f"/proofs/{proof.hash}",
         "bounty_id": proof.bounty_id,
-        "bounty_issue_number": data.get("issue_number"),
         "created_at": entry.created_at.isoformat(),
     }
 
