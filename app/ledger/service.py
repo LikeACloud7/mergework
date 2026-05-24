@@ -126,10 +126,6 @@ def resolve_payout_account(session: Session, to_account: str) -> str:
         return address
     raise LedgerError("to_account must be a github:<login> account or registered mrwk1 wallet")
 
-
-CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
-
-
 def _clean_optional_text(value: str | None, field: str, max_length: int) -> str | None:
     if value is None:
         return None
