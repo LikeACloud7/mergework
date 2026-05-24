@@ -139,6 +139,8 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert "Bounty Payment" in ledger_entry_page.text
     assert "Bounty scan status" in ledger_entry_page.text
     assert "Award paid" in ledger_entry_page.text
+    assert client.get("/api/v1/ledger/0").status_code == 400
+    assert client.get("/ledger/0").status_code == 400
 
     proof_page = client.get(f"/proofs/{proof_hash}")
     assert proof_page.status_code == 200

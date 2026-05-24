@@ -634,6 +634,31 @@ def test_mcp_get_ledger_entry_includes_payment_proof_hash(sqlite_url: str) -> No
     assert payload["proof_hash"] == proof_hash
 
 
+def test_mcp_get_ledger_entry_rejects_non_positive_sequence(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "get_ledger_entry", "arguments": {"sequence": 0}},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "error": {"code": -32602, "message": "invalid tool arguments"},
+    }
+
+
 def test_mcp_get_proof_returns_public_proof_details(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
