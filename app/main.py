@@ -346,19 +346,21 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     async def api_create_bounty(
         request: Request, admin_login: str = Depends(require_admin_token)
     ) -> dict[str, Any]:
-        data = await request.json()
+        data = await _json_object(request)
         with session_scope(db_url) as session:
             try:
                 bounty = create_bounty(
                     session,
-                    repo=data["repo"],
-                    issue_number=int(data["issue_number"]),
-                    issue_url=data["issue_url"],
-                    title=data["title"],
+                    repo=_required_str(data, "repo"),
+                    issue_number=_required_int(data, "issue_number"),
+                    issue_url=_required_str(data, "issue_url"),
+                    title=_required_str(data, "title"),
                     reward_mrwk=str(data["reward_mrwk"]),
                     max_awards=_optional_int(data, "max_awards", 1),
-                    acceptance=data["acceptance"],
+                    acceptance=_required_str(data, "acceptance"),
                 )
+            except KeyError as exc:
+                raise HTTPException(status_code=400, detail=f"{exc.args[0]} is required") from exc
             except LedgerError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             result = bounty_to_dict(bounty)
