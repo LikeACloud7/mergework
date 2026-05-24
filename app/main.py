@@ -1219,6 +1219,12 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
                 return int(clean)
         raise ValueError(f"{field} must be an integer")
 
+    def positive_int_arg(field: str) -> int:
+        value = int_arg(field)
+        if value <= 0:
+            raise ValueError(f"{field} must be positive")
+        return value
+
     def str_arg(field: str, *, allow_empty: bool = False) -> str:
         value = args[field]
         if not isinstance(value, str):
@@ -1242,7 +1248,7 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
             ).all()
             return json.dumps([bounty_to_dict(bounty) for bounty in bounties])
         if name == "get_bounty":
-            bounty = session.get(Bounty, int_arg("id"))
+            bounty = session.get(Bounty, positive_int_arg("id"))
             if bounty is None:
                 return "bounty not found"
             return json.dumps(bounty_to_dict(bounty))
