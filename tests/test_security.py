@@ -371,6 +371,40 @@ def test_bounty_urls_reject_unsafe_schemes(sqlite_url: str) -> None:
             )
 
 
+def test_bounty_urls_reject_embedded_credentials(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        with pytest.raises(LedgerError, match="URL must not include credentials"):
+            create_bounty(
+                session,
+                repo="ramimbo/mergework",
+                issue_number=9,
+                issue_url="https://operator:secret@github.com/ramimbo/mergework/issues/9",
+                title="Credential-bearing URL",
+                reward_mrwk="1",
+                acceptance="Maintainer applies mrwk:accepted",
+            )
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=10,
+            issue_url="https://github.com/ramimbo/mergework/issues/10",
+            title="Safe URL",
+            reward_mrwk="1",
+            acceptance="Maintainer applies mrwk:accepted",
+        )
+        with pytest.raises(LedgerError, match="URL must not include credentials"):
+            pay_bounty(
+                session,
+                bounty_id=bounty.id,
+                to_account="github:alice",
+                submission_url="https://operator:secret@github.com/ramimbo/mergework/pull/10",
+                accepted_by="maintainer",
+                verifier_result={"label": "mrwk:accepted"},
+            )
+
+
 def test_bounty_fields_reject_oversized_values(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
