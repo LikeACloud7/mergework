@@ -341,6 +341,22 @@ def test_mcp_rejects_malformed_requests_without_500(sqlite_url: str) -> None:
         "error": {"code": -32602, "message": "invalid params"},
     }
 
+    bad_arguments = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 8,
+            "method": "tools/call",
+            "params": {"name": "list_bounties", "arguments": []},
+        },
+    )
+    assert bad_arguments.status_code == 200
+    assert bad_arguments.json() == {
+        "jsonrpc": "2.0",
+        "id": 8,
+        "error": {"code": -32602, "message": "invalid params"},
+    }
+
 
 def test_mcp_get_ledger_entry_includes_payment_proof_hash(sqlite_url: str) -> None:
     create_schema(sqlite_url)
