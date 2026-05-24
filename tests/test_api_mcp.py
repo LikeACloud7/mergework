@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.db import create_schema, session_scope
@@ -392,6 +393,38 @@ def test_mcp_rejects_malformed_requests_without_500(sqlite_url: str) -> None:
     assert bad_params.json() == {
         "jsonrpc": "2.0",
         "id": 7,
+        "error": {"code": -32602, "message": "invalid params"},
+    }
+
+
+@pytest.mark.parametrize(
+    ("arguments", "request_id"),
+    [
+        ([], 8),
+        ("", 9),
+        (0, 10),
+        (False, 11),
+    ],
+    ids=["array", "empty-string", "zero", "false"],
+)
+def test_mcp_rejects_non_object_tool_arguments(
+    sqlite_url: str, arguments: object, request_id: int
+) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/call",
+            "params": {"name": "list_bounties", "arguments": arguments},
+        },
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "jsonrpc": "2.0",
+        "id": request_id,
         "error": {"code": -32602, "message": "invalid params"},
     }
 

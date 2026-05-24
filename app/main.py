@@ -717,9 +717,15 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 "error": {"code": -32602, "message": "invalid params"},
             }
         name = params.get("name")
-        args = params.get("arguments") or {}
-        if not isinstance(args, dict):
+        args = params.get("arguments", {})
+        if args is None:
             args = {}
+        if not isinstance(args, dict):
+            return {
+                "jsonrpc": "2.0",
+                "id": response_id,
+                "error": {"code": -32602, "message": "invalid params"},
+            }
         if not isinstance(name, str):
             return {
                 "jsonrpc": "2.0",
