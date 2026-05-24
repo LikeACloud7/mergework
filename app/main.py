@@ -6,6 +6,7 @@ import json
 import re
 import secrets
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlencode, urlsplit, urlunsplit
@@ -136,6 +137,12 @@ def ledger_to_dict(entry: LedgerEntry, proof_hash: str | None = None) -> dict[st
     }
 
 
+def _wallet_timestamp(value: datetime) -> str:
+    if value.tzinfo is not None:
+        value = value.replace(tzinfo=None)
+    return value.isoformat()
+
+
 def wallet_to_dict(session: Session, wallet: Wallet) -> dict[str, Any]:
     return {
         "address": wallet.address,
@@ -145,7 +152,7 @@ def wallet_to_dict(session: Session, wallet: Wallet) -> dict[str, Any]:
         "balance_mrwk": format_mrwk(get_balance(session, wallet.address)),
         "nonce": wallet.nonce,
         "next_nonce": wallet.nonce + 1,
-        "created_at": wallet.created_at.isoformat(),
+        "created_at": _wallet_timestamp(wallet.created_at),
     }
 
 
