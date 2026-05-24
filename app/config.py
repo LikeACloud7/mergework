@@ -82,11 +82,17 @@ def validate_deploy_settings(settings: Settings) -> list[str]:
         errors.append("MERGEWORK_PUBLIC_BASE_URL must not include userinfo")
     if parsed_base_url.hostname:
         try:
-            is_loopback = ipaddress.ip_address(parsed_base_url.hostname).is_loopback
+            ip_address = ipaddress.ip_address(parsed_base_url.hostname)
         except ValueError:
             is_loopback = parsed_base_url.hostname.lower() == "localhost"
+            is_private_or_link_local = False
+        else:
+            is_loopback = ip_address.is_loopback
+            is_private_or_link_local = ip_address.is_private or ip_address.is_link_local
         if is_loopback:
             errors.append("MERGEWORK_PUBLIC_BASE_URL must not use a loopback host")
+        elif is_private_or_link_local:
+            errors.append("MERGEWORK_PUBLIC_BASE_URL must not use a private or link-local host")
     return errors
 
 
