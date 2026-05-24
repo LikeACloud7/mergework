@@ -23,6 +23,7 @@ from app.ledger.service import (
     pay_bounty,
     public_url_or_none,
     register_wallet,
+    validate_public_url,
 )
 from app.main import _signed_value, create_app
 from app.models import LedgerEntry, WebhookEvent
@@ -525,6 +526,19 @@ def test_bounty_urls_reject_embedded_credentials(sqlite_url: str) -> None:
                 accepted_by="maintainer",
                 verifier_result={"label": "mrwk:accepted"},
             )
+
+
+def test_public_urls_reject_whitespace() -> None:
+    for url in (
+        "https://exa mple.com/path",
+        "https://example.com/has space",
+        "https://example.com/?q=has space",
+    ):
+        with pytest.raises(LedgerError, match="URL must not contain whitespace"):
+            validate_public_url(url)
+        assert public_url_or_none(url) is None
+
+    assert validate_public_url(" https://example.com/path ") == "https://example.com/path"
 
 
 def test_bounty_payment_proof_rejects_control_character_metadata(sqlite_url: str) -> None:
