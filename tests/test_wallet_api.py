@@ -349,6 +349,11 @@ def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) ->
     assert "Generate wallet" in wallets
     assert "Private key stays in this browser" in wallets
     assert "If you lose the private key" in wallets
+    assert (
+        'id="wallet-private-key" name="private_key_hex" rows="5" readonly autocomplete="off"'
+        in wallets
+    )
+    assert 'autocapitalize="none" spellcheck="false"' in wallets
     assert address in detail
     assert "Main smoke wallet" in wallets
     assert "Main smoke wallet" in detail
