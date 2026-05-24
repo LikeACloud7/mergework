@@ -1069,6 +1069,18 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
 
 def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
+    def int_arg(field: str) -> int:
+        value = args[field]
+        if isinstance(value, bool):
+            raise ValueError(f"{field} must be an integer")
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            clean = value.strip()
+            if clean and clean.lstrip("+-").isdigit():
+                return int(clean)
+        raise ValueError(f"{field} must be an integer")
+
     with session_scope(database_url) as session:
         if name == "list_bounties":
             bounties = session.scalars(
@@ -1076,7 +1088,7 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
             ).all()
             return json.dumps([bounty_to_dict(bounty) for bounty in bounties])
         if name == "get_bounty":
-            bounty = session.get(Bounty, int(args["id"]))
+            bounty = session.get(Bounty, int_arg("id"))
             if bounty is None:
                 return "bounty not found"
             return json.dumps(bounty_to_dict(bounty))
@@ -1101,13 +1113,13 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
                 from_address=str(args["from_address"]),
                 to_address=str(args["to_address"]),
                 amount_mrwk=str(args["amount_mrwk"]),
-                nonce=int(args["nonce"]),
+                nonce=int_arg("nonce"),
                 memo=str(args.get("memo", "")),
                 signature_hex=str(args["signature_hex"]),
             )
             return json.dumps(wallet_transfer_to_dict(transfer))
         if name == "get_ledger_entry":
-            entry = session.get(LedgerEntry, int(args["sequence"]))
+            entry = session.get(LedgerEntry, int_arg("sequence"))
             if entry is None:
                 return "ledger entry not found"
             proof = session.scalar(
