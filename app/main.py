@@ -207,24 +207,30 @@ def _optional_str(data: dict[str, Any], field: str, default: str = "") -> str:
     return value
 
 
+def _parse_int(value: Any, field: str) -> int:
+    if isinstance(value, bool):
+        raise HTTPException(status_code=400, detail=f"{field} must be an integer")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        clean = value.strip()
+        if clean and clean.lstrip("+-").isdigit():
+            return int(clean)
+    raise HTTPException(status_code=400, detail=f"{field} must be an integer")
+
+
 def _required_int(data: dict[str, Any], field: str) -> int:
     value = data.get(field)
-    if value is None or isinstance(value, bool):
+    if value is None:
         raise HTTPException(status_code=400, detail=f"{field} must be an integer")
-    try:
-        return int(value)
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=f"{field} must be an integer") from exc
+    return _parse_int(value, field)
 
 
 def _optional_int(data: dict[str, Any], field: str, default: int) -> int:
     value = data.get(field, default)
-    if value is None or isinstance(value, bool):
+    if value is None:
         raise HTTPException(status_code=400, detail=f"{field} must be an integer")
-    try:
-        return int(value)
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=f"{field} must be an integer") from exc
+    return _parse_int(value, field)
 
 
 def _csrf_token(action: str, login: str, secret: str) -> str:
