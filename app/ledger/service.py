@@ -96,7 +96,7 @@ def validate_public_url(url: str) -> str:
         except ValueError:
             pass
         else:
-            if ip_address.is_loopback or ip_address.is_private or ip_address.is_link_local:
+            if ip_address.is_multicast or not ip_address.is_global:
                 raise LedgerError("URL must use a public host")
     return clean
 

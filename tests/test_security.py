@@ -536,7 +536,9 @@ def test_bounty_urls_reject_non_public_hosts(sqlite_url: str) -> None:
                 "https://localhost/ramimbo/mergework/issues/21",
                 "https://127.0.0.1/ramimbo/mergework/issues/21",
                 "https://10.0.0.5/ramimbo/mergework/issues/21",
+                "https://100.64.0.1/ramimbo/mergework/issues/21",
                 "https://169.254.10.20/ramimbo/mergework/issues/21",
+                "https://224.0.0.1/ramimbo/mergework/issues/21",
                 "https://[::1]/ramimbo/mergework/issues/21",
                 "https://[fd00::1]/ramimbo/mergework/issues/21",
             ),
@@ -722,6 +724,12 @@ def test_close_bounty_rejects_control_character_reference(sqlite_url: str) -> No
 def test_public_url_or_none_omits_control_character_urls() -> None:
     assert public_url_or_none("https://github.com/ramimbo/mergework/issues/14\nextra") is None
     assert public_url_or_none("https://127.0.0.1/ramimbo/mergework/issues/14") is None
+    assert public_url_or_none("https://100.64.0.1/ramimbo/mergework/issues/14") is None
+    assert public_url_or_none("https://224.0.0.1/ramimbo/mergework/issues/14") is None
+    assert (
+        public_url_or_none("https://8.8.8.8/ramimbo/mergework/issues/14")
+        == "https://8.8.8.8/ramimbo/mergework/issues/14"
+    )
     assert (
         public_url_or_none(" https://github.com/ramimbo/mergework/issues/14 ")
         == "https://github.com/ramimbo/mergework/issues/14"
