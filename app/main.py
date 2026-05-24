@@ -29,6 +29,7 @@ from app.ledger.service import (
     format_mrwk,
     get_balance,
     link_wallet_to_github,
+    linked_wallet_for_github,
     pay_bounty,
     public_url_or_none,
     register_wallet,
@@ -909,7 +910,20 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     @app.get("/me", response_class=HTMLResponse)
     def me_page(request: Request) -> HTMLResponse:
         login = github_login_from_request(request)
-        return templates.TemplateResponse(request, "me.html", {"github_login": login})
+        linked_wallet_address = ""
+        if login:
+            with session_scope(db_url) as session:
+                linked_wallet = linked_wallet_for_github(session, login)
+                if linked_wallet:
+                    linked_wallet_address = linked_wallet.address
+        return templates.TemplateResponse(
+            request,
+            "me.html",
+            {
+                "github_login": login,
+                "linked_wallet_address": linked_wallet_address,
+            },
+        )
 
     @app.post("/admin/logout")
     def admin_logout() -> RedirectResponse:
