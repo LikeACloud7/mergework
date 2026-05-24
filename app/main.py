@@ -329,8 +329,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             "future_path": "public snapshots, bridges, and onchain claims",
         }
 
-    @app.get("/api/v1/bounties")
-    def api_bounties(status: str | None = Query(None)) -> list[dict[str, Any]]:
+    def list_bounties_by_status(status: str | None = None) -> list[dict[str, Any]]:
         with session_scope(db_url) as session:
             query = select(Bounty)
             if status is not None:
@@ -341,6 +340,10 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 query = query.where(Bounty.status == status)
             bounties = session.scalars(query.order_by(Bounty.id.desc())).all()
             return [bounty_to_dict(bounty) for bounty in bounties]
+
+    @app.get("/api/v1/bounties")
+    def api_bounties(status: str | None = Query(None)) -> list[dict[str, Any]]:
+        return list_bounties_by_status(status)
 
     @app.post("/api/v1/bounties")
     async def api_create_bounty(
@@ -721,8 +724,15 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         )
 
     @app.get("/bounties", response_class=HTMLResponse)
-    def bounties_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "bounties.html", {"bounties": api_bounties()})
+    def bounties_page(request: Request, status: str | None = Query(None)) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request,
+            "bounties.html",
+            {
+                "bounties": list_bounties_by_status(status),
+                "selected_status": status,
+            },
+        )
 
     @app.get("/bounties/{bounty_id}", response_class=HTMLResponse)
     def bounty_page(request: Request, bounty_id: int) -> HTMLResponse:

@@ -2,6 +2,12 @@
 {% block title %}MRWK Bounties{% endblock %}
 {% block content %}
 <h1>Bounties</h1>
+<nav aria-label="Bounty status filters">
+  <a href="/bounties"{% if not selected_status %} aria-current="page"{% endif %}>All</a>
+  <a href="/bounties?status=open"{% if selected_status == "open" %} aria-current="page"{% endif %}>Open</a>
+  <a href="/bounties?status=paid"{% if selected_status == "paid" %} aria-current="page"{% endif %}>Paid</a>
+  <a href="/bounties?status=closed"{% if selected_status == "closed" %} aria-current="page"{% endif %}>Closed</a>
+</nav>
 <div class="list">
   {% for bounty in bounties %}
   <article>
