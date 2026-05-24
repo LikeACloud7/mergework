@@ -31,6 +31,8 @@ WEAK_SECRET_VALUES = {
 }
 GITHUB_LOGIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$")
 
+DNS_LABEL_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
+
 
 def _csv_env(name: str, default: str = "") -> tuple[str, ...]:
     return tuple(
@@ -65,6 +67,13 @@ def _required_env_value_errors(name: str, value: str) -> list[str]:
 
 def _invalid_github_logins(logins: tuple[str, ...]) -> list[str]:
     return sorted({login for login in logins if not GITHUB_LOGIN_RE.fullmatch(login)})
+
+
+def _is_valid_dns_hostname(hostname: str) -> bool:
+    if len(hostname) > 253:
+        return False
+    labels = hostname.lower().split(".")
+    return all(DNS_LABEL_RE.fullmatch(label) for label in labels)
 
 
 def validate_deploy_settings(settings: Settings) -> list[str]:
@@ -111,7 +120,13 @@ def validate_deploy_settings(settings: Settings) -> list[str]:
             errors.append(
                 "MERGEWORK_GITHUB_ACCEPTED_LABELERS must be included in MERGEWORK_ADMIN_LOGINS"
             )
-    parsed_base_url = urlparse(settings.public_base_url)
+    try:
+        parsed_base_url = urlparse(settings.public_base_url)
+    except ValueError:
+        errors.append("MERGEWORK_PUBLIC_BASE_URL must include a valid host")
+        return errors
+    authority = parsed_base_url.netloc.rsplit("@", 1)[-1]
+    has_bracketed_host = authority.startswith("[")
     if parsed_base_url.scheme != "https":
         errors.append("MERGEWORK_PUBLIC_BASE_URL must use https")
     if not parsed_base_url.netloc:
@@ -122,10 +137,21 @@ def validate_deploy_settings(settings: Settings) -> list[str]:
         errors.append("MERGEWORK_PUBLIC_BASE_URL must not include query or fragment")
     if parsed_base_url.username or parsed_base_url.password:
         errors.append("MERGEWORK_PUBLIC_BASE_URL must not include userinfo")
-    if parsed_base_url.hostname:
+    try:
+        has_empty_port = parsed_base_url.port is None and parsed_base_url.netloc.endswith(":")
+    except ValueError:
+        errors.append("MERGEWORK_PUBLIC_BASE_URL must include a valid host")
+    else:
+        if has_empty_port:
+            errors.append("MERGEWORK_PUBLIC_BASE_URL must include a valid host")
+    if not parsed_base_url.hostname:
+        errors.append("MERGEWORK_PUBLIC_BASE_URL must include a valid host")
+    else:
         try:
             ip_address = ipaddress.ip_address(parsed_base_url.hostname)
         except ValueError:
+            if has_bracketed_host or not _is_valid_dns_hostname(parsed_base_url.hostname):
+                errors.append("MERGEWORK_PUBLIC_BASE_URL must include a valid host")
             is_loopback = parsed_base_url.hostname.lower() == "localhost"
             is_private_or_link_local = False
         else:
