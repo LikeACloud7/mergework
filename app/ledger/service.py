@@ -81,9 +81,15 @@ def validate_public_url(url: str) -> str:
         raise LedgerError("URL is too long")
     if any(ord(char) < 32 or ord(char) == 127 for char in clean):
         raise LedgerError("URL must not contain control characters")
-    parsed = urlparse(clean)
+    try:
+        parsed = urlparse(clean)
+        has_empty_port = parsed.port is None and parsed.netloc.endswith(":")
+    except ValueError as exc:
+        raise LedgerError("URL must include a valid host") from exc
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise LedgerError("URL must use http or https")
+    if has_empty_port:
+        raise LedgerError("URL must include a valid host")
     if parsed.username or parsed.password:
         raise LedgerError("URL must not include credentials")
     return clean

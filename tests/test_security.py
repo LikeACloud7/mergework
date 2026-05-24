@@ -23,6 +23,7 @@ from app.ledger.service import (
     pay_bounty,
     public_url_or_none,
     register_wallet,
+    validate_public_url,
 )
 from app.main import _signed_value, create_app
 from app.models import LedgerEntry, WebhookEvent
@@ -491,6 +492,14 @@ def test_bounty_urls_reject_unsafe_schemes(sqlite_url: str) -> None:
                 accepted_by="maintainer",
                 verifier_result={"label": "mrwk:accepted"},
             )
+
+
+def test_public_urls_reject_malformed_hosts_and_ports() -> None:
+    for url in ("https://[bad", "https://example.com:bad/path", "https://example.com:/path"):
+        with pytest.raises(LedgerError, match="URL must include a valid host"):
+            validate_public_url(url)
+
+    assert public_url_or_none("https://[bad") is None
 
 
 def test_bounty_urls_reject_embedded_credentials(sqlite_url: str) -> None:
