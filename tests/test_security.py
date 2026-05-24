@@ -15,11 +15,13 @@ from app.ledger.service import (
     TREASURY_ACCOUNT,
     LedgerError,
     add_ledger_entry,
+    close_bounty,
     create_bounty,
     ensure_genesis,
     get_balance,
     parse_mrwk_amount,
     pay_bounty,
+    public_url_or_none,
     register_wallet,
 )
 from app.main import _signed_value, create_app
@@ -442,6 +444,71 @@ def test_bounty_urls_reject_embedded_credentials(sqlite_url: str) -> None:
                 accepted_by="maintainer",
                 verifier_result={"label": "mrwk:accepted"},
             )
+
+
+def test_bounty_urls_reject_control_characters(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        with pytest.raises(LedgerError, match="URL must not contain control characters"):
+            create_bounty(
+                session,
+                repo="ramimbo/mergework",
+                issue_number=11,
+                issue_url="https://github.com/ramimbo/mergework/issues/11\nextra",
+                title="Control URL",
+                reward_mrwk="1",
+                acceptance="Maintainer applies mrwk:accepted",
+            )
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=12,
+            issue_url="https://github.com/ramimbo/mergework/issues/12",
+            title="Safe URL",
+            reward_mrwk="1",
+            acceptance="Maintainer applies mrwk:accepted",
+        )
+        with pytest.raises(LedgerError, match="URL must not contain control characters"):
+            pay_bounty(
+                session,
+                bounty_id=bounty.id,
+                to_account="github:alice",
+                submission_url="https://github.com/ramimbo/mergework/pull/12\textra",
+                accepted_by="maintainer",
+                verifier_result={"label": "mrwk:accepted"},
+            )
+
+
+def test_close_bounty_rejects_control_character_reference(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=13,
+            issue_url="https://github.com/ramimbo/mergework/issues/13",
+            title="Close reference guard",
+            reward_mrwk="1",
+            acceptance="Maintainer applies mrwk:accepted",
+        )
+
+        with pytest.raises(LedgerError, match="URL must not contain control characters"):
+            close_bounty(
+                session,
+                bounty_id=bounty.id,
+                closed_by="maintainer",
+                reference="https://github.com/ramimbo/mergework/issues/13\x7f",
+            )
+
+
+def test_public_url_or_none_omits_control_character_urls() -> None:
+    assert public_url_or_none("https://github.com/ramimbo/mergework/issues/14\nextra") is None
+    assert (
+        public_url_or_none(" https://github.com/ramimbo/mergework/issues/14 ")
+        == "https://github.com/ramimbo/mergework/issues/14"
+    )
 
 
 def test_bounty_fields_reject_oversized_values(sqlite_url: str) -> None:
