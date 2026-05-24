@@ -149,6 +149,14 @@ def _clean_required_text(value: str, field: str, max_length: int) -> str:
     return clean
 
 
+def _clean_proof_metadata(verifier_result: dict[str, Any]) -> dict[str, Any]:
+    clean = dict(verifier_result)
+    for key, value in clean.items():
+        if isinstance(value, str) and CONTROL_CHAR_RE.search(value):
+            raise LedgerError(f"verifier_result.{key} must not contain control characters")
+    return clean
+
+
 def wallet_transfer_payload(
     *,
     from_address: str,
@@ -568,6 +576,10 @@ def pay_bounty(
         raise LedgerError("bounty already paid")
     if bounty.status != "open":
         raise LedgerError("bounty is not open")
+    clean_accepted_by = _clean_required_text(accepted_by, "accepted_by", 80)
+    clean_verifier_result = _clean_proof_metadata(verifier_result)
+    if "accepted_by" in clean_verifier_result:
+        clean_verifier_result["accepted_by"] = clean_accepted_by
     clean_submission_url = validate_public_url(submission_url)
     existing_submission = session.scalar(
         select(Submission)
@@ -602,7 +614,7 @@ def pay_bounty(
         submitter_account=to_account,
         url=clean_submission_url,
         status="accepted",
-        verifier_result=canonical_json(verifier_result),
+        verifier_result=canonical_json(clean_verifier_result),
     )
     session.add(submission)
     try:
@@ -623,12 +635,12 @@ def pay_bounty(
         "repo": bounty.repo,
         "issue_number": bounty.issue_number,
         "submission_url": clean_submission_url,
-        "accepted_by": accepted_by,
+        "accepted_by": clean_accepted_by,
         "to_account": to_account,
         "amount_mrwk": format_mrwk(bounty.reward_microunits),
         "ledger_sequence": ledger_entry.sequence,
         "ledger_hash": ledger_entry.entry_hash,
-        "verifier_result": verifier_result,
+        "verifier_result": clean_verifier_result,
     }
     proof_hash = hashlib.sha256(canonical_json(proof_payload).encode()).hexdigest()
     proof = Proof(
