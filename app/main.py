@@ -201,6 +201,8 @@ def _normalized_account(account: str) -> str:
         raise HTTPException(status_code=400, detail="account must not contain control characters")
     if account.lower().startswith("mrwk1"):
         return account.lower()
+    if account.startswith("github:"):
+        return f"github:{account.removeprefix('github:').lower()}"
     return account
 
 

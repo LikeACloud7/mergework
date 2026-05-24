@@ -813,6 +813,52 @@ def test_wallet_account_views_normalize_mixed_case_addresses(sqlite_url: str) ->
     assert f"{wallet_address}: 50 MRWK" in balance["result"]["content"][0]["text"]
 
 
+def test_github_account_views_normalize_mixed_case_logins(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        proof = pay_bounty(
+            session,
+            bounty_id=create_bounty(
+                session,
+                repo="ramimbo/mergework",
+                issue_number=103,
+                issue_url="https://github.com/ramimbo/mergework/issues/103",
+                title="Normalize GitHub account links",
+                reward_mrwk="50",
+                acceptance="GitHub account views normalize login casing.",
+            ).id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/103",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    mixed_case_account = "github:Alice"
+
+    account_api = client.get(f"/api/v1/accounts/{mixed_case_account}").json()
+    account = client.get(f"/accounts/{mixed_case_account}").text
+    balance = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "get_balance", "arguments": {"account": mixed_case_account}},
+        },
+    ).json()
+
+    assert account_api["account"] == "github:alice"
+    assert account_api["github_login"] == "alice"
+    assert account_api["exists"] is True
+    assert account_api["balance_mrwk"] == "50"
+    assert "50 MRWK" in account
+    assert f"/proofs/{proof.hash}" in account
+    assert 'href="https://github.com/alice">@alice</a>' in account
+    assert "github:alice: 50 MRWK" in balance["result"]["content"][0]["text"]
+
+
 def test_ledger_page_highlights_bounty_payment_and_release(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
