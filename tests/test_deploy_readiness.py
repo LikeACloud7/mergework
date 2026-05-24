@@ -99,6 +99,16 @@ def test_deploy_readiness_requires_https_oauth_and_allowed_labelers() -> None:
     assert "MERGEWORK_GITHUB_ACCEPTED_LABELERS must list maintainer logins" in errors
 
 
+def test_deploy_readiness_rejects_malformed_oauth_client_id() -> None:
+    whitespace_errors = validate_deploy_settings(_settings(github_oauth_client_id=" client-id"))
+    control_errors = validate_deploy_settings(_settings(github_oauth_client_id="client-id\nextra"))
+
+    assert "MERGEWORK_GITHUB_OAUTH_CLIENT_ID must not include leading or trailing whitespace" in (
+        whitespace_errors
+    )
+    assert "MERGEWORK_GITHUB_OAUTH_CLIENT_ID must not include control characters" in control_errors
+
+
 def test_deploy_readiness_rejects_non_admin_accepted_labelers() -> None:
     errors = validate_deploy_settings(
         _settings(

@@ -50,6 +50,17 @@ def _secret_errors(name: str, value: str) -> list[str]:
     return []
 
 
+def _required_env_value_errors(name: str, value: str) -> list[str]:
+    if not value.strip():
+        return [f"{name} is required"]
+    errors = []
+    if value != value.strip():
+        errors.append(f"{name} must not include leading or trailing whitespace")
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+        errors.append(f"{name} must not include control characters")
+    return errors
+
+
 def validate_deploy_settings(settings: Settings) -> list[str]:
     errors: list[str] = []
     errors.extend(_secret_errors("MERGEWORK_GITHUB_WEBHOOK_SECRET", settings.github_webhook_secret))
@@ -67,8 +78,11 @@ def validate_deploy_settings(settings: Settings) -> list[str]:
     present_secrets = [secret for secret in deploy_secrets if secret]
     if len(set(present_secrets)) != len(present_secrets):
         errors.append("deploy secrets must use distinct values")
-    if not settings.github_oauth_client_id:
-        errors.append("MERGEWORK_GITHUB_OAUTH_CLIENT_ID is required")
+    errors.extend(
+        _required_env_value_errors(
+            "MERGEWORK_GITHUB_OAUTH_CLIENT_ID", settings.github_oauth_client_id
+        )
+    )
     if not settings.admin_logins:
         errors.append("MERGEWORK_ADMIN_LOGINS must list admin GitHub logins")
     if not settings.github_accepted_labelers:
