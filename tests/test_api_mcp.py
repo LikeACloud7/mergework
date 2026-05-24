@@ -514,6 +514,7 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
     ledger = client.get("/ledger").text
     entry = client.get("/ledger/3").text
     proof_page = client.get(f"/proofs/{proof.hash}").text
+    account_api = client.get("/api/v1/accounts/github:alice").json()
     account = client.get("/accounts/github:alice").text
 
     assert "/ledger/3" in ledger
@@ -529,7 +530,10 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
     assert "maintainer" in proof_page
     assert "github:alice" in proof_page
     assert "Ledger address" in account
-    assert "MRWK wallet transfers are enabled" in account
+    assert account_api["transfer_status"] == (
+        "Claim GitHub balances from /me after linking a registered mrwk1 wallet."
+    )
+    assert "Claim GitHub balances from /me" in account
     assert 'href="/accounts/reserve:bounty:1"' in account
     assert 'href="/accounts/github:alice"' in account
 
