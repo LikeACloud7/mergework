@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import re
 import secrets
 import time
 from pathlib import Path
@@ -60,6 +61,7 @@ SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
 }
+GITHUB_LOGIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$")
 
 
 def bounty_to_dict(bounty: Bounty) -> dict[str, Any]:
@@ -160,6 +162,15 @@ def _normalized_account(account: str) -> str:
     if account.lower().startswith("mrwk1"):
         return account.lower()
     return account
+
+
+def _github_login_from_account(account: str) -> str | None:
+    if not account.startswith("github:"):
+        return None
+    login = account.removeprefix("github:")
+    if not GITHUB_LOGIN_RE.fullmatch(login):
+        return None
+    return login
 
 
 def _signed_value(value: str, secret: str) -> str:
@@ -454,6 +465,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     @app.get("/api/v1/accounts/{account}")
     def api_account(account: str) -> dict[str, Any]:
         account = _normalized_account(account)
+        github_login = _github_login_from_account(account)
         if account.startswith("github:"):
             transfer_status = (
                 "Claim GitHub balances from /me after linking a registered mrwk1 wallet."
@@ -470,6 +482,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             return {
                 "account": account,
                 "ledger_address": account,
+                "github_login": github_login,
                 "exists": account_row is not None,
                 "balance_mrwk": format_mrwk(get_balance(session, account)),
                 "transfer_status": transfer_status,

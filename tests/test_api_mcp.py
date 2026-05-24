@@ -562,6 +562,7 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
         "Claim GitHub balances from /me after linking a registered mrwk1 wallet."
     )
     assert "Claim GitHub balances from /me" in account
+    assert 'href="https://github.com/alice">@alice</a>' in account
     assert 'href="/accounts/reserve:bounty:1"' in account
     assert 'href="/accounts/github:alice"' in account
 
