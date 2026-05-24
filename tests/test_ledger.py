@@ -17,7 +17,9 @@ from app.ledger.service import (
     ensure_genesis,
     get_balance,
     pay_bounty,
+    register_wallet,
     reserve_account_for_bounty,
+    resolve_payout_account,
     verify_hash_chain,
     verify_supply_conservation,
 )
@@ -78,6 +80,18 @@ def test_bounty_reserve_and_payout_conserve_supply(sqlite_url: str) -> None:
         assert proof.hash
         assert verify_hash_chain(session) is True
         assert verify_supply_conservation(session) is True
+
+
+def test_resolve_payout_account_accepts_mixed_case_prefixes(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        wallet = register_wallet(session, public_key_hex="1" * 64)
+        mixed_wallet = "MRWK1" + wallet.address.removeprefix("mrwk1").upper()
+
+        assert resolve_payout_account(session, " GitHub:Alice ") == "github:alice"
+        assert resolve_payout_account(session, mixed_wallet) == wallet.address
 
 
 def test_create_bounty_rejects_non_positive_issue_number(sqlite_url: str) -> None:
