@@ -78,6 +78,8 @@ def validate_public_url(url: str) -> str:
     clean = url.strip()
     if len(clean) > 500:
         raise LedgerError("URL is too long")
+    if any(ord(char) < 32 or ord(char) == 127 for char in clean):
+        raise LedgerError("URL must not contain control characters")
     parsed = urlparse(clean)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise LedgerError("URL must use http or https")
