@@ -429,6 +429,41 @@ def test_mcp_rejects_non_object_tool_arguments(
     }
 
 
+def test_mcp_get_bounty_rejects_fractional_id(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=103,
+            issue_url="https://github.com/ramimbo/mergework/issues/103",
+            title="MCP bounty id validation",
+            reward_mrwk="75",
+            acceptance="MCP tools should reject fractional ids.",
+        )
+        bounty_id = bounty.id
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "tools/call",
+            "params": {"name": "get_bounty", "arguments": {"id": bounty_id + 0.9}},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "jsonrpc": "2.0",
+        "id": 12,
+        "error": {"code": -32602, "message": "invalid tool arguments"},
+    }
+
+
 def test_mcp_get_ledger_entry_includes_payment_proof_hash(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
