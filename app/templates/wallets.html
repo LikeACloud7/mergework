@@ -16,7 +16,7 @@
     <label>Label <input id="wallet-label" name="label" placeholder="Main wallet"></label>
     <label>Address <input id="wallet-address" name="address" readonly></label>
     <label>Public key <textarea id="wallet-public-key" name="public_key_hex" rows="3" readonly></textarea></label>
-    <label>Private key <textarea id="wallet-private-key" name="private_key_hex" rows="5" readonly></textarea></label>
+    <label>Private key <textarea id="wallet-private-key" name="private_key_hex" rows="5" readonly autocomplete="off" autocapitalize="none" spellcheck="false"></textarea></label>
     <button type="submit">Register public key</button>
   </form>
   <p class="notice">Private key stays in this browser. Store it yourself; the server cannot recover it.</p>
