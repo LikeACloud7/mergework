@@ -23,6 +23,7 @@ BANNED_PUBLIC_PHRASES = [
     "1 MRWK = $",
 ]
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+DOCS_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/docs.yml"
 
 
 def _local_target_exists(source: Path, target: str) -> bool:
@@ -50,6 +51,18 @@ def main() -> int:
             if not _local_target_exists(path, link):
                 print(f"broken local link in {relative}: {link}")
                 ok = False
+    docs_issue_template = ROOT / DOCS_ISSUE_TEMPLATE
+    if not docs_issue_template.exists():
+        print(f"missing docs issue template: {DOCS_ISSUE_TEMPLATE}")
+        ok = False
+    else:
+        template = docs_issue_template.read_text(encoding="utf-8").lower()
+        if "id: location" not in template:
+            print("docs issue template must ask where the unclear docs were seen")
+            ok = False
+        if "link the page, docs file, heading, command, or ui path" not in template:
+            print("docs issue template location prompt must request actionable evidence")
+            ok = False
     if ok:
         print("docs smoke ok")
         return 0
