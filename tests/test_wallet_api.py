@@ -352,6 +352,7 @@ def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) ->
     assert address in detail
     assert "Main smoke wallet" in wallets
     assert "Main smoke wallet" in detail
+    assert "To claim GitHub bounty balance" in detail
     assert "Signed transfer" in transfer
     assert "both wallets are registered" in transfer
     assert "/static/wallet.js" in transfer
