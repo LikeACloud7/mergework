@@ -176,6 +176,8 @@ def _safe_next_path(next_path: str | None) -> str:
 def _normalized_account(account: str) -> str:
     if account.lower().startswith("mrwk1"):
         return account.lower()
+    if account.startswith("github:"):
+        return f"github:{account.removeprefix('github:').lower()}"
     return account
 
 
