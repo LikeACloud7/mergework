@@ -60,6 +60,18 @@ SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
 }
+API_DOCS_CSP = (
+    "default-src 'self'; "
+    "base-uri 'self'; "
+    "frame-ancestors 'none'; "
+    "form-action 'self'; "
+    "connect-src 'self'; "
+    "img-src 'self' data: https://fastapi.tiangolo.com; "
+    "object-src 'none'; "
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net"
+)
+API_DOCS_PATHS = {"/api/docs", "/api/redoc"}
 
 
 def bounty_to_dict(bounty: Bounty) -> dict[str, Any]:
@@ -259,6 +271,8 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     @app.middleware("http")
     async def add_security_headers(request: Request, call_next: Any) -> Any:
         response = await call_next(request)
+        if request.url.path in API_DOCS_PATHS:
+            response.headers["Content-Security-Policy"] = API_DOCS_CSP
         for name, value in SECURITY_HEADERS.items():
             response.headers.setdefault(name, value)
         return response
