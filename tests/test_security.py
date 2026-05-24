@@ -501,6 +501,95 @@ def test_bounty_urls_reject_embedded_credentials(sqlite_url: str) -> None:
             )
 
 
+def test_bounty_payment_proof_rejects_control_character_metadata(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        first_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=15,
+            issue_url="https://github.com/ramimbo/mergework/issues/15",
+            title="Proof metadata",
+            reward_mrwk="1",
+            acceptance="Maintainer applies mrwk:accepted",
+        )
+        second_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=16,
+            issue_url="https://github.com/ramimbo/mergework/issues/16",
+            title="Proof verifier metadata",
+            reward_mrwk="1",
+            acceptance="Maintainer applies mrwk:accepted",
+        )
+
+        with pytest.raises(LedgerError, match="accepted_by must not contain control characters"):
+            pay_bounty(
+                session,
+                bounty_id=first_bounty.id,
+                to_account="github:alice",
+                submission_url="https://github.com/ramimbo/mergework/pull/15",
+                accepted_by="maintainer\nops",
+                verifier_result={"label": "mrwk:accepted"},
+            )
+        with pytest.raises(
+            LedgerError, match="verifier_result.note must not contain control characters"
+        ):
+            pay_bounty(
+                session,
+                bounty_id=second_bounty.id,
+                to_account="github:bob",
+                submission_url="https://github.com/ramimbo/mergework/pull/16",
+                accepted_by="maintainer",
+                verifier_result={"label": "mrwk:accepted", "note": "line1\nline2"},
+            )
+
+        assert first_bounty.awards_paid == 0
+        assert second_bounty.awards_paid == 0
+        assert get_balance(session, "github:alice") == 0
+        assert get_balance(session, "github:bob") == 0
+
+
+def test_admin_payout_api_rejects_control_character_note(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create_schema(sqlite_url)
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=17,
+            issue_url="https://github.com/ramimbo/mergework/issues/17",
+            title="Admin proof metadata",
+            reward_mrwk="25",
+            acceptance="Maintainer verifies payout.",
+        )
+        bounty_id = bounty.id
+
+    response = client.post(
+        f"/api/v1/bounties/{bounty_id}/pay",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json={
+            "to_account": "github:alice",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/17",
+            "accepted_by": "maintainer",
+            "note": "line1\nline2",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == ("verifier_result.note must not contain control characters")
+    with session_scope(sqlite_url) as session:
+        assert get_balance(session, "github:alice") == 0
+
+
 def test_bounty_urls_reject_control_characters(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
