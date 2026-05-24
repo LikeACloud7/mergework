@@ -9,6 +9,10 @@
   <dl>
     <dt>Ledger address</dt>
     <dd><code>{{ account.ledger_address }}</code></dd>
+    {% if account.github_login %}
+    <dt>GitHub profile</dt>
+    <dd><a href="https://github.com/{{ account.github_login }}">@{{ account.github_login }}</a></dd>
+    {% endif %}
     <dt>Send status</dt>
     <dd>{{ account.transfer_status }}</dd>
   </dl>
