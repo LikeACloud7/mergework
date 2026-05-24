@@ -88,6 +88,11 @@ def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     assert "What has to be true" in response.text
     assert "Focused PR improves status, reward, issue link, and acceptance text." in response.text
 
+    missing_response = client.get("/api/v1/bounties/999")
+    assert missing_response.status_code == 404
+    assert client.get("/api/v1/bounties/0").status_code == 400
+    assert client.get("/bounties/0").status_code == 400
+
 
 def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) -> None:
     create_schema(sqlite_url)
