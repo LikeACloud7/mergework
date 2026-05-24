@@ -323,9 +323,16 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         }
 
     @app.get("/api/v1/bounties")
-    def api_bounties() -> list[dict[str, Any]]:
+    def api_bounties(status: str | None = Query(None)) -> list[dict[str, Any]]:
         with session_scope(db_url) as session:
-            bounties = session.scalars(select(Bounty).order_by(Bounty.id.desc())).all()
+            query = select(Bounty)
+            if status is not None:
+                if status not in {"open", "paid", "closed"}:
+                    raise HTTPException(
+                        status_code=400, detail="status must be one of: open, paid, closed"
+                    )
+                query = query.where(Bounty.status == status)
+            bounties = session.scalars(query.order_by(Bounty.id.desc())).all()
             return [bounty_to_dict(bounty) for bounty in bounties]
 
     @app.post("/api/v1/bounties")
