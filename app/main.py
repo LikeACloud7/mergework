@@ -1208,7 +1208,7 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
                 "Open a focused PR or issue, reference the MRWK bounty, include test evidence, "
                 "and wait for a maintainer to apply mrwk:accepted."
             )
-    return "unknown tool"
+    raise ValueError("unknown tool")
 
 
 app = create_app()
