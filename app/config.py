@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import os
 from dataclasses import dataclass
 from urllib.parse import urlparse
@@ -68,6 +69,13 @@ def validate_deploy_settings(settings: Settings) -> list[str]:
         errors.append("MERGEWORK_PUBLIC_BASE_URL must be an origin without a path")
     if parsed_base_url.query or parsed_base_url.fragment:
         errors.append("MERGEWORK_PUBLIC_BASE_URL must not include query or fragment")
+    if parsed_base_url.hostname:
+        try:
+            is_loopback = ipaddress.ip_address(parsed_base_url.hostname).is_loopback
+        except ValueError:
+            is_loopback = parsed_base_url.hostname.lower() == "localhost"
+        if is_loopback:
+            errors.append("MERGEWORK_PUBLIC_BASE_URL must not use a loopback host")
     return errors
 
 
