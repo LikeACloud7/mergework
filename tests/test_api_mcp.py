@@ -534,6 +534,18 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
     assert 'href="/accounts/github:alice"' in account
 
 
+def test_account_page_rejects_empty_account_path(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get("/accounts/")
+
+    assert response.status_code == 404
+
+
 def test_ledger_page_highlights_bounty_payment_and_release(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
