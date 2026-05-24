@@ -78,6 +78,17 @@ def test_deploy_readiness_requires_https_oauth_and_allowed_labelers() -> None:
     assert "MERGEWORK_GITHUB_ACCEPTED_LABELERS must list maintainer logins" in errors
 
 
+def test_deploy_readiness_rejects_non_admin_accepted_labelers() -> None:
+    errors = validate_deploy_settings(
+        _settings(
+            admin_logins=("alice",),
+            github_accepted_labelers=("alice", "bob"),
+        )
+    )
+
+    assert "MERGEWORK_GITHUB_ACCEPTED_LABELERS must be included in MERGEWORK_ADMIN_LOGINS" in errors
+
+
 def test_deploy_readiness_rejects_public_base_url_path_query_or_fragment() -> None:
     path_errors = validate_deploy_settings(
         _settings(public_base_url="https://mrwk.example.test/app")
