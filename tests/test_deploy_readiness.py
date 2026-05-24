@@ -119,3 +119,13 @@ def test_deploy_readiness_script_runs_directly_from_source() -> None:
 
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "Deploy readiness check passed."
+
+
+def test_deploy_readiness_rejects_loopback_public_base_url() -> None:
+    localhost_errors = validate_deploy_settings(_settings(public_base_url="https://localhost:8000"))
+    ipv4_errors = validate_deploy_settings(_settings(public_base_url="https://127.0.0.1"))
+    ipv6_errors = validate_deploy_settings(_settings(public_base_url="https://[::1]"))
+
+    assert "MERGEWORK_PUBLIC_BASE_URL must not use a loopback host" in localhost_errors
+    assert "MERGEWORK_PUBLIC_BASE_URL must not use a loopback host" in ipv4_errors
+    assert "MERGEWORK_PUBLIC_BASE_URL must not use a loopback host" in ipv6_errors
