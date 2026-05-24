@@ -360,6 +360,8 @@ def create_bounty(
 ) -> Bounty:
     ensure_genesis(session)
     reward = parse_mrwk_amount(reward_mrwk)
+    if issue_number <= 0:
+        raise LedgerError("issue_number must be positive")
     if max_awards <= 0:
         raise LedgerError("max_awards must be positive")
     if max_awards > 1_000:
