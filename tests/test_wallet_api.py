@@ -393,6 +393,10 @@ def test_wallet_pages_do_not_require_manual_nonce(sqlite_url: str, monkeypatch) 
     assert "Transaction number is handled automatically" in me
     assert "different key will be rejected" in me
     assert "GitHub account is linked to the wallet" in me
+    assert 'name="private_key_hex" rows="5" autocomplete="off"' in transfer
+    assert me.count('name="private_key_hex" rows="5" autocomplete="off"') == 2
+    assert "Clear this field after use. Never share your private key." in transfer
+    assert "Clear this field after use. Never share your private key." in me
 
 
 def test_reject_self_transfer(sqlite_url: str) -> None:
