@@ -1322,17 +1322,26 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 "error": {"code": -32602, "message": "tool name is required"},
             }
         try:
-            text = _call_mcp_tool(db_url, name, args)
+            tool_result = _call_mcp_tool(db_url, name, args)
         except (KeyError, TypeError, ValueError, LedgerError, HTTPException):
             return {
                 "jsonrpc": "2.0",
                 "id": response_id,
                 "error": {"code": -32602, "message": "invalid tool arguments"},
             }
+        if isinstance(tool_result, dict):
+            return {
+                "jsonrpc": "2.0",
+                "id": response_id,
+                "result": {
+                    "content": [{"type": "text", "text": json.dumps(tool_result)}],
+                    "structuredContent": tool_result,
+                },
+            }
         return {
             "jsonrpc": "2.0",
             "id": response_id,
-            "result": {"content": [{"type": "text", "text": text}]},
+            "result": {"content": [{"type": "text", "text": tool_result}]},
         }
 
     @app.get("/", response_class=HTMLResponse)
@@ -1675,7 +1684,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     return app
 
 
-def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
+def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | dict[str, Any]:
     def int_arg(field: str) -> int:
         value = args[field]
         if isinstance(value, bool):
@@ -1718,6 +1727,17 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
             raise ValueError(f"{field} must be a string")
         clean = value.strip()
         return clean or None
+
+    def output_format_arg() -> str:
+        value = args.get("format", "text")
+        if value is None:
+            return "text"
+        if not isinstance(value, str):
+            raise ValueError("format must be a string")
+        normalized = value.strip().lower()
+        if normalized not in {"text", "json"}:
+            raise ValueError("format must be text or json")
+        return normalized
 
     def mcp_issue_number_search_value(query_text: str) -> int | None:
         if not query_text.isdigit():
@@ -1767,6 +1787,52 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
                 ),
             ]
         )
+
+    def work_proof_guidance_json(bounty: Bounty) -> dict[str, Any]:
+        bounty_data = bounty_to_dict(bounty)
+        return {
+            "bounty_id": bounty_data["id"],
+            "issue_number": bounty_data["issue_number"],
+            "status": bounty_data["status"],
+            "awards_remaining": bounty_data["awards_remaining"],
+            "max_awards": bounty_data["max_awards"],
+            "awards_paid": bounty_data["awards_paid"],
+            "reward_mrwk": bounty_data["reward_mrwk"],
+            "available_mrwk": bounty_data["available_mrwk"],
+            "repository": bounty_data["repo"],
+            "issue_url": bounty_data["issue_url"],
+            "title": bounty_data["title"],
+            "acceptance": bounty_data["acceptance"],
+            "submission_format": (
+                "Open a focused PR or issue that links this bounty, include specific "
+                "test or behavior evidence, then comment /claim with the PR or "
+                "evidence URL and verification summary."
+            ),
+            "safety_rules": [
+                "Do not include private keys, seed material, secrets, deployment "
+                "credentials, private vulnerability details, or price claims."
+            ],
+        }
+
+    def generic_work_proof_guidance_json() -> dict[str, Any]:
+        return {
+            "bounty_id": None,
+            "issue_number": None,
+            "status": "generic_guidance",
+            "awards_remaining": None,
+            "reward_mrwk": None,
+            "repository": None,
+            "issue_url": None,
+            "acceptance": None,
+            "submission_format": (
+                "Open a focused PR or issue, reference the MRWK bounty, include test "
+                "evidence, and wait for a maintainer to apply mrwk:accepted."
+            ),
+            "safety_rules": [
+                "Do not include private keys, seed material, secrets, deployment "
+                "credentials, private vulnerability details, or price claims."
+            ],
+        }
 
     def optional_bool_arg(field: str, default: bool = False) -> bool:
         value = args.get(field, default)
@@ -1864,13 +1930,20 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
                 }
             )
         if name == "submit_work_proof":
+            output_format = output_format_arg()
             has_bounty_id = "bounty_id" in args and args.get("bounty_id") is not None
             has_issue_number = "issue_number" in args and args.get("issue_number") is not None
             if has_bounty_id and has_issue_number:
                 raise ValueError("use bounty_id or issue_number, not both")
             if has_bounty_id:
                 bounty = session.get(Bounty, positive_int_arg("bounty_id"))
-                return "bounty not found" if bounty is None else work_proof_guidance(bounty)
+                if bounty is None:
+                    return "bounty not found"
+                return (
+                    work_proof_guidance_json(bounty)
+                    if output_format == "json"
+                    else work_proof_guidance(bounty)
+                )
             if has_issue_number:
                 bounties = session.scalars(
                     select(Bounty)
@@ -1882,7 +1955,13 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
                     return "bounty not found"
                 if len(bounties) > 1:
                     raise ValueError("issue_number matches multiple bounties")
-                return work_proof_guidance(bounties[0])
+                return (
+                    work_proof_guidance_json(bounties[0])
+                    if output_format == "json"
+                    else work_proof_guidance(bounties[0])
+                )
+            if output_format == "json":
+                return generic_work_proof_guidance_json()
             return (
                 "Open a focused PR or issue, reference the MRWK bounty, include test evidence, "
                 "and wait for a maintainer to apply mrwk:accepted."
