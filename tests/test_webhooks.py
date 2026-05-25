@@ -155,6 +155,58 @@ def test_accepted_pr_label_pays_pr_author_for_linked_bounty_issue(sqlite_url: st
         assert get_balance(session, "github:maintainer") == 0
 
 
+def test_accepted_issue_event_for_pull_request_does_not_pay_matching_bounty(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    body = json.dumps(
+        {
+            "action": "labeled",
+            "label": {"name": "mrwk:accepted"},
+            "issue": {
+                "number": 3,
+                "html_url": "https://github.com/ramimbo/mergework/pull/3",
+                "pull_request": {
+                    "html_url": "https://github.com/ramimbo/mergework/pull/3",
+                    "url": "https://api.github.com/repos/ramimbo/mergework/pulls/3",
+                },
+                "user": {"login": "contributor"},
+            },
+            "repository": {"full_name": "ramimbo/mergework"},
+            "sender": {"login": "maintainer"},
+        },
+        separators=(",", ":"),
+    ).encode()
+    headers = {
+        "X-GitHub-Delivery": "delivery-pr-issue-event",
+        "X-GitHub-Event": "issues",
+        "X-Hub-Signature-256": _signature("secret", body),
+    }
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=3,
+            issue_url="https://github.com/ramimbo/mergework/issues/3",
+            title="Real bounty issue with matching PR number",
+            reward_mrwk="150",
+            acceptance="Maintainer applies mrwk:accepted to the accepted work.",
+        )
+
+    result = handle_github_webhook(
+        sqlite_url, headers, body, "secret", accepted_labelers=("maintainer",)
+    )
+
+    assert result == {"status": "ignored_pull_request_issue"}
+    with session_scope(sqlite_url) as session:
+        assert get_balance(session, "github:contributor") == 0
+        event = session.get(WebhookEvent, "delivery-pr-issue-event")
+        assert event is not None
+        assert event.processed_status == "ignored_pull_request_issue"
+
+
 def test_accepted_label_requires_submitter_login(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     body = json.dumps(
