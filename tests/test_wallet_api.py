@@ -230,6 +230,22 @@ def test_wallet_api_malformed_register_requests_return_4xx(sqlite_url: str) -> N
     assert non_object.json()["detail"] == "json body must be an object"
 
 
+def test_wallet_lookup_rejects_invalid_addresses_before_lookup(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    api_response = client.get("/api/v1/wallets/not-a-wallet")
+    page_response = client.get("/wallets/%20%20%20")
+    unknown_wallet = client.get("/api/v1/wallets/mrwk1" + ("0" * 40))
+
+    assert api_response.status_code == 400
+    assert api_response.json()["detail"] == "invalid MRWK wallet address"
+    assert page_response.status_code == 400
+    assert "invalid MRWK wallet address" in page_response.text
+    assert unknown_wallet.status_code == 404
+    assert unknown_wallet.json()["detail"] == "wallet not found"
+
+
 @pytest.mark.parametrize(
     "path",
     ["/api/v1/wallets/register", "/api/v1/wallets/link-github"],
