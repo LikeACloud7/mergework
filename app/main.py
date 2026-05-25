@@ -543,12 +543,16 @@ def _github_login_from_account(account: str) -> str | None:
 def _positive_bounty_id(bounty_id: int) -> int:
     if bounty_id <= 0:
         raise HTTPException(status_code=400, detail="bounty id must be positive")
+    if bounty_id > SQLITE_INTEGER_MAX:
+        raise HTTPException(status_code=400, detail="bounty id is too large")
     return bounty_id
 
 
 def _positive_ledger_sequence(sequence: int) -> int:
     if sequence <= 0:
         raise HTTPException(status_code=400, detail="ledger sequence must be positive")
+    if sequence > SQLITE_INTEGER_MAX:
+        raise HTTPException(status_code=400, detail="ledger sequence is too large")
     return sequence
 
 

@@ -174,6 +174,13 @@ def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     assert client.get("/api/v1/bounties/0").status_code == 400
     assert client.get("/bounties/0").status_code == 400
 
+    oversized_bounty_id = "9" * 40
+    oversized_api_response = client.get(f"/api/v1/bounties/{oversized_bounty_id}")
+    assert oversized_api_response.status_code == 400
+    assert oversized_api_response.json()["detail"] == "bounty id is too large"
+    oversized_page_response = client.get(f"/bounties/{oversized_bounty_id}")
+    assert oversized_page_response.status_code == 400
+
 
 def test_bounty_detail_shows_accepted_award_history(sqlite_url: str) -> None:
     create_schema(sqlite_url)
@@ -282,6 +289,13 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert "Award paid" in ledger_entry_page.text
     assert client.get("/api/v1/ledger/0").status_code == 400
     assert client.get("/ledger/0").status_code == 400
+
+    oversized_sequence = "9" * 40
+    oversized_api_response = client.get(f"/api/v1/ledger/{oversized_sequence}")
+    assert oversized_api_response.status_code == 400
+    assert oversized_api_response.json()["detail"] == "ledger sequence is too large"
+    oversized_page_response = client.get(f"/ledger/{oversized_sequence}")
+    assert oversized_page_response.status_code == 400
 
     proof_page = client.get(f"/proofs/{proof_hash}")
     assert proof_page.status_code == 200
