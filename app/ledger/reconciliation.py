@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.ledger.service import format_mrwk
@@ -166,11 +167,16 @@ def _payout_evidence(
 ) -> tuple[PayoutEvidence, ...]:
     proofs = session.scalars(
         select(Proof)
-        .where(Proof.submission_id == submission.id, Proof.kind == "bounty_payment")
+        .where(
+            Proof.kind == "bounty_payment",
+            or_(Proof.submission_id == submission.id, Proof.bounty_id == bounty.id),
+        )
         .order_by(Proof.created_at, Proof.hash)
     ).all()
     evidence: list[PayoutEvidence] = []
     for proof in proofs:
+        if not _matches_submission_source(proof, submission, bounty):
+            continue
         entry = session.get(LedgerEntry, proof.ledger_sequence)
         evidence.append(
             PayoutEvidence(
@@ -184,6 +190,24 @@ def _payout_evidence(
             )
         )
     return tuple(evidence)
+
+
+def _matches_submission_source(proof: Proof, submission: Submission, bounty: Bounty) -> bool:
+    if proof.submission_id == submission.id:
+        return True
+    if proof.submission_id is not None:
+        return False
+    if proof.bounty_id != bounty.id:
+        return False
+    try:
+        data = json.loads(proof.public_json)
+    except ValueError:
+        return False
+    return (
+        isinstance(data, dict)
+        and data.get("kind") == "bounty_payment"
+        and data.get("submission_url") == submission.url
+    )
 
 
 def _matches_submission(
