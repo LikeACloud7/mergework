@@ -17,6 +17,7 @@ from app.models import WebhookEvent
 
 ACCEPTED_LABEL = "mrwk:accepted"
 ISSUE_NUMBER_BOUNDARY = r"(?![A-Za-z0-9_-])"
+MAX_SQLITE_INTEGER = 2**63 - 1
 LINKED_ISSUE_RE = re.compile(
     r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs?|references?|bounty)\s+"
     rf"(?:(?P<repo>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#(?P<repo_number>\d+){ISSUE_NUMBER_BOUNDARY}"
@@ -65,13 +66,15 @@ def _linked_issue_numbers(body: str, current_repo: str) -> list[int]:
         if repo is not None and repo.lower() != current_repo.lower():
             continue
         number = match.group("repo_number") or match.group("number")
-        if number is not None and int(number) not in numbers:
-            numbers.append(int(number))
+        if number is not None:
+            issue_number = _github_issue_number_from_text(number)
+            if issue_number is not None and issue_number not in numbers:
+                numbers.append(issue_number)
     for match in GITHUB_ISSUE_URL_RE.finditer(body):
         if match.group("repo").lower() != current_repo.lower():
             continue
-        number = int(match.group("number"))
-        if number not in numbers:
+        number = _github_issue_number_from_text(match.group("number"))
+        if number is not None and number not in numbers:
             numbers.append(number)
     return numbers
 
@@ -92,8 +95,23 @@ def _payload_object(payload: dict[str, Any], key: str) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _github_issue_number_from_text(value: str) -> int | None:
+    normalized = value.lstrip("0") or "0"
+    if len(normalized) > len(str(MAX_SQLITE_INTEGER)):
+        return None
+    issue_number = int(normalized)
+    if issue_number <= 0 or issue_number > MAX_SQLITE_INTEGER:
+        return None
+    return issue_number
+
+
 def _github_issue_number(value: Any) -> int | None:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value <= 0
+        or value > MAX_SQLITE_INTEGER
+    ):
         return None
     return value
 
