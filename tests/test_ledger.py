@@ -65,6 +65,7 @@ def test_add_ledger_entry_rejects_malformed_public_fields(sqlite_url: str) -> No
             ("to_account", "github:" + "a" * 122, "to_account is too long"),
             ("reference", "manual\nref", "reference must not contain control characters"),
             ("reference", "   ", "reference is required"),
+            ("reference", "x" * 501, "reference is too long"),
         )
         for field, value, message in bad_cases:
             kwargs = {**base_kwargs, field: value}
