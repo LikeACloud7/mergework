@@ -259,10 +259,25 @@ input, textarea, button {
   font: inherit;
 }
 button { cursor: pointer; color: white; background: var(--accent); border-color: var(--accent); }
+.search-form {
+  margin: 28px 0;
+}
+.search-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.search-row a {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
 .inline-form { margin-top: 18px; max-width: 180px; }
 .wallet-tool form + h2 { margin-top: 34px; }
 @media (max-width: 640px) {
   header { align-items: flex-start; flex-direction: column; }
+  .search-row { grid-template-columns: 1fr; }
   .detail dl { grid-template-columns: 1fr; }
   .bounty-summary { grid-template-columns: 1fr; }
   .ledger-card-head { grid-template-columns: 1fr; }

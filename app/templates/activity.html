@@ -4,6 +4,15 @@
 <h1>Accepted work activity</h1>
 <p class="lead">Proof-backed MRWK bounty payments, grouped by contributor account.</p>
 
+<form class="search-form" method="get" action="/activity" role="search">
+  <label for="activity-q">Search accepted work</label>
+  <div class="search-row">
+    <input id="activity-q" name="q" value="{{ query }}" placeholder="account, PR, proof, issue, bounty">
+    <button type="submit">Search</button>
+    {% if query %}<a href="/activity">Clear</a>{% endif %}
+  </div>
+</form>
+
 <section class="grid">
   <article><strong>{{ totals.accepted_awards }}</strong><span>accepted awards</span></article>
   <article><strong>{{ totals.accepted_mrwk }}</strong><span>accepted MRWK</span></article>
