@@ -123,10 +123,11 @@ def _preserve_forwarded_https_redirect(request: Request, response: Response) -> 
 def _issue_number_search_value(query: str) -> int | None:
     if not query.isdigit():
         return None
-    issue_number = int(query)
-    if issue_number > SQLITE_INTEGER_MAX:
+    try:
+        issue_number = int(query)
+    except ValueError:
         return None
-    return issue_number
+    return issue_number if issue_number <= SQLITE_INTEGER_MAX else None
 
 
 def bounty_to_dict(bounty: Bounty) -> dict[str, Any]:
