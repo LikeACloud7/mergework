@@ -256,6 +256,7 @@ def register_wallet(
             existing.label = clean_label
         if normalized_login is not None:
             existing.github_login = normalized_login
+            ensure_account(session, f"github:{normalized_login}")
         ensure_account(session, address)
         return existing
     wallet = Wallet(
@@ -267,6 +268,8 @@ def register_wallet(
     )
     session.add(wallet)
     ensure_account(session, address)
+    if normalized_login is not None:
+        ensure_account(session, f"github:{normalized_login}")
     session.flush()
     return wallet
 
