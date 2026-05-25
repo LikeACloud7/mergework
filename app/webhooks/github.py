@@ -85,6 +85,11 @@ def _record_status(
     return {"status": status}
 
 
+def _payload_object(payload: dict[str, Any], key: str) -> dict[str, Any]:
+    value = payload.get(key) or {}
+    return value if isinstance(value, dict) else {}
+
+
 def _handle_accepted_issue_label(
     database_url: str,
     payload: dict[str, Any],
@@ -93,16 +98,18 @@ def _handle_accepted_issue_label(
     payload_hash: str,
     accepted_labelers: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    issue = payload.get("issue") or {}
-    pull_request = payload.get("pull_request") or {}
+    issue = _payload_object(payload, "issue")
+    pull_request = _payload_object(payload, "pull_request")
     labeled_item = pull_request or issue
-    repo = (payload.get("repository") or {}).get("full_name")
+    repo_name = _payload_object(payload, "repository").get("full_name")
+    repo = repo_name.strip() if isinstance(repo_name, str) else ""
     issue_number = issue.get("number")
-    label = (payload.get("label") or {}).get("name", "")
+    label_name = _payload_object(payload, "label").get("name")
+    label = label_name if isinstance(label_name, str) else ""
     if payload.get("action") != "labeled" or label.lower() != ACCEPTED_LABEL:
         _record_event(database_url, delivery_id, event_type, payload_hash, "ignored")
         return {"status": "ignored"}
-    if not repo or not isinstance(labeled_item, dict):
+    if not repo or not labeled_item:
         return _record_status(database_url, delivery_id, event_type, payload_hash, "missing_issue")
 
     user = labeled_item.get("user") or {}
