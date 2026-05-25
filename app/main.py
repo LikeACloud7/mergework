@@ -45,7 +45,7 @@ from app.ledger.service import (
     submit_github_claim,
     submit_wallet_transfer,
 )
-from app.models import Account, Bounty, LedgerEntry, Proof, Wallet, WalletTransfer
+from app.models import Account, Bounty, LedgerEntry, Proof, Wallet, WalletTransfer, WebhookEvent
 from app.wallets import WalletError, normalize_wallet_address
 from app.webhooks.github import handle_github_webhook
 
@@ -825,6 +825,36 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         status: str | None = Query(None), q: str | None = Query(None)
     ) -> list[dict[str, Any]]:
         return list_bounties_by_status(status, q)
+
+    @app.get("/api/v1/admin/webhook-events")
+    def api_admin_webhook_events(
+        status: str | None = Query(None),
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+        admin_login: str = Depends(require_admin_token),
+    ) -> list[dict[str, Any]]:
+        del admin_login
+        normalized_status = status.strip().lower() if status is not None else None
+        if normalized_status == "":
+            normalized_status = None
+        with session_scope(db_url) as session:
+            query = select(WebhookEvent)
+            if normalized_status is not None:
+                query = query.where(func.lower(WebhookEvent.processed_status) == normalized_status)
+            events = session.scalars(
+                query.order_by(
+                    WebhookEvent.created_at.desc(), WebhookEvent.delivery_id.desc()
+                ).limit(limit)
+            ).all()
+            return [
+                {
+                    "delivery_id": event.delivery_id,
+                    "event_type": event.event_type,
+                    "processed_status": event.processed_status,
+                    "payload_hash": event.payload_hash,
+                    "created_at": event.created_at.isoformat(),
+                }
+                for event in events
+            ]
 
     @app.post("/api/v1/bounties")
     async def api_create_bounty(

@@ -257,6 +257,71 @@ def test_admin_bounty_api_rejects_fractional_integer_fields(
     assert oversized_issue.json()["detail"] == "issue_number is too large"
 
 
+def test_admin_webhook_events_api_lists_and_filters_processing_outcomes(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create_schema(sqlite_url)
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    with session_scope(sqlite_url) as session:
+        session.add(
+            WebhookEvent(
+                delivery_id="delivery-paid",
+                event_type="pull_request",
+                payload_hash="a" * 64,
+                processed_status="paid",
+            )
+        )
+        session.add(
+            WebhookEvent(
+                delivery_id="delivery-missing",
+                event_type="issues",
+                payload_hash="b" * 64,
+                processed_status="Missing_Submitter",
+            )
+        )
+
+    unauthenticated = client.get("/api/v1/admin/webhook-events")
+    all_events = client.get(
+        "/api/v1/admin/webhook-events",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+    )
+    filtered = client.get(
+        "/api/v1/admin/webhook-events?status= Missing_Submitter ",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+    )
+    limited = client.get(
+        "/api/v1/admin/webhook-events?limit=1",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+    )
+    too_large = client.get(
+        "/api/v1/admin/webhook-events?limit=201",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+    )
+
+    assert unauthenticated.status_code == 401
+    assert all_events.status_code == 200
+    all_by_delivery = {event["delivery_id"]: event for event in all_events.json()}
+    assert set(all_by_delivery) == {"delivery-paid", "delivery-missing"}
+    assert all_by_delivery["delivery-paid"]["payload_hash"] == "a" * 64
+    assert filtered.status_code == 200
+    assert filtered.json() == [
+        {
+            "delivery_id": "delivery-missing",
+            "event_type": "issues",
+            "processed_status": "Missing_Submitter",
+            "payload_hash": "b" * 64,
+            "created_at": filtered.json()[0]["created_at"],
+        }
+    ]
+    assert limited.status_code == 200
+    assert len(limited.json()) == 1
+    assert too_large.status_code == 422
+
+
 def test_admin_payout_api_requires_admin_token_not_cookie_auth(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
