@@ -847,6 +847,46 @@ def test_mcp_get_bounty_rejects_non_positive_id(sqlite_url: str, bounty_id: int)
 @pytest.mark.parametrize(
     ("tool_name", "arguments", "request_id"),
     [
+        ("get_bounty", {"id": "9" * 40}, 16),
+        ("get_bounty", {"id": 2**63}, 17),
+        ("get_ledger_entry", {"sequence": "9" * 40}, 18),
+        ("submit_work_proof", {"bounty_id": "9" * 40}, 19),
+        ("submit_work_proof", {"issue_number": "9" * 40}, 20),
+    ],
+)
+def test_mcp_rejects_oversized_integer_arguments_without_500(
+    sqlite_url: str, tool_name: str, arguments: dict[str, object], request_id: int
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        raise_server_exceptions=False,
+    )
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/call",
+            "params": {"name": tool_name, "arguments": arguments},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "error": {"code": -32602, "message": "invalid tool arguments"},
+    }
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "arguments", "request_id"),
+    [
         ("get_balance", {"account": True}, 13),
         ("get_balance", {"account": 123}, 14),
         ("get_balance", {"account": ""}, 15),

@@ -1675,12 +1675,21 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
         if isinstance(value, bool):
             raise ValueError(f"{field} must be an integer")
         if isinstance(value, int):
-            return value
-        if isinstance(value, str):
+            parsed = value
+        elif isinstance(value, str):
             clean = value.strip()
             if clean and clean.lstrip("+-").isdigit():
-                return int(clean)
-        raise ValueError(f"{field} must be an integer")
+                try:
+                    parsed = int(clean)
+                except ValueError as exc:
+                    raise ValueError(f"{field} must be an integer") from exc
+            else:
+                raise ValueError(f"{field} must be an integer")
+        else:
+            raise ValueError(f"{field} must be an integer")
+        if parsed < -SQLITE_INTEGER_MAX - 1 or parsed > SQLITE_INTEGER_MAX:
+            raise ValueError(f"{field} is too large")
+        return parsed
 
     def positive_int_arg(field: str) -> int:
         value = int_arg(field)
