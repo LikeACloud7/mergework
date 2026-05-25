@@ -73,6 +73,15 @@ def test_api_examples_document_ledger_response_shape() -> None:
     assert "bounty-payment ledger entries" in examples
 
 
+def test_api_examples_document_auth_me_response_shape() -> None:
+    examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
+
+    assert "/api/v1/auth/me" in examples
+    assert '"authenticated": false' in examples
+    assert '"github_login": null' in examples
+    assert "Unauthenticated requests return" in examples
+
+
 def test_api_examples_document_bounty_list_response_shape() -> None:
     examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
 

@@ -53,6 +53,21 @@ API path such as `/api/v1/bounties/11`.
 
 ## Ledger, Proofs, Accounts, And Wallets
 
+Check whether the current request has an authenticated GitHub session:
+
+```bash
+curl -s "$API_HOST/api/v1/auth/me"
+```
+
+Unauthenticated requests return a public session shape with a `null` login:
+
+```json
+{
+  "authenticated": false,
+  "github_login": null
+}
+```
+
 Read recent ledger entries and inspect one entry:
 
 ```bash
