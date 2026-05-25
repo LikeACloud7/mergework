@@ -413,6 +413,78 @@ def test_accepted_issue_label_rejects_boolean_issue_number(sqlite_url: str) -> N
         assert event.processed_status == "missing_issue"
 
 
+def test_accepted_labels_ignore_oversized_issue_numbers(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    oversized_issue = "9" * 30
+    cases = [
+        (
+            "delivery-oversized-issue-number",
+            "issues",
+            {
+                "action": "labeled",
+                "label": {"name": "mrwk:accepted"},
+                "issue": {
+                    "number": int(oversized_issue),
+                    "html_url": f"https://github.com/ramimbo/mergework/issues/{oversized_issue}",
+                    "user": {"login": "alice"},
+                },
+                "repository": {"full_name": "ramimbo/mergework"},
+                "sender": {"login": "maintainer"},
+            },
+        ),
+        (
+            "delivery-oversized-pr-issue-reference",
+            "pull_request",
+            {
+                "action": "labeled",
+                "label": {"name": "mrwk:accepted"},
+                "pull_request": {
+                    "number": 8,
+                    "html_url": "https://github.com/ramimbo/mergework/pull/8",
+                    "body": f"Closes #{oversized_issue}",
+                    "user": {"login": "alice"},
+                },
+                "repository": {"full_name": "ramimbo/mergework"},
+                "sender": {"login": "maintainer"},
+            },
+        ),
+    ]
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=3,
+            issue_url="https://github.com/ramimbo/mergework/issues/3",
+            title="Valid issue bounty",
+            reward_mrwk="25",
+            acceptance="Oversized issue numbers must not match or overflow lookup.",
+        )
+
+    for delivery_id, event_type, payload in cases:
+        body = json.dumps(payload, separators=(",", ":")).encode()
+        result = handle_github_webhook(
+            sqlite_url,
+            {
+                "X-GitHub-Delivery": delivery_id,
+                "X-GitHub-Event": event_type,
+                "X-Hub-Signature-256": _signature("secret", body),
+            },
+            body,
+            "secret",
+        )
+
+        assert result == {"status": "missing_issue"}
+
+    with session_scope(sqlite_url) as session:
+        assert get_balance(session, "github:alice") == 0
+        for delivery_id, _event_type, _payload in cases:
+            event = session.get(WebhookEvent, delivery_id)
+            assert event is not None
+            assert event.processed_status == "missing_issue"
+
+
 def test_accepted_label_requires_sender_login(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     body = json.dumps(
