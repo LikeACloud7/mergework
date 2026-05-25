@@ -111,6 +111,14 @@ def _handle_accepted_issue_label(
         return {"status": "ignored"}
     if not repo or not labeled_item:
         return _record_status(database_url, delivery_id, event_type, payload_hash, "missing_issue")
+    if event_type == "issues" and "pull_request" in issue:
+        return _record_status(
+            database_url,
+            delivery_id,
+            event_type,
+            payload_hash,
+            "ignored_pull_request_issue",
+        )
 
     user = labeled_item.get("user") or {}
     submitter_login = user.get("login") if isinstance(user, dict) else None
