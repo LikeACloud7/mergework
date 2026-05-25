@@ -90,6 +90,12 @@ def _payload_object(payload: dict[str, Any], key: str) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _github_issue_number(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return value
+
+
 def _handle_accepted_issue_label(
     database_url: str,
     payload: dict[str, Any],
@@ -137,8 +143,10 @@ def _handle_accepted_issue_label(
     submission_url = labeled_item.get("html_url", "")
     if event_type == "pull_request":
         bounty_issue_numbers = _linked_issue_numbers(str(pull_request.get("body") or ""), repo)
-    elif isinstance(issue_number, int):
-        bounty_issue_numbers = [issue_number]
+    else:
+        issue_number = _github_issue_number(issue_number)
+        if issue_number is not None:
+            bounty_issue_numbers = [issue_number]
     if not bounty_issue_numbers:
         return _record_status(database_url, delivery_id, event_type, payload_hash, "missing_issue")
 
