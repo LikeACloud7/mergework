@@ -364,11 +364,15 @@ def test_admin_payout_api_requires_admin_token_not_cookie_auth(
     assert cookie_only.status_code == 401
     assert token_auth.status_code == 200
     assert token_auth.json()["to_account"] == wallet_address
+    assert token_auth.json()["submission_id"] is not None
+    assert token_auth.json()["ledger_sequence"] is not None
+    assert token_auth.json()["ledger_url"].startswith("/ledger/")
+    assert token_auth.json()["proof_url"].startswith("/proofs/")
     with session_scope(sqlite_url) as session:
         assert get_balance(session, wallet_address) == 25_000_000
 
 
-def test_admin_payout_api_reports_award_state_and_blocks_duplicate_submission(
+def test_admin_payout_api_returns_existing_proof_for_duplicate_submission(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     create_schema(sqlite_url)
@@ -410,6 +414,8 @@ def test_admin_payout_api_reports_award_state_and_blocks_duplicate_submission(
     assert first_body["submission_url"] == "https://github.com/ramimbo/mergework/pull/283"
     assert first_body["proof_hash"]
     assert first_body["proof_url"] == f"/proofs/{first_body['proof_hash']}"
+    assert first_body["ledger_url"] == f"/ledger/{first_body['ledger_sequence']}"
+    assert first_body["submission_id"] is not None
     assert isinstance(first_body["ledger_sequence"], int)
 
     duplicate = client.post(
@@ -418,13 +424,21 @@ def test_admin_payout_api_reports_award_state_and_blocks_duplicate_submission(
         json={**first_payload, "to_account": "github:carol"},
     )
 
-    assert duplicate.status_code == 400
-    assert duplicate.json()["detail"] == "submission already paid"
+    assert duplicate.status_code == 409
+    assert duplicate.json()["status"] == "already_paid"
+    assert duplicate.json()["proof_hash"] == first_body["proof_hash"]
+    assert duplicate.json()["ledger_sequence"] == first_body["ledger_sequence"]
+    assert duplicate.json()["submission_id"] == first_body["submission_id"]
+    assert duplicate.json()["submission_url"] == first_body["submission_url"]
     with session_scope(sqlite_url) as session:
         bounty = session.get(Bounty, bounty_id)
+        payments = session.scalars(
+            select(LedgerEntry).where(LedgerEntry.entry_type == "bounty_payment")
+        ).all()
         assert bounty is not None
         assert bounty.awards_paid == 1
         assert bounty.status == "open"
+        assert len(payments) == 1
         assert get_balance(session, "github:alice") == 15_000_000
 
     final = client.post(
