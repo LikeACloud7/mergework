@@ -540,3 +540,18 @@ def test_me_page_prefills_claim_address_for_linked_wallet(sqlite_url: str, monke
 
     assert f'value="{address}"' in me
     assert "Claim form is prefilled with your linked wallet." in me
+
+
+def test_prelinked_wallet_creates_github_account_row(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    _, public_hex, _ = _keypair()
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        register_wallet(session, public_key_hex=public_hex, github_login="alice")
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    account = client.get("/api/v1/accounts/github:alice")
+
+    assert account.status_code == 200
+    assert account.json()["exists"] is True
