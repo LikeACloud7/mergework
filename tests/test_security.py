@@ -377,7 +377,14 @@ def test_admin_payout_reconciliation_api_reports_missing_and_duplicate_evidence(
         f"/proofs/{proof.hash}",
         f"/proofs/{'e' * 64}",
     }
-    assert all(evidence["matches_submission"] for evidence in duplicate_check["evidence"])
+    for evidence in duplicate_check["evidence"]:
+        assert isinstance(evidence["ledger_sequence"], int)
+        assert evidence["ledger_sequence"] == proof.ledger_sequence
+        assert evidence["ledger_type"] == "bounty_payment"
+        assert evidence["reference"] == "https://github.com/ramimbo/mergework/pull/282"
+        assert evidence["to_account"] == "github:bob"
+        assert evidence["amount_mrwk"] == "15"
+        assert evidence["matches_submission"] is True
 
 
 def test_admin_payout_api_returns_400_for_malformed_json(
