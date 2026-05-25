@@ -112,7 +112,11 @@ def _handle_accepted_issue_label(
             database_url, delivery_id, event_type, payload_hash, "missing_submitter"
         )
     submitter = submitter_login.strip()
-    accepted_by = ((payload.get("sender") or {}).get("login") or "maintainer").strip().lower()
+    sender = payload.get("sender") or {}
+    sender_login = sender.get("login") if isinstance(sender, dict) else None
+    if not isinstance(sender_login, str) or not sender_login.strip():
+        return _record_status(database_url, delivery_id, event_type, payload_hash, "missing_sender")
+    accepted_by = sender_login.strip().lower()
     if accepted_labelers and accepted_by not in accepted_labelers:
         return _record_status(
             database_url, delivery_id, event_type, payload_hash, "unauthorized_labeler"
