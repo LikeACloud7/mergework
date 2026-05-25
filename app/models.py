@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -52,6 +52,7 @@ class Bounty(Base):
     acceptance: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(default=utc_now)
     submissions: Mapped[list[Submission]] = relationship(back_populates="bounty")
+    attempts: Mapped[list[BountyAttempt]] = relationship(back_populates="bounty")
 
 
 class Submission(Base):
@@ -66,6 +67,30 @@ class Submission(Base):
     verifier_result: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[datetime] = mapped_column(default=utc_now)
     bounty: Mapped[Bounty] = relationship(back_populates="submissions")
+
+
+class BountyAttempt(Base):
+    __tablename__ = "bounty_attempts"
+    __table_args__ = (
+        Index(
+            "uq_active_bounty_attempt_submitter",
+            "bounty_id",
+            "submitter_account",
+            unique=True,
+            sqlite_where=text("status = 'active'"),
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    bounty_id: Mapped[int] = mapped_column(ForeignKey("bounties.id"), index=True)
+    submitter_account: Mapped[str] = mapped_column(String(128), index=True)
+    source_url: Mapped[str | None] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(40), default="active", index=True)
+    expires_at: Mapped[datetime] = mapped_column(index=True)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now)
+    bounty: Mapped[Bounty] = relationship(back_populates="attempts")
 
 
 class LedgerEntry(Base):

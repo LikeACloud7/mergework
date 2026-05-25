@@ -6,7 +6,7 @@ import json
 import re
 import secrets
 import time
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any
@@ -17,7 +17,8 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
@@ -49,6 +50,7 @@ from app.ledger.service import (
 from app.models import (
     Account,
     Bounty,
+    BountyAttempt,
     LedgerEntry,
     Proof,
     Submission,
@@ -97,6 +99,9 @@ API_DOCS_CSP = (
 )
 API_DOCS_PATHS = {"/api/docs", "/api/redoc"}
 SQLITE_INTEGER_MAX = 2**63 - 1
+DEFAULT_ATTEMPT_TTL_SECONDS = 24 * 60 * 60
+MIN_ATTEMPT_TTL_SECONDS = 60
+MAX_ATTEMPT_TTL_SECONDS = 7 * 24 * 60 * 60
 
 
 def _request_was_forwarded_https(request: Request) -> bool:
@@ -151,6 +156,75 @@ def bounty_to_dict(bounty: Bounty) -> dict[str, Any]:
         "acceptance": bounty.acceptance,
         "created_at": bounty.created_at.isoformat(),
     }
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _attempt_effective_status(attempt: BountyAttempt, now: datetime) -> str:
+    if attempt.status == "active" and _as_utc(attempt.expires_at) <= now:
+        return "expired"
+    return attempt.status
+
+
+def bounty_attempt_to_dict(attempt: BountyAttempt, now: datetime | None = None) -> dict[str, Any]:
+    now = now or _utc_now()
+    return {
+        "id": attempt.id,
+        "bounty_id": attempt.bounty_id,
+        "submitter_account": attempt.submitter_account,
+        "source_url": attempt.source_url,
+        "status": _attempt_effective_status(attempt, now),
+        "expires_at": _as_utc(attempt.expires_at).isoformat(),
+        "created_at": _as_utc(attempt.created_at).isoformat(),
+        "updated_at": _as_utc(attempt.updated_at).isoformat(),
+    }
+
+
+def _active_attempt_conditions(bounty_id: int, now: datetime) -> tuple[Any, ...]:
+    return (
+        BountyAttempt.bounty_id == bounty_id,
+        BountyAttempt.status == "active",
+        BountyAttempt.expires_at > now,
+    )
+
+
+def bounty_attempt_warnings(session: Session, bounty: Bounty, now: datetime) -> list[str]:
+    warnings: list[str] = []
+    awards_remaining = max(0, bounty.max_awards - bounty.awards_paid)
+    if bounty.status != "open":
+        warnings.append(f"bounty is {bounty.status}")
+        awards_remaining = 0
+    if awards_remaining <= 0:
+        warnings.append("bounty has no award slots remaining")
+    active_count = session.scalar(
+        select(func.count())
+        .select_from(BountyAttempt)
+        .where(*_active_attempt_conditions(bounty.id, now))
+    )
+    if active_count and active_count > 1:
+        warnings.append(f"bounty has {active_count} active attempts")
+    return warnings
+
+
+def expire_stale_bounty_attempts(
+    session: Session, bounty_id: int, now: datetime, submitter_account: str | None = None
+) -> None:
+    query = update(BountyAttempt).where(
+        BountyAttempt.bounty_id == bounty_id,
+        BountyAttempt.status == "active",
+        BountyAttempt.expires_at <= now,
+    )
+    if submitter_account is not None:
+        query = query.where(BountyAttempt.submitter_account == submitter_account)
+    session.execute(query.values(status="expired", updated_at=now))
 
 
 def bounty_awards_to_dict(session: Session, bounty_id: int) -> list[dict[str, Any]]:
@@ -810,6 +884,15 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             return "api-token"
         raise HTTPException(status_code=401, detail="admin token required")
 
+    def attempt_submitter_account(data: dict[str, Any], github_login: str) -> str:
+        submitter_account = f"github:{github_login}"
+        if data.get("submitter_account") is None:
+            return submitter_account
+        requested_account = _normalized_account(_required_str(data, "submitter_account"))
+        if requested_account != submitter_account:
+            raise HTTPException(status_code=403, detail="submitter_account does not match login")
+        return submitter_account
+
     @app.get("/health")
     def health() -> dict[str, Any]:
         with session_scope(db_url) as session:
@@ -945,6 +1028,157 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             result = bounty_to_dict(bounty)
             result["accepted_awards"] = bounty_awards_to_dict(session, bounty.id)
             return result
+
+    @app.get("/api/v1/bounties/{bounty_id}/attempts")
+    def api_bounty_attempts(bounty_id: int, include_expired: bool = Query(False)) -> dict[str, Any]:
+        bounty_id = _positive_bounty_id(bounty_id)
+        now = _utc_now()
+        with session_scope(db_url) as session:
+            bounty = session.get(Bounty, bounty_id)
+            if bounty is None:
+                raise HTTPException(status_code=404, detail="bounty not found")
+            query = select(BountyAttempt).where(BountyAttempt.bounty_id == bounty_id)
+            if not include_expired:
+                query = query.where(*_active_attempt_conditions(bounty_id, now))
+            attempts = session.scalars(
+                query.order_by(BountyAttempt.created_at.desc(), BountyAttempt.id.desc())
+            ).all()
+            return {
+                "bounty_id": bounty_id,
+                "warnings": bounty_attempt_warnings(session, bounty, now),
+                "attempts": [bounty_attempt_to_dict(attempt, now) for attempt in attempts],
+            }
+
+    @app.post("/api/v1/bounties/{bounty_id}/attempts")
+    async def api_create_bounty_attempt(
+        bounty_id: int,
+        request: Request,
+        github_login: str = Depends(require_github_login),
+    ) -> JSONResponse:
+        bounty_id = _positive_bounty_id(bounty_id)
+        data = await _json_object(request)
+        submitter_account = attempt_submitter_account(data, github_login)
+        ttl_seconds = _optional_int(data, "ttl_seconds", DEFAULT_ATTEMPT_TTL_SECONDS)
+        if ttl_seconds < MIN_ATTEMPT_TTL_SECONDS:
+            raise HTTPException(status_code=400, detail="ttl_seconds must be at least 60")
+        if ttl_seconds > MAX_ATTEMPT_TTL_SECONDS:
+            raise HTTPException(status_code=400, detail="ttl_seconds must be no more than 604800")
+        source = _optional_str(data, "source_url").strip()
+        try:
+            source_url = validate_public_url(source) if source else None
+        except LedgerError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        now = _utc_now()
+        with session_scope(db_url) as session:
+            bounty = session.get(Bounty, bounty_id)
+            if bounty is None:
+                raise HTTPException(status_code=404, detail="bounty not found")
+            expire_stale_bounty_attempts(session, bounty_id, now, submitter_account)
+            awards_remaining = max(0, bounty.max_awards - bounty.awards_paid)
+            if bounty.status != "open" or awards_remaining <= 0:
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "status": "not_available",
+                        "bounty_id": bounty_id,
+                        "warnings": bounty_attempt_warnings(session, bounty, now),
+                    },
+                )
+            existing = session.scalar(
+                select(BountyAttempt)
+                .where(
+                    *_active_attempt_conditions(bounty_id, now),
+                    BountyAttempt.submitter_account == submitter_account,
+                )
+                .order_by(BountyAttempt.created_at.desc(), BountyAttempt.id.desc())
+                .limit(1)
+            )
+            if existing is not None:
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "status": "duplicate_active_attempt",
+                        "attempt": bounty_attempt_to_dict(existing, now),
+                        "warnings": bounty_attempt_warnings(session, bounty, now),
+                    },
+                )
+            attempt = BountyAttempt(
+                bounty_id=bounty_id,
+                submitter_account=submitter_account,
+                source_url=source_url,
+                status="active",
+                expires_at=now + timedelta(seconds=ttl_seconds),
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(attempt)
+            try:
+                session.flush()
+            except IntegrityError:
+                session.rollback()
+                bounty = session.get(Bounty, bounty_id)
+                existing = session.scalar(
+                    select(BountyAttempt)
+                    .where(
+                        *_active_attempt_conditions(bounty_id, now),
+                        BountyAttempt.submitter_account == submitter_account,
+                    )
+                    .order_by(BountyAttempt.created_at.desc(), BountyAttempt.id.desc())
+                    .limit(1)
+                )
+                if bounty is None or existing is None:
+                    raise HTTPException(
+                        status_code=409, detail="active attempt already exists"
+                    ) from None
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "status": "duplicate_active_attempt",
+                        "attempt": bounty_attempt_to_dict(existing, now),
+                        "warnings": bounty_attempt_warnings(session, bounty, now),
+                    },
+                )
+            return JSONResponse(
+                status_code=201,
+                content={
+                    "status": "registered",
+                    "attempt": bounty_attempt_to_dict(attempt, now),
+                    "warnings": bounty_attempt_warnings(session, bounty, now),
+                },
+            )
+
+    @app.post("/api/v1/bounty-attempts/{attempt_id}/release")
+    async def api_release_bounty_attempt(
+        attempt_id: int,
+        request: Request,
+        github_login: str = Depends(require_github_login),
+    ) -> dict[str, Any]:
+        if attempt_id <= 0:
+            raise HTTPException(status_code=400, detail="attempt id must be positive")
+        if attempt_id > SQLITE_INTEGER_MAX:
+            raise HTTPException(status_code=400, detail="attempt id is too large")
+        data = await _json_object(request)
+        submitter_account = attempt_submitter_account(data, github_login)
+        now = _utc_now()
+        with session_scope(db_url) as session:
+            attempt = session.get(BountyAttempt, attempt_id)
+            if attempt is None:
+                raise HTTPException(status_code=404, detail="attempt not found")
+            if attempt.submitter_account != submitter_account:
+                raise HTTPException(status_code=403, detail="submitter_account does not match")
+            effective_status = _attempt_effective_status(attempt, now)
+            if effective_status != "active":
+                return {
+                    "status": f"already_{effective_status}",
+                    "attempt": bounty_attempt_to_dict(attempt, now),
+                }
+            attempt.status = "released"
+            attempt.updated_at = now
+            session.flush()
+            return {
+                "status": "released",
+                "attempt": bounty_attempt_to_dict(attempt, now),
+            }
 
     @app.get("/api/v1/reconciliation/payouts")
     def api_payout_reconciliation(
