@@ -379,6 +379,12 @@ def _positive_bounty_id(bounty_id: int) -> int:
     return bounty_id
 
 
+def _positive_ledger_sequence(sequence: int) -> int:
+    if sequence <= 0:
+        raise HTTPException(status_code=400, detail="ledger sequence must be positive")
+    return sequence
+
+
 def _signed_value(value: str, secret: str) -> str:
     timestamp = str(int(time.time()))
     body = f"{value}|{timestamp}"
@@ -851,6 +857,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.get("/api/v1/ledger/{sequence}")
     def api_ledger_entry(sequence: int) -> dict[str, Any]:
+        sequence = _positive_ledger_sequence(sequence)
         with session_scope(db_url) as session:
             entry = session.get(LedgerEntry, sequence)
             if entry is None:
@@ -1393,7 +1400,7 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
             )
             return json.dumps(wallet_transfer_to_dict(transfer))
         if name == "get_ledger_entry":
-            entry = session.get(LedgerEntry, int_arg("sequence"))
+            entry = session.get(LedgerEntry, positive_int_arg("sequence"))
             if entry is None:
                 return "ledger entry not found"
             proof = session.scalar(
