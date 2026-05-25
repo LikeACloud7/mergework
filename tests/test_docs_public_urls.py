@@ -83,7 +83,9 @@ def test_api_examples_document_bounty_list_response_shape() -> None:
     assert '"issue_number": 164' in examples
     assert '"reward_mrwk": "100"' in examples
     assert '"reserved_mrwk": "500"' in examples
-    assert '"awards_remaining": 5' in examples
+    assert '"awards_paid": 4' in examples
+    assert '"awards_remaining": 1' in examples
+    assert "Award counters can change" in examples
     assert "Use `id` for the single-bounty API path" in examples
 
 
