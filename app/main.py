@@ -46,6 +46,7 @@ from app.ledger.service import (
     submit_wallet_transfer,
     validate_public_url,
 )
+from app.mcp import handle_mcp_request
 from app.models import (
     Account,
     Bounty,
@@ -1236,119 +1237,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.post("/mcp")
     async def mcp(request: Request) -> Any:
-        try:
-            payload = await request.json()
-        except ValueError:
-            return JSONResponse(
-                {
-                    "jsonrpc": "2.0",
-                    "id": None,
-                    "error": {"code": -32700, "message": "parse error"},
-                },
-                status_code=400,
-            )
-        if not isinstance(payload, dict):
-            return JSONResponse(
-                {
-                    "jsonrpc": "2.0",
-                    "id": None,
-                    "error": {"code": -32600, "message": "invalid request"},
-                },
-                status_code=400,
-            )
-        response_id = payload.get("id")
-        method = payload.get("method")
-        if method == "tools/list":
-            return {
-                "jsonrpc": "2.0",
-                "id": response_id,
-                "result": {
-                    "tools": [
-                        {
-                            "name": "list_bounties",
-                            "description": (
-                                "List MRWK bounties with optional status, q, and limit filters"
-                            ),
-                        },
-                        {
-                            "name": "get_bounty",
-                            "description": "Get a bounty by id, optionally with accepted awards",
-                        },
-                        {"name": "get_balance", "description": "Get an account balance"},
-                        {
-                            "name": "register_wallet",
-                            "description": "Register an MRWK wallet public key",
-                        },
-                        {"name": "get_wallet", "description": "Get an MRWK wallet by address"},
-                        {
-                            "name": "submit_wallet_transfer",
-                            "description": "Submit a signed MRWK wallet transfer",
-                        },
-                        {"name": "get_ledger_entry", "description": "Get a ledger entry"},
-                        {"name": "get_proof", "description": "Get a public proof by hash"},
-                        {
-                            "name": "submit_work_proof",
-                            "description": (
-                                "Return submission instructions, optionally for a bounty_id "
-                                "or issue_number"
-                            ),
-                        },
-                    ]
-                },
-            }
-        if method != "tools/call":
-            return {
-                "jsonrpc": "2.0",
-                "id": response_id,
-                "error": {"code": -32601, "message": "unknown method"},
-            }
-        params = payload.get("params")
-        if params is None:
-            params = {}
-        if not isinstance(params, dict):
-            return {
-                "jsonrpc": "2.0",
-                "id": response_id,
-                "error": {"code": -32602, "message": "invalid params"},
-            }
-        name = params.get("name")
-        args = params.get("arguments", {})
-        if args is None:
-            args = {}
-        if not isinstance(args, dict):
-            return {
-                "jsonrpc": "2.0",
-                "id": response_id,
-                "error": {"code": -32602, "message": "invalid params"},
-            }
-        if not isinstance(name, str):
-            return {
-                "jsonrpc": "2.0",
-                "id": response_id,
-                "error": {"code": -32602, "message": "tool name is required"},
-            }
-        try:
-            tool_result = _call_mcp_tool(db_url, name, args)
-        except (KeyError, TypeError, ValueError, LedgerError, HTTPException):
-            return {
-                "jsonrpc": "2.0",
-                "id": response_id,
-                "error": {"code": -32602, "message": "invalid tool arguments"},
-            }
-        if isinstance(tool_result, dict):
-            return {
-                "jsonrpc": "2.0",
-                "id": response_id,
-                "result": {
-                    "content": [{"type": "text", "text": json.dumps(tool_result)}],
-                    "structuredContent": tool_result,
-                },
-            }
-        return {
-            "jsonrpc": "2.0",
-            "id": response_id,
-            "result": {"content": [{"type": "text", "text": tool_result}]},
-        }
+        return await handle_mcp_request(request, db_url, _call_mcp_tool)
 
     @app.get("/", response_class=HTMLResponse)
     def hub(request: Request) -> HTMLResponse:
