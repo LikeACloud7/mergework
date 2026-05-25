@@ -87,6 +87,24 @@ def test_api_examples_document_bounty_list_response_shape() -> None:
     assert "Use `id` for the single-bounty API path" in examples
 
 
+def test_api_examples_document_wallet_response_shape() -> None:
+    examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
+
+    assert "/api/v1/wallets/<wallet_address>" in examples
+    assert '"address": "mrwk1fb1437aec45b46ec640f44b2e2aced55dc23556e"' in examples
+    assert (
+        '"public_key_hex": "d88d3edf935ba932ee2737ee5500c795f21caeb4a2fdeacb55a4ff63c52c9d51"'
+        in examples
+    )
+    assert '"label": null' in examples
+    assert '"github_login": "prettyboyvic"' in examples
+    assert '"balance_mrwk": "50"' in examples
+    assert '"nonce": 2' in examples
+    assert '"next_nonce": 3' in examples
+    assert '"created_at": "2026-05-24T17:50:56.118158"' in examples
+    assert "read-only wallet lookup" in examples
+
+
 def test_agent_guide_explains_internal_bounty_ids() -> None:
     guide = Path("docs/agent-guide.md").read_text(encoding="utf-8")
 
