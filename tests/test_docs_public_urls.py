@@ -165,6 +165,21 @@ def test_api_examples_document_github_claim_response() -> None:
     assert "same immutable ledger-entry shape" in examples
 
 
+def test_api_examples_document_mcp_wallet_transfer_response() -> None:
+    examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
+
+    assert '"name":"submit_wallet_transfer"' in examples
+    assert '"from_address":"<sender_mrwk1_address>"' in examples
+    assert '"to_address":"<receiver_mrwk1_address>"' in examples
+    assert '"signature_hex":"<128 lowercase hex chars>"' in examples
+    assert "REST transfer API" in examples
+    assert "result.content[0].text" in examples
+    assert '\\"type\\":\\"wallet_transfer\\"' in examples
+    assert '\\"ledger_sequence\\":42' in examples
+    assert '\\"amount_mrwk\\":\\"1.5\\"' in examples
+    assert '\\"memo\\":\\"agent payout consolidation\\"' in examples
+
+
 def test_agent_guide_explains_internal_bounty_ids() -> None:
     guide = Path("docs/agent-guide.md").read_text(encoding="utf-8")
 
