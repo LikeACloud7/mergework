@@ -138,6 +138,9 @@ def test_api_examples_document_wallet_github_link_response() -> None:
     assert '"signature_hex":"<128 lowercase hex chars>"' in examples
     assert "wallet-link payload" in examples
     assert "wallet's `next_nonce`" in examples
+    assert '"github_login":"<signed_in_github_login>"' in examples
+    assert '"type":"mrwk_link_github_v1"' in examples
+    assert "compact ASCII" in examples
     assert '"github_login": "tatelyman"' in examples
     assert '"nonce": 1' in examples
     assert '"next_nonce": 2' in examples

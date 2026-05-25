@@ -175,7 +175,12 @@ The registration response uses the same public wallet shape as
 Link a registered wallet to the current GitHub login. The GitHub login comes
 from the signed-in session cookie, not the request body. Sign the canonical
 wallet-link payload for the wallet's `next_nonce` with the wallet private key;
-do not send the private key to MergeWork.
+do not send the private key to MergeWork. The signed payload is compact ASCII
+JSON with sorted keys and includes the authenticated GitHub login:
+
+```json
+{"address":"<registered_mrwk1_address>","github_login":"<signed_in_github_login>","nonce":1,"type":"mrwk_link_github_v1"}
+```
 
 ```bash
 curl -s -X POST "$API_HOST/api/v1/wallets/link-github" \
