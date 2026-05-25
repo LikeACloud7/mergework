@@ -7,6 +7,7 @@ import re
 import secrets
 import time
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlencode, urlsplit, urlunsplit
@@ -150,6 +151,20 @@ def bounty_awards_to_dict(session: Session, bounty_id: int) -> list[dict[str, An
             }
         )
     return awards
+
+
+def bounty_list_summary(bounties: list[dict[str, Any]]) -> dict[str, Any]:
+    open_awards = sum(int(bounty["awards_remaining"]) for bounty in bounties)
+    open_pool_microunits = sum(
+        int(Decimal(str(bounty["reward_mrwk"])) * Decimal(1_000_000))
+        * int(bounty["awards_remaining"])
+        for bounty in bounties
+    )
+    return {
+        "bounties_shown": len(bounties),
+        "open_awards": open_awards,
+        "open_pool_mrwk": format_mrwk(open_pool_microunits),
+    }
 
 
 def ledger_to_dict(entry: LedgerEntry, proof_hash: str | None = None) -> dict[str, Any]:
@@ -1102,11 +1117,13 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     ) -> HTMLResponse:
         selected_status = status.strip().lower() if status is not None else None
         query_text = q.strip() if q is not None else ""
+        bounties = list_bounties_by_status(status, q)
         return templates.TemplateResponse(
             request,
             "bounties.html",
             {
-                "bounties": list_bounties_by_status(status, q),
+                "bounties": bounties,
+                "summary": bounty_list_summary(bounties),
                 "selected_status": selected_status,
                 "query_text": query_text,
             },

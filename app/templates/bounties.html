@@ -16,6 +16,20 @@
   <a href="/bounties?status=closed{% if query_text %}&q={{ query_text | urlencode }}{% endif %}"{% if selected_status == "closed" %} aria-current="page"{% endif %}>Closed</a>
 </nav>
 {% if query_text %}<p>Showing matches for “{{ query_text }}”.</p>{% endif %}
+<section class="bounty-list-summary" aria-label="Bounty list summary">
+  <article>
+    <span>Bounties shown</span>
+    <strong>{{ summary.bounties_shown }}</strong>
+  </article>
+  <article>
+    <span>Awards open</span>
+    <strong>{{ summary.open_awards }}</strong>
+  </article>
+  <article>
+    <span>Open reward pool</span>
+    <strong>{{ summary.open_pool_mrwk }} MRWK</strong>
+  </article>
+</section>
 <div class="list">
   {% for bounty in bounties %}
   <article>
