@@ -207,6 +207,51 @@ def test_accepted_issue_event_for_pull_request_does_not_pay_matching_bounty(
         assert event.processed_status == "ignored_pull_request_issue"
 
 
+def test_accepted_pr_label_rejects_malformed_body_objects(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    body = json.dumps(
+        {
+            "action": "labeled",
+            "label": {"name": "mrwk:accepted"},
+            "pull_request": {
+                "number": 8,
+                "html_url": "https://github.com/ramimbo/mergework/pull/8",
+                "body": {"text": "Bounty #3"},
+                "user": {"login": "contributor"},
+            },
+            "repository": {"full_name": "ramimbo/mergework"},
+            "sender": {"login": "maintainer"},
+        },
+        separators=(",", ":"),
+    ).encode()
+    headers = {
+        "X-GitHub-Delivery": "delivery-pr-malformed-body",
+        "X-GitHub-Event": "pull_request",
+        "X-Hub-Signature-256": _signature("secret", body),
+    }
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=3,
+            issue_url="https://github.com/ramimbo/mergework/issues/3",
+            title="Wallet transfer validation tests",
+            reward_mrwk="150",
+            acceptance="PR adds focused wallet transfer failure tests.",
+        )
+
+    result = handle_github_webhook(sqlite_url, headers, body, "secret")
+
+    assert result == {"status": "malformed_pull_request_body"}
+    with session_scope(sqlite_url) as session:
+        assert get_balance(session, "github:contributor") == 0
+        event = session.get(WebhookEvent, "delivery-pr-malformed-body")
+        assert event is not None
+        assert event.processed_status == "malformed_pull_request_body"
+
+
 def test_accepted_label_requires_submitter_login(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     body = json.dumps(
