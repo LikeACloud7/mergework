@@ -193,6 +193,59 @@ def test_account_views_accept_valid_reserve_bounty_account(sqlite_url: str) -> N
     assert mcp_resp.json()["result"]["content"][0]["text"] == "reserve:bounty:1: 50 MRWK"
 
 
+def test_account_views_accept_valid_mrwk_wallet_account(sqlite_url: str) -> None:
+    client = _setup_app(sqlite_url)
+    account = "mrwk1" + ("0" * 40)
+
+    api_resp = client.get(f"/api/v1/accounts/{account}")
+    page_resp = client.get(f"/accounts/{account}")
+    mcp_resp = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "id": 1,
+            "params": {"name": "get_balance", "arguments": {"account": account.upper()}},
+        },
+    )
+
+    assert api_resp.status_code == 200
+    assert api_resp.json()["account"] == account
+    assert page_resp.status_code == 200
+    assert mcp_resp.status_code == 200
+    assert mcp_resp.json()["result"]["content"][0]["text"] == f"{account}: 0 MRWK"
+
+
+@pytest.mark.parametrize(
+    "account",
+    [
+        "mrwk1bad",
+        "mrwk1" + ("0" * 39),
+        "mrwk1" + ("g" * 40),
+    ],
+)
+def test_account_views_reject_malformed_mrwk_wallet_accounts(sqlite_url: str, account: str) -> None:
+    client = _setup_app(sqlite_url)
+
+    api_resp = client.get(f"/api/v1/accounts/{account}")
+    page_resp = client.get(f"/accounts/{account}")
+    mcp_resp = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "id": 1,
+            "params": {"name": "get_balance", "arguments": {"account": account}},
+        },
+    )
+
+    assert api_resp.status_code == 400
+    assert api_resp.json()["detail"] == "invalid MRWK wallet address"
+    assert page_resp.status_code == 400
+    assert mcp_resp.status_code == 200
+    assert mcp_resp.json()["error"]["code"] == -32602
+
+
 @pytest.mark.parametrize(
     "account",
     [
