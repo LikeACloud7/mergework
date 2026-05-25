@@ -140,6 +140,7 @@ def test_activity_api_filters_accepted_work_by_query(sqlite_url: str) -> None:
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 
     by_account = client.get("/api/v1/activity?q=ALICE").json()
+    by_repo = client.get("/api/v1/activity?q=ramimbo%2Fmergework").json()
     by_proof = client.get(f"/api/v1/activity?q={alice_proof.hash[:12]}").json()
     no_match = client.get("/api/v1/activity?q=carol").json()
 
@@ -151,6 +152,11 @@ def test_activity_api_filters_accepted_work_by_query(sqlite_url: str) -> None:
     }
     assert by_account["contributors"][0]["account"] == "github:alice"
     assert by_account["recent"][0]["submission_url"].endswith("/pull/164")
+    assert by_repo["totals"] == {
+        "accepted_awards": 2,
+        "accepted_mrwk": "200",
+        "contributors": 2,
+    }
     assert by_proof["recent"][0]["proof_hash"] == alice_proof.hash
     assert no_match["totals"] == {
         "accepted_awards": 0,
