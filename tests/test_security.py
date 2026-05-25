@@ -201,6 +201,13 @@ def test_admin_page_renders_safe_webhook_events_for_cookie_admin(
     assert re.search(
         r"<code>missing_submitter</code>\s*</span>\s*<strong>2</strong>", all_events.text
     )
+    status_summary_positions = [
+        all_events.text.index("<code>missing_submitter</code>"),
+        all_events.text.index("<code>bounty_not_found</code>"),
+        all_events.text.index("<code>exhausted_bounty</code>"),
+        all_events.text.index("<code>paid</code>"),
+    ]
+    assert status_summary_positions == sorted(status_summary_positions)
     assert "paid" in all_events.text
     assert filtered.status_code == 200
     assert "delivery-missing-submitter" in filtered.text
