@@ -78,7 +78,15 @@ def _is_valid_dns_hostname(hostname: str) -> bool:
 
 def _sqlite_database_errors(database_url: str) -> list[str]:
     parsed = urlparse(database_url)
-    if not parsed.scheme.startswith("sqlite"):
+    is_sqlite = parsed.scheme == "sqlite" or parsed.scheme.startswith("sqlite+")
+    is_postgres = (
+        parsed.scheme in {"postgres", "postgresql"}
+        or parsed.scheme.startswith("postgres+")
+        or parsed.scheme.startswith("postgresql+")
+    )
+    if not (is_sqlite or is_postgres):
+        return ["MERGEWORK_DATABASE_URL must use sqlite, postgresql, or postgres"]
+    if not is_sqlite:
         return []
 
     sqlite_path = parsed.path
