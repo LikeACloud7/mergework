@@ -224,6 +224,10 @@ def ledger_to_dict(entry: LedgerEntry, proof_hash: str | None = None) -> dict[st
     }
 
 
+def _bounty_detail_url(bounty_id: int | None) -> str | None:
+    return f"/bounties/{bounty_id}" if bounty_id is not None else None
+
+
 def _activity_row(entry: LedgerEntry, proof: Proof) -> dict[str, Any] | None:
     data = json.loads(proof.public_json)
     if not isinstance(data, dict) or data.get("kind") != "bounty_payment":
@@ -246,6 +250,7 @@ def _activity_row(entry: LedgerEntry, proof: Proof) -> dict[str, Any] | None:
         "proof_hash": proof.hash,
         "proof_url": f"/proofs/{proof.hash}",
         "bounty_id": proof.bounty_id,
+        "bounty_url": _bounty_detail_url(proof.bounty_id),
         "created_at": entry.created_at.isoformat(),
     }
 
@@ -397,6 +402,8 @@ def accepted_work_for_account(session: Session, account: str) -> list[dict[str, 
                 "issue_url": issue_url,
                 "repo": repo,
                 "issue_number": issue_number,
+                "bounty_id": proof.bounty_id,
+                "bounty_url": _bounty_detail_url(proof.bounty_id),
                 "accepted_by": data.get("accepted_by"),
                 "created_at": entry.created_at.isoformat(),
             }

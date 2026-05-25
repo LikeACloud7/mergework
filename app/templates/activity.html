@@ -75,7 +75,11 @@
           <div class="ledger-field ledger-field--reference reference-cell">
             <dt>Bounty</dt>
             {% set bounty_issue_url = safe_public_url(row.bounty_issue_url) %}
-            <dd>{% if bounty_issue_url %}<a href="{{ bounty_issue_url }}">{{ row.bounty_repo }} #{{ row.bounty_issue_number }}</a>{% else %}-{% endif %}</dd>
+            <dd>
+              {% if row.bounty_url %}<a href="{{ row.bounty_url }}">Bounty #{{ row.bounty_id }}</a>{% endif %}
+              {% if row.bounty_url and bounty_issue_url %} · {% endif %}
+              {% if bounty_issue_url %}<a href="{{ bounty_issue_url }}">{{ row.bounty_repo }} #{{ row.bounty_issue_number }}</a>{% elif not row.bounty_url %}-{% endif %}
+            </dd>
           </div>
           <div class="ledger-field ledger-field--reference reference-cell">
             <dt>Accepted work</dt>

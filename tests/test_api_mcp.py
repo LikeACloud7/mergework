@@ -1327,6 +1327,7 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
     assert 'via <a href="/ledger/3">#3</a>' in account
     assert "Accepted work" in account
     assert "Proof-backed bounty payments made to this account." in account
+    assert f'href="/bounties/{bounty.id}">Bounty #{bounty.id}</a>' in account
     assert 'href="https://github.com/ramimbo/mergework/issues/2"' in account
     assert 'href="/accounts/reserve:bounty:1"' in account
     assert 'href="/accounts/github:alice"' in account
