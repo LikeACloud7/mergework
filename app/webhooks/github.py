@@ -134,7 +134,15 @@ def _handle_accepted_issue_label(
         )
 
     bounty_issue_numbers: list[int] = []
-    submission_url = labeled_item.get("html_url", "")
+    submission_url_value = labeled_item.get("html_url", "")
+    if submission_url_value is None:
+        submission_url = ""
+    elif isinstance(submission_url_value, str):
+        submission_url = submission_url_value
+    else:
+        return _record_status(
+            database_url, delivery_id, event_type, payload_hash, "malformed_submission_url"
+        )
     if event_type == "pull_request":
         bounty_issue_numbers = _linked_issue_numbers(str(pull_request.get("body") or ""), repo)
     elif isinstance(issue_number, int):
