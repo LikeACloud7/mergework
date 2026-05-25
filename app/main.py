@@ -373,6 +373,12 @@ def _github_login_from_account(account: str) -> str | None:
     return login
 
 
+def _positive_bounty_id(bounty_id: int) -> int:
+    if bounty_id <= 0:
+        raise HTTPException(status_code=400, detail="bounty id must be positive")
+    return bounty_id
+
+
 def _signed_value(value: str, secret: str) -> str:
     timestamp = str(int(time.time()))
     body = f"{value}|{timestamp}"
@@ -640,6 +646,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.get("/api/v1/bounties/{bounty_id}")
     def api_bounty(bounty_id: int) -> dict[str, Any]:
+        bounty_id = _positive_bounty_id(bounty_id)
         with session_scope(db_url) as session:
             bounty = session.get(Bounty, bounty_id)
             if bounty is None:
@@ -652,6 +659,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         request: Request,
         admin_login: str = Depends(require_admin_token),
     ) -> dict[str, Any]:
+        bounty_id = _positive_bounty_id(bounty_id)
         data = await _json_object(request)
         try:
             requested_account = _required_str(data, "to_account")
@@ -696,6 +704,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         request: Request,
         admin_login: str = Depends(require_admin_token),
     ) -> dict[str, Any]:
+        bounty_id = _positive_bounty_id(bounty_id)
         data = await _json_object(request)
         reference = _optional_str(data, "reference") if data.get("reference") is not None else None
         closed_by = _optional_str(data, "closed_by", admin_login)

@@ -417,6 +417,33 @@ def test_admin_close_bounty_api_releases_remaining_reserve(
     assert token_auth.json()["released_mrwk"] == "50"
 
 
+def test_admin_bounty_id_routes_reject_non_positive_ids(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create_schema(sqlite_url)
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    headers = {"x-mergework-admin-token": "admin-token-for-tests"}
+
+    payout = client.post(
+        "/api/v1/bounties/0/pay",
+        headers=headers,
+        json={
+            "to_account": "github:alice",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/1",
+        },
+    )
+    close = client.post("/api/v1/bounties/0/close", headers=headers, json={})
+
+    assert payout.status_code == 400
+    assert payout.json()["detail"] == "bounty id must be positive"
+    assert close.status_code == 400
+    assert close.json()["detail"] == "bounty id must be positive"
+
+
 def test_admin_bounty_api_accepts_multi_award_count(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
