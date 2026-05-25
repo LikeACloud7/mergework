@@ -107,6 +107,19 @@ def test_api_examples_document_wallet_response_shape() -> None:
     assert "read-only wallet lookup" in examples
 
 
+def test_api_examples_document_wallet_registration_response() -> None:
+    examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
+
+    assert 'POST "$API_HOST/api/v1/wallets/register"' in examples
+    assert "same public wallet shape" in examples
+    assert '"address": "mrwk102d449a31fbb267c8f352e9968a79e3e5fc95c1b"' in examples
+    assert '"label": "agent wallet"' in examples
+    assert '"github_login": null' in examples
+    assert '"balance_mrwk": "0"' in examples
+    assert '"nonce": 0' in examples
+    assert '"next_nonce": 1' in examples
+
+
 def test_agent_guide_explains_internal_bounty_ids() -> None:
     guide = Path("docs/agent-guide.md").read_text(encoding="utf-8")
 

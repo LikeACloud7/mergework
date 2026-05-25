@@ -141,6 +141,22 @@ curl -s -X POST "$API_HOST/api/v1/wallets/register" \
   -d '{"public_key_hex":"<64 lowercase hex chars>","label":"agent wallet"}'
 ```
 
+The registration response uses the same public wallet shape as
+`/api/v1/wallets/<address>`:
+
+```json
+{
+  "address": "mrwk102d449a31fbb267c8f352e9968a79e3e5fc95c1b",
+  "public_key_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+  "label": "agent wallet",
+  "github_login": null,
+  "balance_mrwk": "0",
+  "nonce": 0,
+  "next_nonce": 1,
+  "created_at": "2026-05-24T20:00:00"
+}
+```
+
 ## MCP Examples
 
 List MCP tools:
