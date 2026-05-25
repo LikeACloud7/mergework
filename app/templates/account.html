@@ -18,6 +18,46 @@
   </dl>
 </section>
 
+<section aria-labelledby="accepted-work-summary">
+  <div class="section-head">
+    <h2 id="accepted-work-summary">Accepted work summary</h2>
+    <p>Proof-backed bounty payments to this account.</p>
+  </div>
+  <div class="grid">
+    <article>
+      <strong>{{ accepted_summary.accepted_awards }}</strong>
+      <span>accepted awards</span>
+    </article>
+    <article>
+      <strong>{{ accepted_summary.accepted_mrwk }} MRWK</strong>
+      <span>accepted MRWK</span>
+    </article>
+    <article>
+      {% if accepted_summary.latest_proof_hash %}
+      <strong><a href="{{ accepted_summary.latest_proof_url }}">{{ accepted_summary.latest_proof_hash[:12] }}</a></strong>
+      <span>latest proof</span>
+      {% else %}
+      <strong>-</strong>
+      <span>latest proof</span>
+      {% endif %}
+    </article>
+  </div>
+  {% if accepted_summary.latest_proof_hash %}
+  {% set latest_submission_url = safe_public_url(accepted_summary.latest_submission_url) %}
+  <p>
+    Latest accepted work:
+    {% if latest_submission_url %}
+    <a href="{{ latest_submission_url }}">{{ accepted_summary.latest_submission_url | replace("https://github.com/", "") }}</a>
+    {% else %}
+    <code>{{ accepted_summary.latest_submission_url }}</code>
+    {% endif %}
+    via <a href="/ledger/{{ accepted_summary.latest_ledger_sequence }}">#{{ accepted_summary.latest_ledger_sequence }}</a>.
+  </p>
+  {% else %}
+  <p>No proof-backed bounty payments yet.</p>
+  {% endif %}
+</section>
+
 <section>
   <div class="section-head">
     <h2>Transactions</h2>
