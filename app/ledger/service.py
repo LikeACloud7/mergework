@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import re
 from datetime import UTC, datetime
@@ -85,11 +86,27 @@ def validate_public_url(url: str) -> str:
     clean = url.strip()
     if len(clean) > 500:
         raise LedgerError("URL is too long")
-    parsed = urlparse(clean)
+    try:
+        parsed = urlparse(clean)
+        has_empty_port = parsed.port is None and parsed.netloc.endswith(":")
+        hostname = parsed.hostname
+    except ValueError as exc:
+        raise LedgerError("URL must include a valid host") from exc
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise LedgerError("URL must use http or https")
-    if parsed.username or parsed.password:
+    if not hostname or has_empty_port:
+        raise LedgerError("URL must include a valid host")
+    if parsed.username is not None or parsed.password is not None:
         raise LedgerError("URL must not include credentials")
+    if any(char.isspace() for char in clean):
+        raise LedgerError("URL must not contain whitespace")
+    try:
+        ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        pass
+    else:
+        if ip.is_multicast or not ip.is_global:
+            raise LedgerError("URL must use a public host")
     return clean
 
 
