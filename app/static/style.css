@@ -65,7 +65,13 @@ main { max-width: 980px; margin: 0 auto; padding: 48px 20px; }
 }
 .grid strong { display: block; font-size: 1.6rem; }
 .grid span, .list p, .section-head p { color: var(--muted); }
-table { width: 100%; border-collapse: collapse; background: var(--panel); }
+table {
+  background: var(--panel);
+  border-collapse: collapse;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
 th, td { border-bottom: 1px solid var(--line); padding: 10px; text-align: left; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 main h1 code {
