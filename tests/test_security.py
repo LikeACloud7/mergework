@@ -1093,6 +1093,88 @@ def test_admin_payout_api_rejects_control_character_note(
         assert get_balance(session, "github:alice") == 0
 
 
+def test_admin_payout_api_omits_blank_note_from_public_proof(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create_schema(sqlite_url)
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=18,
+            issue_url="https://github.com/ramimbo/mergework/issues/18",
+            title="Admin blank proof note",
+            reward_mrwk="25",
+            acceptance="Maintainer verifies payout.",
+        )
+        bounty_id = bounty.id
+
+    response = client.post(
+        f"/api/v1/bounties/{bounty_id}/pay",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json={
+            "to_account": "github:alice",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/18",
+            "accepted_by": "maintainer",
+            "note": "   ",
+        },
+    )
+
+    assert response.status_code == 200
+    with session_scope(sqlite_url) as session:
+        proof = session.scalars(select(Proof)).one()
+        verifier_result = json.loads(proof.public_json)["verifier_result"]
+        assert verifier_result == {"accepted_by": "maintainer", "source": "admin_api"}
+        assert get_balance(session, "github:alice") == 25_000_000
+
+
+def test_admin_payout_api_trims_note_in_public_proof(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create_schema(sqlite_url)
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=19,
+            issue_url="https://github.com/ramimbo/mergework/issues/19",
+            title="Admin trimmed proof note",
+            reward_mrwk="25",
+            acceptance="Maintainer verifies payout.",
+        )
+        bounty_id = bounty.id
+
+    response = client.post(
+        f"/api/v1/bounties/{bounty_id}/pay",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json={
+            "to_account": "github:bob",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/19",
+            "accepted_by": "maintainer",
+            "note": "  verified manually  ",
+        },
+    )
+
+    assert response.status_code == 200
+    with session_scope(sqlite_url) as session:
+        proof = session.scalars(select(Proof)).one()
+        verifier_result = json.loads(proof.public_json)["verifier_result"]
+        assert verifier_result["note"] == "verified manually"
+        assert get_balance(session, "github:bob") == 25_000_000
+
+
 def test_bounty_urls_reject_control_characters(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
