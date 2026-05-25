@@ -242,6 +242,87 @@ def test_accepted_label_requires_sender_login(sqlite_url: str) -> None:
         assert event.processed_status == "missing_sender"
 
 
+def test_accepted_label_handles_malformed_object_fields(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    cases = [
+        (
+            "delivery-malformed-label",
+            {
+                "action": "labeled",
+                "label": "mrwk:accepted",
+                "issue": {
+                    "number": 44,
+                    "html_url": "https://github.com/ramimbo/mergework/issues/44",
+                    "user": {"login": "alice"},
+                },
+                "repository": {"full_name": "ramimbo/mergework"},
+                "sender": {"login": "maintainer"},
+            },
+            "ignored",
+        ),
+        (
+            "delivery-malformed-repo",
+            {
+                "action": "labeled",
+                "label": {"name": "mrwk:accepted"},
+                "issue": {
+                    "number": 44,
+                    "html_url": "https://github.com/ramimbo/mergework/issues/44",
+                    "user": {"login": "alice"},
+                },
+                "repository": "ramimbo/mergework",
+                "sender": {"login": "maintainer"},
+            },
+            "missing_issue",
+        ),
+        (
+            "delivery-malformed-issue",
+            {
+                "action": "labeled",
+                "label": {"name": "mrwk:accepted"},
+                "issue": "ramimbo/mergework#44",
+                "repository": {"full_name": "ramimbo/mergework"},
+                "sender": {"login": "maintainer"},
+            },
+            "missing_issue",
+        ),
+    ]
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=44,
+            issue_url="https://github.com/ramimbo/mergework/issues/44",
+            title="Accepted issue",
+            reward_mrwk="25",
+            acceptance="Maintainer applies mrwk:accepted",
+        )
+
+    for delivery_id, payload, expected_status in cases:
+        body = json.dumps(payload, separators=(",", ":")).encode()
+        result = handle_github_webhook(
+            sqlite_url,
+            {
+                "X-GitHub-Delivery": delivery_id,
+                "X-GitHub-Event": "issues",
+                "X-Hub-Signature-256": _signature("secret", body),
+            },
+            body,
+            "secret",
+        )
+
+        assert result == {"status": expected_status}
+
+    with session_scope(sqlite_url) as session:
+        assert get_balance(session, "github:alice") == 0
+        for delivery_id, _payload, expected_status in cases:
+            event = session.get(WebhookEvent, delivery_id)
+            assert event is not None
+            assert event.processed_status == expected_status
+
+
 def test_accepted_pr_labels_can_pay_multiple_awards_for_one_bounty(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     first_body = json.dumps(
