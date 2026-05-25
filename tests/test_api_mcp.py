@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.db import create_schema, session_scope
 from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
+from app.models import Proof
 
 
 def test_health_status_and_bounty_api(sqlite_url: str) -> None:
@@ -1308,6 +1309,14 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
     assert account_api["transfer_status"] == (
         "Claim GitHub balances from /me after linking a registered mrwk1 wallet."
     )
+    assert account_api["accepted_work"] == {
+        "accepted_awards": 1,
+        "accepted_mrwk": "25",
+        "latest_ledger_sequence": 3,
+        "latest_submission_url": "https://github.com/ramimbo/mergework/pull/3",
+        "latest_proof_hash": proof.hash,
+        "latest_proof_url": f"/proofs/{proof.hash}",
+    }
     assert "Claim GitHub balances from /me" in account
     assert 'href="https://github.com/alice">@alice</a>' in account
     assert "Accepted work summary" in account
@@ -1321,6 +1330,52 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
     assert 'href="https://github.com/ramimbo/mergework/issues/2"' in account
     assert 'href="/accounts/reserve:bounty:1"' in account
     assert 'href="/accounts/github:alice"' in account
+
+
+def test_account_api_keeps_schema_when_accepted_work_proof_is_malformed(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=42,
+            issue_url="https://github.com/ramimbo/mergework/issues/42",
+            title="Malformed accepted-work proof",
+            reward_mrwk="25",
+            acceptance="Accepted label",
+        )
+        proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/42",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        proof_row = session.get(Proof, proof.hash)
+        assert proof_row is not None
+        proof_row.public_json = "{"
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get("/api/v1/accounts/github:alice")
+    account_page = client.get("/accounts/github:alice")
+
+    assert response.status_code == 200
+    assert account_page.status_code == 200
+    account_api = response.json()
+    assert account_api["balance_mrwk"] == "25"
+    assert account_api["accepted_work"] == {
+        "accepted_awards": 0,
+        "accepted_mrwk": "0",
+        "latest_ledger_sequence": None,
+        "latest_submission_url": None,
+        "latest_proof_hash": None,
+        "latest_proof_url": None,
+    }
 
 
 def test_account_page_rejects_empty_account_path(sqlite_url: str) -> None:

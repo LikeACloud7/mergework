@@ -402,6 +402,31 @@ def accepted_work_for_account(session: Session, account: str) -> list[dict[str, 
     return accepted_work
 
 
+def empty_accepted_summary() -> dict[str, Any]:
+    return {
+        "accepted_awards": 0,
+        "accepted_mrwk": "0",
+        "latest_ledger_sequence": None,
+        "latest_submission_url": None,
+        "latest_proof_hash": None,
+        "latest_proof_url": None,
+    }
+
+
+def safe_account_accepted_summary(session: Session, account: str) -> dict[str, Any]:
+    try:
+        return account_accepted_summary(session, account)
+    except Exception:
+        return empty_accepted_summary()
+
+
+def safe_accepted_work_for_account(session: Session, account: str) -> list[dict[str, Any]]:
+    try:
+        return accepted_work_for_account(session, account)
+    except Exception:
+        return []
+
+
 def _wallet_timestamp(value: datetime) -> str:
     if value.tzinfo is not None:
         value = value.replace(tzinfo=None)
@@ -927,6 +952,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             transfer_status = "MRWK wallet transfers are enabled for registered mrwk1 addresses."
         with session_scope(db_url) as session:
             account_row = session.get(Account, account)
+            accepted_work = safe_account_accepted_summary(session, account)
             return {
                 "account": account,
                 "ledger_address": account,
@@ -934,6 +960,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 "exists": account_row is not None,
                 "balance_mrwk": format_mrwk(get_balance(session, account)),
                 "transfer_status": transfer_status,
+                "accepted_work": accepted_work,
             }
 
     @app.get("/api/v1/auth/me")
@@ -1267,7 +1294,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         account = _normalized_account(account)
         with session_scope(db_url) as session:
             account_data = api_account(account)
-            accepted_summary = account_accepted_summary(session, account)
+            accepted_summary = safe_account_accepted_summary(session, account)
             entries = session.scalars(
                 select(LedgerEntry)
                 .where(or_(LedgerEntry.from_account == account, LedgerEntry.to_account == account))
@@ -1276,7 +1303,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             ).all()
             proofs = _proof_hashes_by_sequence(session, [entry.sequence for entry in entries])
             transactions = [ledger_to_dict(entry, proofs.get(entry.sequence)) for entry in entries]
-            accepted_work = accepted_work_for_account(session, account)
+            accepted_work = safe_accepted_work_for_account(session, account)
         return templates.TemplateResponse(
             request,
             "account.html",
