@@ -1716,7 +1716,10 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
     def mcp_issue_number_search_value(query_text: str) -> int | None:
         if not query_text.isdigit():
             return None
-        issue_number = int(query_text)
+        try:
+            issue_number = int(query_text)
+        except ValueError:
+            return None
         return issue_number if issue_number <= 2**63 - 1 else None
 
     def list_limit_arg(default: int = 25) -> int:

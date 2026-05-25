@@ -551,6 +551,21 @@ def test_mcp_list_bounties_filters_status_query_and_limit(sqlite_url: str) -> No
     oversized_payload = json.loads(oversized_result["result"]["content"][0]["text"])
     assert oversized_payload == []
 
+    digit_limit_result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {
+                "name": "list_bounties",
+                "arguments": {"q": "9" * 5000},
+            },
+        },
+    ).json()
+    digit_limit_payload = json.loads(digit_limit_result["result"]["content"][0]["text"])
+    assert digit_limit_payload == []
+
 
 @pytest.mark.parametrize(
     ("arguments", "request_id"),
