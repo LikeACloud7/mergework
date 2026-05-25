@@ -555,14 +555,18 @@ def test_wallet_pages_do_not_require_manual_nonce(sqlite_url: str, monkeypatch) 
 
 def test_github_wallet_actions_clear_private_key_after_success() -> None:
     wallet_js = Path("app/static/wallet.js").read_text(encoding="utf-8")
+    set_result = "setText(resultSelector, result);"
+    clear_private_key = "clearPrivateKeyField(form);"
+    refresh_nonce = "await getNextNonce(address, statusSelector);"
 
     assert "function clearPrivateKeyField(form)" in wallet_js
     assert 'for (const action of ["link-github", "claim-github"])' in wallet_js
-    assert (
-        "setText(resultSelector, result);\n"
-        "        clearPrivateKeyField(form);\n"
-        "        await getNextNonce(address, statusSelector);"
-    ) in wallet_js
+    idx_set_result = wallet_js.find(set_result)
+    idx_clear_private_key = wallet_js.find(clear_private_key, idx_set_result)
+    idx_refresh_nonce = wallet_js.find(refresh_nonce, idx_clear_private_key)
+
+    assert -1 not in {idx_set_result, idx_clear_private_key, idx_refresh_nonce}
+    assert idx_set_result < idx_clear_private_key < idx_refresh_nonce
 
 
 def test_reject_self_transfer(sqlite_url: str) -> None:
