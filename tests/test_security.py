@@ -102,6 +102,7 @@ def test_regular_pages_keep_strict_csp(sqlite_url: str) -> None:
 def test_admin_bounty_form_requires_csrf_for_cookie_auth(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    create_schema(sqlite_url)
     monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "test-cookie-secret")
     monkeypatch.setenv("MERGEWORK_GITHUB_OAUTH_CLIENT_ID", "client-id")
     monkeypatch.setenv("MERGEWORK_GITHUB_OAUTH_CLIENT_SECRET", "client-secret")
@@ -128,6 +129,68 @@ def test_admin_bounty_form_requires_csrf_for_cookie_auth(
         follow_redirects=False,
     )
     assert created.status_code == 303
+
+
+def test_admin_page_renders_safe_webhook_events_for_cookie_admin(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create_schema(sqlite_url)
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "test-cookie-secret")
+    monkeypatch.setenv("MERGEWORK_GITHUB_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setenv("MERGEWORK_GITHUB_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("MERGEWORK_ADMIN_LOGINS", "alice")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    with session_scope(sqlite_url) as session:
+        session.add(
+            WebhookEvent(
+                delivery_id="delivery-missing-submitter",
+                event_type="pull_request",
+                payload_hash="a" * 64,
+                processed_status="missing_submitter",
+            )
+        )
+        session.add(
+            WebhookEvent(
+                delivery_id="delivery-bounty-not-found",
+                event_type="pull_request",
+                payload_hash="b" * 64,
+                processed_status="bounty_not_found",
+            )
+        )
+        session.add(
+            WebhookEvent(
+                delivery_id="delivery-paid-secret-payload-body",
+                event_type="pull_request",
+                payload_hash="c" * 64,
+                processed_status="paid",
+            )
+        )
+
+    unauthenticated = client.get("/admin", follow_redirects=False)
+    client.cookies.set("mrwk_admin", _signed_value("alice", "test-cookie-secret"))
+    all_events = client.get("/admin?webhook_limit=10")
+    filtered = client.get("/admin?webhook_status= missing_submitter &webhook_limit=10")
+    limited = client.get("/admin?webhook_limit=1")
+    too_large = client.get("/admin?webhook_limit=101")
+
+    assert unauthenticated.status_code == 302
+    assert unauthenticated.headers["location"] == "/auth/github/login?next=/admin"
+    assert all_events.status_code == 200
+    assert "missing_submitter" in all_events.text
+    assert "bounty_not_found" in all_events.text
+    assert "paid" in all_events.text
+    assert filtered.status_code == 200
+    assert "delivery-missing-submitter" in filtered.text
+    assert "missing_submitter" in filtered.text
+    assert "delivery-bounty-not-found" not in filtered.text
+    assert "a" * 64 in filtered.text
+    assert "secret-payload-body" not in filtered.text
+    assert limited.status_code == 200
+    assert limited.text.count("<tr>") == 2
+    assert too_large.status_code == 422
 
 
 def test_admin_bounty_api_requires_admin_token_not_cookie_auth(
