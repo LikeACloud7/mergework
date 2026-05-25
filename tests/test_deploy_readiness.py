@@ -362,6 +362,9 @@ def test_deploy_readiness_rejects_public_base_url_userinfo() -> None:
 
 def test_deploy_readiness_rejects_malformed_public_base_url_hosts() -> None:
     empty_host_errors = validate_deploy_settings(_settings(public_base_url="https://:443"))
+    invalid_ipv4_errors = validate_deploy_settings(
+        _settings(public_base_url="https://999.999.999.999")
+    )
     invalid_port_errors = validate_deploy_settings(
         _settings(public_base_url="https://api.example:notaport")
     )
@@ -390,6 +393,7 @@ def test_deploy_readiness_rejects_malformed_public_base_url_hosts() -> None:
 
     expected = "MERGEWORK_PUBLIC_BASE_URL must include a valid host"
     assert expected in empty_host_errors
+    assert expected in invalid_ipv4_errors
     assert expected in invalid_port_errors
     assert expected in out_of_range_port_errors
     assert expected in unbracketed_ipv6_errors
@@ -459,3 +463,9 @@ def test_deploy_readiness_rejects_private_public_base_url_ip_literals() -> None:
 
 def test_deploy_readiness_allows_global_public_base_url_ip_literal() -> None:
     assert validate_deploy_settings(_settings(public_base_url="https://8.8.8.8")) == []
+
+
+def test_deploy_readiness_allows_numeric_dns_labels_longer_than_ipv4_octets() -> None:
+    errors = validate_deploy_settings(_settings(public_base_url="https://1234.5.6.7.example"))
+
+    assert errors == []
