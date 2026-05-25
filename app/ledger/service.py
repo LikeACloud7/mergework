@@ -330,6 +330,8 @@ def add_ledger_entry(
     amount_microunits: int,
     reference: str,
 ) -> LedgerEntry:
+    if isinstance(amount_microunits, bool) or not isinstance(amount_microunits, int):
+        raise LedgerError("amount_microunits must be an integer")
     if amount_microunits < 0:
         raise LedgerError("ledger amount cannot be negative")
     if from_account:
