@@ -18,7 +18,7 @@ from app.ledger.service import (
     wallet_claim_payload,
     wallet_link_payload,
 )
-from app.main import _signed_value, _verified_value, create_app
+from app.main import _safe_next_path, _signed_value, _verified_value, create_app
 from app.wallets import address_from_public_key_hex, canonical_wallet_json
 
 
@@ -430,6 +430,14 @@ def test_github_login_redirects_when_oauth_is_configured(sqlite_url: str, monkey
     assert response.headers["location"].startswith("https://github.com/login/oauth/authorize?")
     assert "client_id=client-id" in response.headers["location"]
     assert "mrwk_oauth_state" in response.cookies
+
+
+@pytest.mark.parametrize(
+    "next_path",
+    ("//evil.example/path", "/\\evil.example/path", "/me\nLocation:https://evil.example"),
+)
+def test_oauth_next_path_rejects_redirect_ambiguity(next_path: str) -> None:
+    assert _safe_next_path(next_path) == "/me"
 
 
 def test_github_login_stores_safe_default_for_backslash_next(sqlite_url: str, monkeypatch) -> None:
