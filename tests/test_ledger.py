@@ -11,6 +11,7 @@ from app.ledger.service import (
     GENESIS_SUPPLY_MICRO,
     TREASURY_ACCOUNT,
     LedgerError,
+    add_ledger_entry,
     canonical_json,
     close_bounty,
     create_bounty,
@@ -39,6 +40,51 @@ def test_genesis_creates_fixed_supply_once(sqlite_url: str) -> None:
         assert get_balance(session, TREASURY_ACCOUNT) == GENESIS_SUPPLY_MICRO
         assert verify_hash_chain(session) is True
         assert verify_supply_conservation(session) is True
+
+
+def test_add_ledger_entry_rejects_malformed_public_fields(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        base_kwargs = {
+            "entry_type": "manual_adjustment",
+            "from_account": TREASURY_ACCOUNT,
+            "to_account": "github:alice",
+            "amount_microunits": 1,
+            "reference": "manual:test",
+        }
+
+        bad_cases = (
+            ("entry_type", "manual\nadjustment", "entry_type must not contain control characters"),
+            ("entry_type", "   ", "entry_type is required"),
+            ("entry_type", "x" * 41, "entry_type is too long"),
+            ("from_account", "treasury:\nmrwk", "from_account must not contain control characters"),
+            ("from_account", "x" * 129, "from_account is too long"),
+            ("to_account", "github:\nalice", "to_account must not contain control characters"),
+            ("to_account", "github:" + "a" * 122, "to_account is too long"),
+            ("reference", "manual\nref", "reference must not contain control characters"),
+            ("reference", "   ", "reference is required"),
+        )
+        for field, value, message in bad_cases:
+            kwargs = {**base_kwargs, field: value}
+            with pytest.raises(LedgerError, match=message):
+                add_ledger_entry(session, **kwargs)
+
+        entry = add_ledger_entry(
+            session,
+            entry_type=" manual_adjustment ",
+            from_account=None,
+            to_account=" github:alice ",
+            amount_microunits=1,
+            reference=" manual:test ",
+        )
+
+        assert entry.entry_type == "manual_adjustment"
+        assert entry.from_account is None
+        assert entry.to_account == "github:alice"
+        assert entry.reference == "manual:test"
+        assert verify_hash_chain(session) is True
 
 
 def test_make_engine_accepts_windows_absolute_sqlite_url(tmp_path) -> None:
