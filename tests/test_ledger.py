@@ -570,7 +570,7 @@ def test_duplicate_accepted_source_urls_groups_distinct_accepted_submissions(
                 Submission(
                     bounty_id=first_bounty.id,
                     submitter_account="github:alice",
-                    url="HTTPS://GITHUB.COM:443/Ramimbo/MergeWork/PULL/281/files/"
+                    url="https://github.com:bad/Ramimbo/MergeWork/PULL/281/files/"
                     "?diff=split#discussion_r1",
                     status="accepted",
                     verifier_result=canonical_json({"label": "mrwk:accepted"}),

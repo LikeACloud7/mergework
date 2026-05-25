@@ -139,7 +139,10 @@ def _canonical_source_url(url: str) -> str:
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         return clean
     host = (parsed.hostname or "").lower()
-    port = parsed.port
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
     if (parsed.scheme.lower(), port) in {("http", 80), ("https", 443)}:
         port = None
     netloc = f"{host}:{port}" if port is not None else host
