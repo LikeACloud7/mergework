@@ -1168,6 +1168,7 @@ def test_mcp_submit_work_proof_returns_structured_bounty_guidance(sqlite_url: st
     assert structured["available_mrwk"] == "300"
     assert structured["repository"] == "ramimbo/mergework"
     assert structured["issue_url"] == "https://github.com/ramimbo/mergework/issues/315"
+    assert structured["title"] == "Structured MCP work-proof guidance"
     assert structured["acceptance"] == "Return machine-readable work-proof guidance."
     assert "/claim" in structured["submission_format"]
     assert "private keys" in structured["safety_rules"][0]
@@ -1180,7 +1181,7 @@ def test_mcp_submit_work_proof_returns_structured_generic_guidance(sqlite_url: s
 
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 
-    result = client.post(
+    response = client.post(
         "/mcp",
         json={
             "jsonrpc": "2.0",
@@ -1188,7 +1189,9 @@ def test_mcp_submit_work_proof_returns_structured_generic_guidance(sqlite_url: s
             "method": "tools/call",
             "params": {"name": "submit_work_proof", "arguments": {"format": "json"}},
         },
-    ).json()["result"]["structuredContent"]
+    )
+    response_result = response.json()["result"]
+    result = response_result["structuredContent"]
 
     assert result == {
         "bounty_id": None,
@@ -1208,6 +1211,7 @@ def test_mcp_submit_work_proof_returns_structured_generic_guidance(sqlite_url: s
             "credentials, private vulnerability details, or price claims."
         ],
     }
+    assert json.loads(response_result["content"][0]["text"]) == result
 
 
 def test_mcp_submit_work_proof_reports_unknown_bounty(sqlite_url: str) -> None:
