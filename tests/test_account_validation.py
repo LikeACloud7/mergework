@@ -202,6 +202,7 @@ def test_account_views_accept_valid_reserve_bounty_account(sqlite_url: str) -> N
         "reserve:bounty:0",
         "reserve:bounty:-1",
         "reserve:bounty:not-a-number",
+        "reserve:bounty:" + "9" * 5000,
     ],
 )
 def test_account_views_reject_malformed_reserve_accounts(sqlite_url: str, account: str) -> None:

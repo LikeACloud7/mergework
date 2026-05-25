@@ -528,9 +528,15 @@ def _normalized_account(account: str) -> str:
                 status_code=400, detail="reserve account must use reserve:bounty:<id>"
             )
         bounty_id = lower.removeprefix(reserve_prefix)
-        if not bounty_id.isdigit() or int(bounty_id) <= 0:
+        try:
+            normalized_bounty_id = int(bounty_id) if bounty_id.isdigit() else 0
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="reserve bounty id is too large") from exc
+        if normalized_bounty_id <= 0:
             raise HTTPException(status_code=400, detail="reserve bounty id must be positive")
-        return f"{reserve_prefix}{int(bounty_id)}"
+        if normalized_bounty_id > SQLITE_INTEGER_MAX:
+            raise HTTPException(status_code=400, detail="reserve bounty id is too large")
+        return f"{reserve_prefix}{normalized_bounty_id}"
     if lower.startswith("mrwk1"):
         return clean.lower()
     if lower.startswith("github:"):
