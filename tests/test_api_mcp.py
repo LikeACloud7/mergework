@@ -587,6 +587,7 @@ def test_mcp_get_bounty_rejects_non_positive_id(sqlite_url: str, bounty_id: int)
         ("get_balance", {"account": ""}, 15),
         ("get_wallet", {"address": 123}, 16),
         ("get_proof", {"hash": 123}, 17),
+        ("get_wallet", {"address": "not-a-wallet"}, 18),
     ],
 )
 def test_mcp_rejects_invalid_string_arguments(
