@@ -17,7 +17,8 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
@@ -211,6 +212,19 @@ def bounty_attempt_warnings(session: Session, bounty: Bounty, now: datetime) -> 
     if active_count and active_count > 1:
         warnings.append(f"bounty has {active_count} active attempts")
     return warnings
+
+
+def expire_stale_bounty_attempts(
+    session: Session, bounty_id: int, now: datetime, submitter_account: str | None = None
+) -> None:
+    query = update(BountyAttempt).where(
+        BountyAttempt.bounty_id == bounty_id,
+        BountyAttempt.status == "active",
+        BountyAttempt.expires_at <= now,
+    )
+    if submitter_account is not None:
+        query = query.where(BountyAttempt.submitter_account == submitter_account)
+    session.execute(query.values(status="expired", updated_at=now))
 
 
 def bounty_awards_to_dict(session: Session, bounty_id: int) -> list[dict[str, Any]]:
@@ -870,6 +884,15 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             return "api-token"
         raise HTTPException(status_code=401, detail="admin token required")
 
+    def attempt_submitter_account(data: dict[str, Any], github_login: str) -> str:
+        submitter_account = f"github:{github_login}"
+        if data.get("submitter_account") is None:
+            return submitter_account
+        requested_account = _normalized_account(_required_str(data, "submitter_account"))
+        if requested_account != submitter_account:
+            raise HTTPException(status_code=403, detail="submitter_account does not match login")
+        return submitter_account
+
     @app.get("/health")
     def health() -> dict[str, Any]:
         with session_scope(db_url) as session:
@@ -1027,10 +1050,14 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             }
 
     @app.post("/api/v1/bounties/{bounty_id}/attempts")
-    async def api_create_bounty_attempt(bounty_id: int, request: Request) -> JSONResponse:
+    async def api_create_bounty_attempt(
+        bounty_id: int,
+        request: Request,
+        github_login: str = Depends(require_github_login),
+    ) -> JSONResponse:
         bounty_id = _positive_bounty_id(bounty_id)
         data = await _json_object(request)
-        submitter_account = _normalized_account(_required_str(data, "submitter_account"))
+        submitter_account = attempt_submitter_account(data, github_login)
         ttl_seconds = _optional_int(data, "ttl_seconds", DEFAULT_ATTEMPT_TTL_SECONDS)
         if ttl_seconds < MIN_ATTEMPT_TTL_SECONDS:
             raise HTTPException(status_code=400, detail="ttl_seconds must be at least 60")
@@ -1046,6 +1073,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             bounty = session.get(Bounty, bounty_id)
             if bounty is None:
                 raise HTTPException(status_code=404, detail="bounty not found")
+            expire_stale_bounty_attempts(session, bounty_id, now, submitter_account)
             awards_remaining = max(0, bounty.max_awards - bounty.awards_paid)
             if bounty.status != "open" or awards_remaining <= 0:
                 return JSONResponse(
@@ -1084,7 +1112,32 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 updated_at=now,
             )
             session.add(attempt)
-            session.flush()
+            try:
+                session.flush()
+            except IntegrityError:
+                session.rollback()
+                bounty = session.get(Bounty, bounty_id)
+                existing = session.scalar(
+                    select(BountyAttempt)
+                    .where(
+                        *_active_attempt_conditions(bounty_id, now),
+                        BountyAttempt.submitter_account == submitter_account,
+                    )
+                    .order_by(BountyAttempt.created_at.desc(), BountyAttempt.id.desc())
+                    .limit(1)
+                )
+                if bounty is None or existing is None:
+                    raise HTTPException(
+                        status_code=409, detail="active attempt already exists"
+                    ) from None
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "status": "duplicate_active_attempt",
+                        "attempt": bounty_attempt_to_dict(existing, now),
+                        "warnings": bounty_attempt_warnings(session, bounty, now),
+                    },
+                )
             return JSONResponse(
                 status_code=201,
                 content={
@@ -1095,13 +1148,17 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             )
 
     @app.post("/api/v1/bounty-attempts/{attempt_id}/release")
-    async def api_release_bounty_attempt(attempt_id: int, request: Request) -> dict[str, Any]:
+    async def api_release_bounty_attempt(
+        attempt_id: int,
+        request: Request,
+        github_login: str = Depends(require_github_login),
+    ) -> dict[str, Any]:
         if attempt_id <= 0:
             raise HTTPException(status_code=400, detail="attempt id must be positive")
         if attempt_id > SQLITE_INTEGER_MAX:
             raise HTTPException(status_code=400, detail="attempt id is too large")
         data = await _json_object(request)
-        submitter_account = _normalized_account(_required_str(data, "submitter_account"))
+        submitter_account = attempt_submitter_account(data, github_login)
         now = _utc_now()
         with session_scope(db_url) as session:
             attempt = session.get(BountyAttempt, attempt_id)

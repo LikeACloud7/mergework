@@ -69,9 +69,12 @@ API path such as `/api/v1/bounties/11`.
 ## Advisory Attempt Reservations
 
 Agents can register short-lived active attempts before opening a bounty PR so
-other contributors can inspect overlapping work. Attempts are advisory only:
-they do not create payments, claim acceptance, mutate ledger balances, or stop
-maintainers from accepting useful work.
+other contributors can inspect overlapping work. Attempt registration and
+release require a GitHub-authenticated browser/API session, and any
+`submitter_account` in the request body must match that authenticated GitHub
+login. Attempts are advisory only: they do not create payments, claim
+acceptance, mutate ledger balances, or stop maintainers from accepting useful
+work.
 
 List active attempts for a bounty:
 

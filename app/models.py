@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -71,6 +71,16 @@ class Submission(Base):
 
 class BountyAttempt(Base):
     __tablename__ = "bounty_attempts"
+    __table_args__ = (
+        Index(
+            "uq_active_bounty_attempt_submitter",
+            "bounty_id",
+            "submitter_account",
+            unique=True,
+            sqlite_where=text("status = 'active'"),
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     bounty_id: Mapped[int] = mapped_column(ForeignKey("bounties.id"), index=True)

@@ -25,6 +25,14 @@ def upgrade() -> None:
     )
     op.create_index("ix_bounty_attempts_bounty_id", "bounty_attempts", ["bounty_id"])
     op.create_index(
+        "uq_active_bounty_attempt_submitter",
+        "bounty_attempts",
+        ["bounty_id", "submitter_account"],
+        unique=True,
+        sqlite_where=sa.text("status = 'active'"),
+        postgresql_where=sa.text("status = 'active'"),
+    )
+    op.create_index(
         "ix_bounty_attempts_submitter_account",
         "bounty_attempts",
         ["submitter_account"],
@@ -37,5 +45,6 @@ def downgrade() -> None:
     op.drop_index("ix_bounty_attempts_expires_at", table_name="bounty_attempts")
     op.drop_index("ix_bounty_attempts_status", table_name="bounty_attempts")
     op.drop_index("ix_bounty_attempts_submitter_account", table_name="bounty_attempts")
+    op.drop_index("uq_active_bounty_attempt_submitter", table_name="bounty_attempts")
     op.drop_index("ix_bounty_attempts_bounty_id", table_name="bounty_attempts")
     op.drop_table("bounty_attempts")

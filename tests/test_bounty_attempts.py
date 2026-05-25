@@ -7,11 +7,18 @@ from sqlalchemy import select
 
 from app.db import create_schema, session_scope
 from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
-from app.main import create_app
+from app.main import _signed_value, create_app
 from app.models import BountyAttempt, LedgerEntry
 
+COOKIE_SECRET = "test-cookie-secret"
 
-def test_bounty_attempts_register_list_duplicate_and_release(sqlite_url: str) -> None:
+
+def _set_login(client: TestClient, login: str) -> None:
+    client.cookies.set("mrwk_user", _signed_value(login, COOKIE_SECRET))
+
+
+def test_bounty_attempts_register_list_duplicate_and_release(sqlite_url: str, monkeypatch) -> None:
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", COOKIE_SECRET)
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
         ensure_genesis(session)
@@ -30,6 +37,7 @@ def test_bounty_attempts_register_list_duplicate_and_release(sqlite_url: str) ->
         )
 
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    _set_login(client, "alice")
 
     created = client.post(
         f"/api/v1/bounties/{bounty.id}/attempts",
@@ -55,6 +63,13 @@ def test_bounty_attempts_register_list_duplicate_and_release(sqlite_url: str) ->
     assert duplicate.json()["status"] == "duplicate_active_attempt"
     assert duplicate.json()["attempt"]["id"] == first_attempt["id"]
 
+    spoofed = client.post(
+        f"/api/v1/bounties/{bounty.id}/attempts",
+        json={"submitter_account": "github:bob", "ttl_seconds": 3600},
+    )
+    assert spoofed.status_code == 403
+
+    _set_login(client, "bob")
     second = client.post(
         f"/api/v1/bounties/{bounty.id}/attempts",
         json={"submitter_account": "github:bob", "ttl_seconds": 3600},
@@ -77,6 +92,7 @@ def test_bounty_attempts_register_list_duplicate_and_release(sqlite_url: str) ->
     )
     assert wrong_submitter.status_code == 403
 
+    _set_login(client, "alice")
     released = client.post(
         f"/api/v1/bounty-attempts/{first_attempt['id']}/release",
         json={"submitter_account": "github:alice"},
@@ -105,7 +121,9 @@ def test_bounty_attempts_register_list_duplicate_and_release(sqlite_url: str) ->
 
 def test_expired_bounty_attempt_is_visible_but_no_longer_blocks_submitter(
     sqlite_url: str,
+    monkeypatch,
 ) -> None:
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", COOKIE_SECRET)
     create_schema(sqlite_url)
     now = datetime.now(UTC)
     with session_scope(sqlite_url) as session:
@@ -132,6 +150,7 @@ def test_expired_bounty_attempt_is_visible_but_no_longer_blocks_submitter(
         )
 
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    _set_login(client, "alice")
 
     active_only = client.get(f"/api/v1/bounties/{bounty.id}/attempts").json()
     assert active_only["attempts"] == []
@@ -147,7 +166,10 @@ def test_expired_bounty_attempt_is_visible_but_no_longer_blocks_submitter(
     assert replacement.json()["attempt"]["status"] == "active"
 
 
-def test_attempt_registration_rejects_closed_and_exhausted_bounties(sqlite_url: str) -> None:
+def test_attempt_registration_rejects_closed_and_exhausted_bounties(
+    sqlite_url: str, monkeypatch
+) -> None:
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", COOKIE_SECRET)
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
         ensure_genesis(session)
@@ -180,6 +202,7 @@ def test_attempt_registration_rejects_closed_and_exhausted_bounties(sqlite_url: 
         )
 
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    _set_login(client, "alice")
 
     closed_response = client.post(
         f"/api/v1/bounties/{closed.id}/attempts",
