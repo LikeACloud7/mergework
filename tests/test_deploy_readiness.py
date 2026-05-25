@@ -457,5 +457,16 @@ def test_deploy_readiness_rejects_private_public_base_url_ip_literals() -> None:
     assert expected in private_ipv6_errors
 
 
+def test_deploy_readiness_rejects_non_global_public_base_url_ip_literals() -> None:
+    cgnat_errors = validate_deploy_settings(_settings(public_base_url="https://100.64.0.1"))
+    multicast_errors = validate_deploy_settings(_settings(public_base_url="https://224.0.0.1"))
+    multicast_ipv6_errors = validate_deploy_settings(_settings(public_base_url="https://[ff02::1]"))
+
+    expected = "MERGEWORK_PUBLIC_BASE_URL must use a globally routable host"
+    assert expected in cgnat_errors
+    assert expected in multicast_errors
+    assert expected in multicast_ipv6_errors
+
+
 def test_deploy_readiness_allows_global_public_base_url_ip_literal() -> None:
     assert validate_deploy_settings(_settings(public_base_url="https://8.8.8.8")) == []

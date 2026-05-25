@@ -228,13 +228,17 @@ def validate_deploy_settings(settings: Settings) -> list[str]:
                 errors.append("MERGEWORK_PUBLIC_BASE_URL must include a valid host")
             is_loopback = parsed_base_url.hostname.lower() == "localhost"
             is_private_or_link_local = False
+            is_non_global = False
         else:
             is_loopback = ip_address.is_loopback
             is_private_or_link_local = ip_address.is_private or ip_address.is_link_local
+            is_non_global = ip_address.is_multicast or not ip_address.is_global
         if is_loopback:
             errors.append("MERGEWORK_PUBLIC_BASE_URL must not use a loopback host")
         elif is_private_or_link_local:
             errors.append("MERGEWORK_PUBLIC_BASE_URL must not use a private or link-local host")
+        elif is_non_global:
+            errors.append("MERGEWORK_PUBLIC_BASE_URL must use a globally routable host")
     return errors
 
 
