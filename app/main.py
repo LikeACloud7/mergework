@@ -697,9 +697,7 @@ def _parse_int(value: Any, field: str) -> int:
             try:
                 return int(clean)
             except ValueError as exc:
-                raise HTTPException(
-                    status_code=400, detail=f"{field} must be an integer"
-                ) from exc
+                raise HTTPException(status_code=400, detail=f"{field} must be an integer") from exc
     raise HTTPException(status_code=400, detail=f"{field} must be an integer")
 
 
