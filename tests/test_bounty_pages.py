@@ -50,6 +50,7 @@ def test_bounties_page_renders_and_filters_by_status(sqlite_url: str) -> None:
         in all_rows.text
     )
     assert "ramimbo/mergework #50" in all_rows.text
+    assert "50 MRWK still available" in all_rows.text
 
     paid_rows = client.get("/bounties?status=paid")
     assert paid_rows.status_code == 200
@@ -147,6 +148,7 @@ def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     assert "<span>Status</span>" in response.text
     assert "<span>Reward per award</span>" in response.text
     assert "<span>Awards</span>" in response.text
+    assert "<span>Available</span>" in response.text
     assert "<span>Issue</span>" in response.text
     assert "100 MRWK" in response.text
     assert "What has to be true" in response.text
