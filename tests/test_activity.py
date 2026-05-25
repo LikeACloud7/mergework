@@ -98,6 +98,11 @@ def test_activity_api_summarizes_proof_backed_bounty_payments(sqlite_url: str) -
         second_proof.hash,
         first_proof.hash,
     ]
+    assert payload["recent"][0]["bounty_issue_url"] == (
+        "https://github.com/ramimbo/mergework/issues/11"
+    )
+    assert payload["recent"][0]["bounty_repo"] == "ramimbo/mergework"
+    assert payload["recent"][0]["bounty_issue_number"] == 11
     assert all("unproved" not in row["submission_url"] for row in payload["recent"])
 
 
@@ -192,6 +197,7 @@ def test_activity_page_renders_empty_and_paid_states(sqlite_url: str) -> None:
     assert "75 MRWK" in paid.text
     assert 'role="search"' in paid.text
     assert 'name="q"' in paid.text
+    assert 'href="https://github.com/ramimbo/mergework/issues/12"' in paid.text
     assert 'href="https://github.com/ramimbo/mergework/pull/12"' in paid.text
     assert f'href="/proofs/{proof.hash}"' in paid.text
     assert "/accounts/github:bob" in paid.text
