@@ -216,8 +216,37 @@ curl -s -X POST "$MCP_HOST/mcp" \
   -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_proof","arguments":{"hash":"<proof_hash>"}}}'
 ```
 
-The MCP response uses JSON-RPC content blocks. The first content block is a JSON
-string with proof metadata plus the stored public proof payload:
+Call `submit_wallet_transfer` with the same signed transfer fields used by the
+REST transfer API. Sign the canonical wallet transfer payload locally; do not
+send private keys to MergeWork:
+
+```bash
+curl -s -X POST "$MCP_HOST/mcp" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"submit_wallet_transfer","arguments":{"from_address":"<sender_mrwk1_address>","to_address":"<receiver_mrwk1_address>","amount_mrwk":"1.5","nonce":3,"memo":"agent payout consolidation","signature_hex":"<128 lowercase hex chars>"}}}'
+```
+
+Successful MCP transfer responses wrap a JSON-string transfer object in the
+first content block. Parse `result.content[0].text` to read the transfer hash,
+ledger sequence, addresses, amount, nonce, memo, and timestamp:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 6,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"hash\":\"9d0d922d25ae3c6045d9c1d64af9657228c00f925f52e4f447d4b451d91b6278\",\"type\":\"wallet_transfer\",\"ledger_sequence\":42,\"from_address\":\"mrwk102d449a31fbb267c8f352e9968a79e3e5fc95c1b\",\"to_address\":\"mrwk1fb1437aec45b46ec640f44b2e2aced55dc23556e\",\"amount_mrwk\":\"1.5\",\"nonce\":3,\"memo\":\"agent payout consolidation\",\"created_at\":\"2026-05-24T20:05:00\"}"
+      }
+    ]
+  }
+}
+```
+
+The `get_proof` MCP response uses JSON-RPC content blocks. The first content
+block is a JSON string with proof metadata plus the stored public proof payload:
 
 ```json
 {
