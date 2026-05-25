@@ -1054,7 +1054,12 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 "id": response_id,
                 "result": {
                     "tools": [
-                        {"name": "list_bounties", "description": "List open MRWK bounties"},
+                        {
+                            "name": "list_bounties",
+                            "description": (
+                                "List MRWK bounties with optional status, q, and limit filters"
+                            ),
+                        },
                         {"name": "get_bounty", "description": "Get a bounty by id"},
                         {"name": "get_balance", "description": "Get an account balance"},
                         {
@@ -1495,10 +1500,53 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
             raise ValueError(f"{field} must be a string")
         return value
 
+    def optional_clean_str_arg(field: str) -> str | None:
+        value = args.get(field)
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError(f"{field} must be a string")
+        clean = value.strip()
+        return clean or None
+
+    def mcp_issue_number_search_value(query_text: str) -> int | None:
+        if not query_text.isdigit():
+            return None
+        issue_number = int(query_text)
+        return issue_number if issue_number <= 2**63 - 1 else None
+
+    def list_limit_arg(default: int = 25) -> int:
+        if "limit" not in args or args.get("limit") is None:
+            return default
+        value = positive_int_arg("limit")
+        if value > 100:
+            raise ValueError("limit must be at most 100")
+        return value
+
     with session_scope(database_url) as session:
         if name == "list_bounties":
+            status = optional_clean_str_arg("status") or "open"
+            normalized_status = status.lower()
+            if normalized_status not in {"open", "paid", "closed"}:
+                raise ValueError("status must be one of: open, paid, closed")
+            query = select(Bounty).where(Bounty.status == normalized_status)
+            query_text = optional_clean_str_arg("q")
+            if query_text:
+                escaped_query = (
+                    query_text.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                )
+                like_query = f"%{escaped_query}%"
+                issue_number = mcp_issue_number_search_value(query_text)
+                text_filter = or_(
+                    func.lower(Bounty.repo).like(like_query, escape="\\"),
+                    func.lower(Bounty.title).like(like_query, escape="\\"),
+                    func.lower(Bounty.acceptance).like(like_query, escape="\\"),
+                )
+                if issue_number is not None:
+                    text_filter = or_(text_filter, Bounty.issue_number == issue_number)
+                query = query.where(text_filter)
             bounties = session.scalars(
-                select(Bounty).where(Bounty.status == "open").order_by(Bounty.id.desc()).limit(25)
+                query.order_by(Bounty.id.desc()).limit(list_limit_arg())
             ).all()
             return json.dumps([bounty_to_dict(bounty) for bounty in bounties])
         if name == "get_bounty":

@@ -423,6 +423,7 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
 
     tools = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).json()
     assert tools["result"]["tools"][0]["name"] == "list_bounties"
+    assert "status, q, and limit filters" in tools["result"]["tools"][0]["description"]
 
     balance = client.post(
         "/mcp",
@@ -435,6 +436,150 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     ).json()
     assert balance["result"]["content"][0]["type"] == "text"
     assert "100000000" in balance["result"]["content"][0]["text"]
+
+
+def test_mcp_list_bounties_filters_status_query_and_limit(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        open_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=284,
+            issue_url="https://github.com/ramimbo/mergework/issues/284",
+            title="Agent MCP workflow filters",
+            reward_mrwk="100",
+            acceptance="Agents should find open MCP bounty workflow work.",
+        )
+        paid_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=285,
+            issue_url="https://github.com/ramimbo/mergework/issues/285",
+            title="Paid proof lookup workflow",
+            reward_mrwk="100",
+            acceptance="Agents should inspect proof lookup behavior.",
+        )
+        closed_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=286,
+            issue_url="https://github.com/ramimbo/mergework/issues/286",
+            title="Closed MCP cleanup",
+            reward_mrwk="100",
+            acceptance="Closed bounty workflow inspection.",
+        )
+        pay_bounty(
+            session,
+            bounty_id=paid_bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/285",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        close_bounty(
+            session,
+            bounty_id=closed_bounty.id,
+            closed_by="maintainer",
+            reference="https://github.com/ramimbo/mergework/issues/286#close",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    default_result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "list_bounties", "arguments": {}},
+        },
+    ).json()
+    default_payload = json.loads(default_result["result"]["content"][0]["text"])
+    assert [item["id"] for item in default_payload] == [open_bounty.id]
+
+    paid_result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "list_bounties",
+                "arguments": {"status": " Paid ", "q": "proof", "limit": 1},
+            },
+        },
+    ).json()
+    paid_payload = json.loads(paid_result["result"]["content"][0]["text"])
+    assert [item["id"] for item in paid_payload] == [paid_bounty.id]
+    assert paid_payload[0]["status"] == "paid"
+
+    closed_result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "list_bounties",
+                "arguments": {"status": "closed", "q": "286"},
+            },
+        },
+    ).json()
+    closed_payload = json.loads(closed_result["result"]["content"][0]["text"])
+    assert [item["id"] for item in closed_payload] == [closed_bounty.id]
+
+    oversized_result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "list_bounties",
+                "arguments": {"q": "9" * 40},
+            },
+        },
+    ).json()
+    oversized_payload = json.loads(oversized_result["result"]["content"][0]["text"])
+    assert oversized_payload == []
+
+
+@pytest.mark.parametrize(
+    ("arguments", "request_id"),
+    [
+        ({"status": "all"}, 31),
+        ({"status": True}, 32),
+        ({"q": 284}, 33),
+        ({"limit": 0}, 34),
+        ({"limit": 101}, 35),
+    ],
+)
+def test_mcp_list_bounties_rejects_invalid_filters(
+    sqlite_url: str, arguments: dict[str, object], request_id: int
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/call",
+            "params": {"name": "list_bounties", "arguments": arguments},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "error": {"code": -32602, "message": "invalid tool arguments"},
+    }
 
 
 def test_mcp_rejects_malformed_requests_without_500(sqlite_url: str) -> None:
