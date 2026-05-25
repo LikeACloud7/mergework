@@ -86,6 +86,8 @@ def validate_public_url(url: str) -> str:
     clean = url.strip()
     if len(clean) > 500:
         raise LedgerError("URL is too long")
+    if any(char.isspace() for char in clean):
+        raise LedgerError("URL must not contain whitespace")
     try:
         parsed = urlparse(clean)
         has_empty_port = parsed.port is None and parsed.netloc.endswith(":")
@@ -98,8 +100,6 @@ def validate_public_url(url: str) -> str:
         raise LedgerError("URL must include a valid host")
     if parsed.username is not None or parsed.password is not None:
         raise LedgerError("URL must not include credentials")
-    if any(char.isspace() for char in clean):
-        raise LedgerError("URL must not contain whitespace")
     try:
         ip = ipaddress.ip_address(hostname)
     except ValueError:
