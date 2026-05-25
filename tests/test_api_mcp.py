@@ -437,7 +437,11 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
 def test_mcp_rejects_malformed_requests_without_500(sqlite_url: str) -> None:
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 
-    malformed = client.post("/mcp", data="not-json", headers={"content-type": "application/json"})
+    malformed = client.post(
+        "/mcp",
+        content="not-json",
+        headers={"content-type": "application/json"},
+    )
     assert malformed.status_code == 400
     assert malformed.json() == {
         "jsonrpc": "2.0",
