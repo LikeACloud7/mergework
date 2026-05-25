@@ -60,6 +60,65 @@ def test_bounties_page_renders_and_filters_by_status(sqlite_url: str) -> None:
     assert 'href="/bounties?status=paid" aria-current="page"' in paid_rows_uppercase.text
 
 
+def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=64,
+            issue_url="https://github.com/ramimbo/mergework/issues/64",
+            title="Improve public bounty discovery",
+            reward_mrwk="100",
+            acceptance="Make contributor search find award slots and proof inspection work.",
+        )
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=65,
+            issue_url="https://github.com/ramimbo/mergework/issues/65",
+            title="Internal admin cleanup",
+            reward_mrwk="100",
+            acceptance="Private admin-only cleanup.",
+        )
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=66,
+            issue_url="https://github.com/ramimbo/mergework/issues/66",
+            title="Literal 100% release_note path",
+            reward_mrwk="100",
+            acceptance=r"Document C:\work\mergework examples.",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    text_search = client.get("/bounties?q=proof+inspection")
+    assert text_search.status_code == 200
+    assert "Search bounties" in text_search.text
+    assert "Showing matches for “proof inspection”." in text_search.text
+    assert "Improve public bounty discovery" in text_search.text
+    assert "Internal admin cleanup" not in text_search.text
+    assert 'href="/bounties?status=open&q=proof%20inspection"' in text_search.text
+
+    issue_search = client.get("/api/v1/bounties?q=65")
+    assert issue_search.status_code == 200
+    assert [row["issue_number"] for row in issue_search.json()] == [65]
+
+    percent_search = client.get("/api/v1/bounties?q=%25")
+    assert percent_search.status_code == 200
+    assert [row["issue_number"] for row in percent_search.json()] == [66]
+
+    underscore_search = client.get("/api/v1/bounties?q=_")
+    assert underscore_search.status_code == 200
+    assert [row["issue_number"] for row in underscore_search.json()] == [66]
+
+    backslash_search = client.get("/api/v1/bounties", params={"q": "\\"})
+    assert backslash_search.status_code == 200
+    assert [row["issue_number"] for row in backslash_search.json()] == [66]
+
+
 def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
