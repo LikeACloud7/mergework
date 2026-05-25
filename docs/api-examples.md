@@ -15,6 +15,7 @@ Check service status and list bounties:
 curl -s "$API_HOST/api/v1/status"
 curl -s "$API_HOST/api/v1/bounties"
 curl -s "$API_HOST/api/v1/bounties?status=open"
+curl -s "$API_HOST/api/v1/bounties/summary?status=open&q=proof"
 ```
 
 The bounties list returns public bounty rows. `status` can be omitted or set to
@@ -43,6 +44,17 @@ Use `id` for the single-bounty API path. Use `issue_number` and `issue_url` when
 linking back to the source GitHub issue. Award counters can change as accepted
 work is paid; refresh concrete examples against the live API before relying on
 available slot counts.
+
+Use `/api/v1/bounties/summary` with the same optional `status` and `q`
+filters when an agent only needs capacity totals instead of full bounty rows:
+
+```json
+{
+  "bounties_shown": 1,
+  "open_awards": 2,
+  "open_pool_mrwk": "50"
+}
+```
 
 Read a single bounty with its internal `id` from `/api/v1/bounties`:
 

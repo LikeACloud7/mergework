@@ -86,6 +86,7 @@ def test_api_examples_document_bounty_list_response_shape() -> None:
     examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
 
     assert "/api/v1/bounties?status=open" in examples
+    assert "/api/v1/bounties/summary?status=open&q=proof" in examples
     assert "status` can be omitted or set to" in examples
     assert '"id": 36' in examples
     assert '"repo": "ramimbo/mergework"' in examples
@@ -95,7 +96,11 @@ def test_api_examples_document_bounty_list_response_shape() -> None:
     assert '"reserved_mrwk": "500"' in examples
     assert '"awards_paid": 4' in examples
     assert '"awards_remaining": 1' in examples
+    assert '"bounties_shown": 1' in examples
+    assert '"open_awards": 2' in examples
+    assert '"open_pool_mrwk": "50"' in examples
     assert "Award counters can change" in examples
+    assert "capacity totals instead of full bounty rows" in examples
     assert "Use `id` for the single-bounty API path" in examples
 
 

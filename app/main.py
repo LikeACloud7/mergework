@@ -876,6 +876,12 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     ) -> list[dict[str, Any]]:
         return list_bounties_by_status(status, q)
 
+    @app.get("/api/v1/bounties/summary")
+    def api_bounties_summary(
+        status: str | None = Query(None), q: str | None = Query(None)
+    ) -> dict[str, Any]:
+        return bounty_list_summary(list_bounties_by_status(status, q))
+
     @app.get("/api/v1/admin/webhook-events")
     def api_admin_webhook_events(
         status: str | None = Query(None),
