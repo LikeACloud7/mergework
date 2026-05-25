@@ -129,6 +129,23 @@ def test_api_examples_document_wallet_registration_response() -> None:
     assert '"next_nonce": 1' in examples
 
 
+def test_api_examples_document_wallet_github_link_response() -> None:
+    examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
+
+    assert 'POST "$API_HOST/api/v1/wallets/link-github"' in examples
+    assert "signed-in session cookie" in examples
+    assert '"address":"<registered_mrwk1_address>"' in examples
+    assert '"signature_hex":"<128 lowercase hex chars>"' in examples
+    assert "wallet-link payload" in examples
+    assert "wallet's `next_nonce`" in examples
+    assert '"github_login":"<signed_in_github_login>"' in examples
+    assert '"type":"mrwk_link_github_v1"' in examples
+    assert "compact ASCII" in examples
+    assert '"github_login": "tatelyman"' in examples
+    assert '"nonce": 1' in examples
+    assert '"next_nonce": 2' in examples
+
+
 def test_api_examples_document_github_claim_response() -> None:
     examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
 

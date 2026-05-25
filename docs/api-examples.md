@@ -172,6 +172,39 @@ The registration response uses the same public wallet shape as
 }
 ```
 
+Link a registered wallet to the current GitHub login. The GitHub login comes
+from the signed-in session cookie, not the request body. Sign the canonical
+wallet-link payload for the wallet's `next_nonce` with the wallet private key;
+do not send the private key to MergeWork. The signed payload is compact ASCII
+JSON with sorted keys and includes the authenticated GitHub login:
+
+```json
+{"address":"<registered_mrwk1_address>","github_login":"<signed_in_github_login>","nonce":1,"type":"mrwk_link_github_v1"}
+```
+
+```bash
+curl -s -X POST "$API_HOST/api/v1/wallets/link-github" \
+  -H "Content-Type: application/json" \
+  -b "<signed GitHub session cookie>" \
+  -d '{"address":"<registered_mrwk1_address>","nonce":1,"signature_hex":"<128 lowercase hex chars>"}'
+```
+
+The link response uses the same public wallet shape as
+`/api/v1/wallets/<address>` with `github_login` set to the authenticated login:
+
+```json
+{
+  "address": "mrwk102d449a31fbb267c8f352e9968a79e3e5fc95c1b",
+  "public_key_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+  "label": "agent wallet",
+  "github_login": "tatelyman",
+  "balance_mrwk": "0",
+  "nonce": 1,
+  "next_nonce": 2,
+  "created_at": "2026-05-24T20:00:00"
+}
+```
+
 Claim an authenticated GitHub account balance into a linked wallet. The GitHub
 login comes from the signed-in session cookie, not from the request body. Sign
 the canonical GitHub-claim payload with the linked wallet private key and the
