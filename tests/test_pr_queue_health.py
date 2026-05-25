@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import json
+import subprocess
 
+import pytest
+
+from scripts import pr_queue_health
 from scripts.pr_queue_health import analyze_queue, format_text_report, main
 
 
@@ -101,3 +105,66 @@ def test_pr_queue_health_text_report_is_pasteable() -> None:
     assert "PR queue health summary" in text
     assert "pull requests: 1" in text
     assert "No queue-health issues found." in text
+
+
+def test_pr_queue_health_wraps_gh_failures(monkeypatch) -> None:
+    def fake_run(*args, **kwargs):
+        raise subprocess.CalledProcessError(
+            returncode=2,
+            cmd=["gh", "pr", "list"],
+            output="partial",
+            stderr="network unavailable",
+        )
+
+    monkeypatch.setattr(pr_queue_health.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="gh command failed"):
+        pr_queue_health._run_gh_json(["gh", "pr", "list"])
+
+
+def test_pr_queue_health_fails_fast_when_issue_fetch_hits_cap(monkeypatch) -> None:
+    def fake_run(args, **kwargs):
+        if args[:3] == ["gh", "pr", "list"]:
+            stdout = "[]"
+        elif args[:3] == ["gh", "issue", "list"]:
+            stdout = json.dumps(
+                [
+                    {"number": number, "title": "MRWK bounty: many", "state": "OPEN"}
+                    for number in range(1, 202)
+                ]
+            )
+        else:
+            raise AssertionError(args)
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(pr_queue_health.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="issue list reached the 201 item safety cap"):
+        pr_queue_health.load_live_queue("ramimbo/mergework")
+
+
+def test_pr_queue_health_fails_fast_when_pr_fetch_hits_cap(monkeypatch) -> None:
+    def fake_run(args, **kwargs):
+        if args[:3] == ["gh", "pr", "list"]:
+            stdout = json.dumps(
+                [
+                    {
+                        "number": number,
+                        "title": "Open PR",
+                        "body": "Refs #1",
+                        "labels": [],
+                        "mergeStateStatus": "clean",
+                    }
+                    for number in range(1, 202)
+                ]
+            )
+        elif args[:3] == ["gh", "issue", "list"]:
+            stdout = "[]"
+        else:
+            raise AssertionError(args)
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(pr_queue_health.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="pr list reached the 201 item safety cap"):
+        pr_queue_health.load_live_queue("ramimbo/mergework")

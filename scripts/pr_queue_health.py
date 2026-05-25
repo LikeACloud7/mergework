@@ -11,6 +11,9 @@ from typing import Any
 BOUNTY_REF_RE = re.compile(r"(?:bounty|refs?|fixes|closes)\s+#(\d+)", re.IGNORECASE)
 NOISY_TITLE_PREFIX_RE = re.compile(r"^\s*(?:\[[^\]]+\]\s*)+")
 UNSTABLE_MERGE_STATES = {"blocked", "conflicting", "dirty", "unknown", "unstable"}
+GH_TIMEOUT_SECONDS = 30
+GH_PR_SAFETY_CAP = 201
+GH_ISSUE_SAFETY_CAP = 201
 
 
 def _labels(raw: dict[str, Any]) -> list[str]:
@@ -209,14 +212,26 @@ def format_text_report(report: dict[str, Any]) -> str:
 
 
 def _run_gh_json(args: list[str]) -> Any:
-    completed = subprocess.run(
-        args,
-        check=True,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    command = " ".join(args)
+    try:
+        completed = subprocess.run(
+            args,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=GH_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"gh command timed out after {GH_TIMEOUT_SECONDS}s: {command}") from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            "gh command failed "
+            f"(exit {exc.returncode}): {command}\n"
+            f"stdout:\n{exc.stdout or exc.output or ''}\n"
+            f"stderr:\n{exc.stderr or ''}"
+        ) from exc
     return json.loads(completed.stdout)
 
 
@@ -231,11 +246,16 @@ def load_live_queue(repo: str) -> dict[str, Any]:
             "--state",
             "open",
             "--limit",
-            "200",
+            str(GH_PR_SAFETY_CAP),
             "--json",
             "number,title,url,body,labels,mergeStateStatus",
         ]
     )
+    if len(prs) >= GH_PR_SAFETY_CAP:
+        raise RuntimeError(
+            f"gh pr list reached the {GH_PR_SAFETY_CAP} item safety cap; "
+            "use an API-paginated collector before trusting this live report"
+        )
     issues = _run_gh_json(
         [
             "gh",
@@ -246,11 +266,16 @@ def load_live_queue(repo: str) -> dict[str, Any]:
             "--state",
             "all",
             "--limit",
-            "200",
+            str(GH_ISSUE_SAFETY_CAP),
             "--json",
             "number,title,state,labels",
         ]
     )
+    if len(issues) >= GH_ISSUE_SAFETY_CAP:
+        raise RuntimeError(
+            f"gh issue list reached the {GH_ISSUE_SAFETY_CAP} item safety cap; "
+            "use an API-paginated collector before trusting this live report"
+        )
     bounty_issues = [
         {
             "number": issue["number"],
