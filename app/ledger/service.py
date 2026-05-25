@@ -298,6 +298,8 @@ def _verify_wallet_payload(
     nonce: int,
     signature_hex: str,
 ) -> str:
+    if isinstance(nonce, bool) or not isinstance(nonce, int):
+        raise LedgerError("nonce must be an integer")
     if nonce != wallet.nonce + 1:
         raise LedgerError("invalid nonce")
     try:
