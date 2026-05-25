@@ -223,6 +223,8 @@ def _activity_row_matches(row: dict[str, Any], query: str) -> bool:
         row["submission_url"],
         row["proof_hash"],
         row["bounty_id"],
+        row["bounty_repo"],
+        row["bounty_issue_url"],
         row["bounty_issue_number"],
     )
     return any(query in str(value or "").lower() for value in searchable_values)
