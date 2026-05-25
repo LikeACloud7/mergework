@@ -190,6 +190,10 @@ def _clean_proof_metadata(verifier_result: dict[str, Any]) -> dict[str, Any]:
     for key, value in clean.items():
         if isinstance(value, str) and CONTROL_CHAR_RE.search(value):
             raise LedgerError(f"verifier_result.{key} must not contain control characters")
+    try:
+        canonical_json(clean)
+    except (TypeError, ValueError) as exc:
+        raise LedgerError("verifier_result must be JSON serializable") from exc
     return clean
 
 

@@ -107,6 +107,42 @@ def test_bounty_reserve_and_payout_conserve_supply(sqlite_url: str) -> None:
         assert verify_supply_conservation(session) is True
 
 
+def test_pay_bounty_rejects_non_json_serializable_verifier_result_values(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=228,
+            issue_url="https://github.com/ramimbo/mergework/issues/228",
+            title="Reject unserializable verifier metadata",
+            reward_mrwk="50",
+            acceptance="Accepted payouts must store JSON proof metadata.",
+        )
+        reserve_account = reserve_account_for_bounty(bounty.id)
+
+        with pytest.raises(LedgerError, match="verifier_result must be JSON serializable"):
+            pay_bounty(
+                session,
+                bounty_id=bounty.id,
+                to_account="github:alice",
+                submission_url="https://github.com/ramimbo/mergework/pull/228",
+                accepted_by="maintainer",
+                verifier_result={"label": "mrwk:accepted", "raw": object()},
+            )
+
+        assert bounty.awards_paid == 0
+        assert bounty.status == "open"
+        assert get_balance(session, "github:alice") == 0
+        assert get_balance(session, reserve_account) == 50_000_000
+        assert session.query(Submission).count() == 0
+        assert session.query(Proof).count() == 0
+
+
 def test_resolve_payout_account_accepts_mixed_case_prefixes(sqlite_url: str) -> None:
     create_schema(sqlite_url)
 
