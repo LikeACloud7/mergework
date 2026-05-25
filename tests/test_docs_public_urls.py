@@ -129,6 +129,25 @@ def test_api_examples_document_wallet_registration_response() -> None:
     assert '"next_nonce": 1' in examples
 
 
+def test_api_examples_document_github_claim_response() -> None:
+    examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
+
+    assert 'POST "$API_HOST/api/v1/github/claim"' in examples
+    assert '"address":"<linked_mrwk1_address>"' in examples
+    assert '"signature_hex":"<128 lowercase hex chars>"' in examples
+    assert "signed-in session cookie" in examples
+    assert "wallet's `next_nonce` value" in examples
+    assert "wallet was just linked with nonce `1`" in examples
+    assert '"github_login":"<signed_in_github_login>"' in examples
+    assert '"type":"mrwk_claim_github_v1"' in examples
+    assert '"type": "github_claim"' in examples
+    assert '"from": "github:<github_login>"' in examples
+    assert '"amount_mrwk": "<claimed_amount_mrwk>"' in examples
+    assert '"created_at": "2026-05-24T20:05:00+00:00"' in examples
+    assert '"proof_hash": null' in examples
+    assert "same immutable ledger-entry shape" in examples
+
+
 def test_agent_guide_explains_internal_bounty_ids() -> None:
     guide = Path("docs/agent-guide.md").read_text(encoding="utf-8")
 

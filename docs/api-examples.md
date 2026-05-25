@@ -172,6 +172,43 @@ The registration response uses the same public wallet shape as
 }
 ```
 
+Claim an authenticated GitHub account balance into a linked wallet. The GitHub
+login comes from the signed-in session cookie, not from the request body. Sign
+the canonical GitHub-claim payload with the linked wallet private key and the
+wallet's `next_nonce` value; do not send the private key to MergeWork. This
+example assumes the wallet was just linked with nonce `1`, so its next nonce is
+`2`. The signed payload is compact ASCII JSON with sorted keys and includes the
+authenticated GitHub login:
+
+```json
+{"address":"<linked_mrwk1_address>","github_login":"<signed_in_github_login>","nonce":2,"type":"mrwk_claim_github_v1"}
+```
+
+```bash
+curl -s -X POST "$API_HOST/api/v1/github/claim" \
+  -H "Content-Type: application/json" \
+  -b "mrwk_user=<signed-session-cookie>" \
+  -d '{"address":"<linked_mrwk1_address>","nonce":2,"signature_hex":"<128 lowercase hex chars>"}'
+```
+
+Successful claim responses use the same immutable ledger-entry shape as
+`/api/v1/ledger/<sequence>`:
+
+```json
+{
+  "sequence": 42,
+  "type": "github_claim",
+  "from": "github:<github_login>",
+  "to": "<linked_mrwk1_address>",
+  "amount_mrwk": "<claimed_amount_mrwk>",
+  "reference": "github-claim:<github_login>:<linked_mrwk1_address>:2",
+  "previous_hash": "248e1e38f90ac42897486a2b52a938ad51f31849250c4a979358e9721ec7c64e",
+  "entry_hash": "d0c0e8f63ad11f2cc6e5f10dc1f61c45f943f3ab126c45761283c0ccf04cb276",
+  "proof_hash": null,
+  "created_at": "2026-05-24T20:05:00+00:00"
+}
+```
+
 ## MCP Examples
 
 List MCP tools:
