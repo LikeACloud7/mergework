@@ -137,6 +137,25 @@ def test_create_bounty_rejects_non_positive_issue_number(sqlite_url: str) -> Non
                 )
 
 
+def test_create_bounty_rejects_oversized_issue_number(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        issue_number = 2**63
+
+        with pytest.raises(LedgerError, match="issue_number is too large"):
+            create_bounty(
+                session,
+                repo="ramimbo/mergework",
+                issue_number=issue_number,
+                issue_url=f"https://github.com/ramimbo/mergework/issues/{issue_number}",
+                title="Oversized issue bounty",
+                reward_mrwk="1",
+                acceptance="Should not be created",
+            )
+
+
 def test_create_bounty_rejects_duplicate_repo_issue(sqlite_url: str) -> None:
     create_schema(sqlite_url)
 

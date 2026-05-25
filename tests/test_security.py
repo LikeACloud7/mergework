@@ -239,11 +239,22 @@ def test_admin_bounty_api_rejects_fractional_integer_fields(
         headers={"x-mergework-admin-token": "admin-token-for-tests"},
         json={**payload, "max_awards": 1.5},
     )
+    oversized_issue = client.post(
+        "/api/v1/bounties",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json={
+            **payload,
+            "issue_number": 2**63,
+            "issue_url": f"https://github.com/ramimbo/mergework/issues/{2**63}",
+        },
+    )
 
     assert fractional_issue.status_code == 400
     assert fractional_issue.json()["detail"] == "issue_number must be an integer"
     assert fractional_awards.status_code == 400
     assert fractional_awards.json()["detail"] == "max_awards must be an integer"
+    assert oversized_issue.status_code == 400
+    assert oversized_issue.json()["detail"] == "issue_number is too large"
 
 
 def test_admin_payout_api_requires_admin_token_not_cookie_auth(
