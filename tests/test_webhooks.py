@@ -252,6 +252,78 @@ def test_accepted_pr_label_rejects_malformed_body_objects(sqlite_url: str) -> No
         assert event.processed_status == "malformed_pull_request_body"
 
 
+def test_accepted_pr_label_rejects_malformed_issue_reference_suffixes(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    cases = [
+        ("delivery-pr-malformed-shorthand-issue-ref", "Closes #3abc"),
+        ("delivery-pr-malformed-shorthand-underscore-ref", "Closes #3_abc"),
+        ("delivery-pr-malformed-shorthand-hyphen-ref", "Closes #3-abc"),
+        (
+            "delivery-pr-malformed-url-issue-ref",
+            "Implements https://github.com/ramimbo/mergework/issues/3abc",
+        ),
+        (
+            "delivery-pr-malformed-url-hyphen-ref",
+            "Implements https://github.com/ramimbo/mergework/issues/3-abc",
+        ),
+        (
+            "delivery-pr-malformed-url-underscore-ref",
+            "Implements https://github.com/ramimbo/mergework/issues/3_abc",
+        ),
+    ]
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=3,
+            issue_url="https://github.com/ramimbo/mergework/issues/3",
+            title="Wallet transfer validation tests",
+            reward_mrwk="150",
+            acceptance="PR adds focused wallet transfer failure tests.",
+        )
+
+    for delivery_id, pr_body in cases:
+        body = json.dumps(
+            {
+                "action": "labeled",
+                "label": {"name": "mrwk:accepted"},
+                "pull_request": {
+                    "number": 8,
+                    "html_url": "https://github.com/ramimbo/mergework/pull/8",
+                    "body": pr_body,
+                    "user": {"login": "contributor"},
+                },
+                "repository": {"full_name": "ramimbo/mergework"},
+                "sender": {"login": "maintainer"},
+            },
+            separators=(",", ":"),
+        ).encode()
+
+        result = handle_github_webhook(
+            sqlite_url,
+            {
+                "X-GitHub-Delivery": delivery_id,
+                "X-GitHub-Event": "pull_request",
+                "X-Hub-Signature-256": _signature("secret", body),
+            },
+            body,
+            "secret",
+        )
+
+        assert result == {"status": "missing_issue"}
+
+    with session_scope(sqlite_url) as session:
+        assert get_balance(session, "github:contributor") == 0
+        for delivery_id, _pr_body in cases:
+            event = session.get(WebhookEvent, delivery_id)
+            assert event is not None
+            assert event.processed_status == "missing_issue"
+
+
 def test_accepted_label_requires_submitter_login(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     body = json.dumps(

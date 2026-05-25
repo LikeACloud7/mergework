@@ -16,13 +16,15 @@ from app.ledger.service import (
 from app.models import WebhookEvent
 
 ACCEPTED_LABEL = "mrwk:accepted"
+ISSUE_NUMBER_BOUNDARY = r"(?![A-Za-z0-9_-])"
 LINKED_ISSUE_RE = re.compile(
     r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs?|references?|bounty)\s+"
-    r"(?:(?P<repo>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#(?P<repo_number>\d+)|#(?P<number>\d+))",
+    rf"(?:(?P<repo>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#(?P<repo_number>\d+){ISSUE_NUMBER_BOUNDARY}"
+    rf"|#(?P<number>\d+){ISSUE_NUMBER_BOUNDARY})",
     re.IGNORECASE,
 )
 GITHUB_ISSUE_URL_RE = re.compile(
-    r"https://github\.com/(?P<repo>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/issues/(?P<number>\d+)",
+    rf"https://github\.com/(?P<repo>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/issues/(?P<number>\d+){ISSUE_NUMBER_BOUNDARY}",
     re.IGNORECASE,
 )
 
