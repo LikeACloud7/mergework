@@ -197,6 +197,83 @@ def test_wallet_transfer_rejects_bad_signature(sqlite_url: str) -> None:
             )
 
 
+def test_wallet_operations_reject_boolean_nonces(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    sender_key, sender_public, sender_address = _keypair()
+    _, receiver_public, receiver_address = _keypair()
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        register_wallet(session, public_key_hex=sender_public, label="Sender")
+        register_wallet(session, public_key_hex=receiver_public, label="Receiver")
+        add_ledger_entry(
+            session,
+            entry_type="test_funding",
+            from_account=TREASURY_ACCOUNT,
+            to_account=sender_address,
+            amount_microunits=10_000_000,
+            reference="test-funding",
+        )
+
+        transfer_payload = wallet_transfer_payload(
+            from_address=sender_address,
+            to_address=receiver_address,
+            amount_microunits=1_000_000,
+            nonce=True,
+            memo="bool nonce",
+        )
+        with pytest.raises(LedgerError, match="nonce must be an integer"):
+            submit_wallet_transfer(
+                session,
+                from_address=sender_address,
+                to_address=receiver_address,
+                amount_mrwk="1",
+                nonce=True,
+                memo="bool nonce",
+                signature_hex=_sign(sender_key, transfer_payload),
+            )
+
+        link_payload = wallet_link_payload(
+            address=sender_address,
+            github_login="alice",
+            nonce=True,
+        )
+        with pytest.raises(LedgerError, match="nonce must be an integer"):
+            link_wallet_to_github(
+                session,
+                address=sender_address,
+                github_login="alice",
+                nonce=True,
+                signature_hex=_sign(sender_key, link_payload),
+            )
+
+        valid_link_payload = wallet_link_payload(
+            address=sender_address,
+            github_login="alice",
+            nonce=1,
+        )
+        link_wallet_to_github(
+            session,
+            address=sender_address,
+            github_login="alice",
+            nonce=1,
+            signature_hex=_sign(sender_key, valid_link_payload),
+        )
+        claim_payload = wallet_claim_payload(
+            address=sender_address,
+            github_login="alice",
+            nonce=True,
+        )
+        with pytest.raises(LedgerError, match="nonce must be an integer"):
+            submit_github_claim(
+                session,
+                address=sender_address,
+                github_login="alice",
+                nonce=True,
+                signature_hex=_sign(sender_key, claim_payload),
+            )
+
+
 def test_linked_wallet_can_claim_existing_github_balance(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     private_key, public_hex, address = _keypair()
