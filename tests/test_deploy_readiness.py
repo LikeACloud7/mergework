@@ -463,3 +463,9 @@ def test_deploy_readiness_rejects_private_public_base_url_ip_literals() -> None:
 
 def test_deploy_readiness_allows_global_public_base_url_ip_literal() -> None:
     assert validate_deploy_settings(_settings(public_base_url="https://8.8.8.8")) == []
+
+
+def test_deploy_readiness_allows_numeric_dns_labels_longer_than_ipv4_octets() -> None:
+    errors = validate_deploy_settings(_settings(public_base_url="https://1234.5.6.7.example"))
+
+    assert errors == []

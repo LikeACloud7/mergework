@@ -32,7 +32,7 @@ WEAK_SECRET_VALUES = {
 GITHUB_LOGIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$")
 
 DNS_LABEL_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
-IPV4_DOTTED_QUAD_RE = re.compile(r"\d+\.\d+\.\d+\.\d+")
+IPV4_DOTTED_QUAD_RE = re.compile(r"(?:\d{1,3}\.){3}\d{1,3}")
 
 
 def _csv_env(name: str, default: str = "") -> tuple[str, ...]:
