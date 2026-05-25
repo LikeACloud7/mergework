@@ -206,6 +206,30 @@ def test_deploy_readiness_rejects_malformed_oauth_client_id() -> None:
     assert "MERGEWORK_GITHUB_OAUTH_CLIENT_ID must not include control characters" in control_errors
 
 
+def test_deploy_readiness_rejects_public_base_url_text_errors() -> None:
+    empty_errors = validate_deploy_settings(_settings(public_base_url=""))
+    whitespace_errors = validate_deploy_settings(
+        _settings(public_base_url=" https://staging.mrwk.example.test")
+    )
+    trailing_whitespace_errors = validate_deploy_settings(
+        _settings(public_base_url="https://staging.mrwk.example.test ")
+    )
+    control_errors = validate_deploy_settings(
+        _settings(public_base_url="https://staging.mrwk.example.test\nextra")
+    )
+
+    assert "MERGEWORK_PUBLIC_BASE_URL is required" in empty_errors
+    assert (
+        "MERGEWORK_PUBLIC_BASE_URL must not include leading or trailing whitespace"
+        in whitespace_errors
+    )
+    assert (
+        "MERGEWORK_PUBLIC_BASE_URL must not include leading or trailing whitespace"
+        in trailing_whitespace_errors
+    )
+    assert "MERGEWORK_PUBLIC_BASE_URL must not include control characters" in control_errors
+
+
 def test_deploy_readiness_rejects_non_admin_accepted_labelers() -> None:
     errors = validate_deploy_settings(
         _settings(
