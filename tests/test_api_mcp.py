@@ -1333,6 +1333,8 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
         "issue_url": "https://github.com/ramimbo/mergework/issues/2",
         "repo": "ramimbo/mergework",
         "issue_number": 2,
+        "bounty_id": bounty.id,
+        "bounty_url": f"/bounties/{bounty.id}",
         "accepted_by": "maintainer",
         "created_at": "<checked>",
     }
