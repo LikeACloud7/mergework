@@ -22,6 +22,11 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.db import create_schema, session_scope
+from app.ledger.reconciliation import (
+    AcceptedPayoutCheck,
+    payout_reconciliation_summary,
+    reconcile_accepted_payouts,
+)
 from app.ledger.service import (
     GENESIS_SUPPLY_MICRO,
     TREASURY_ACCOUNT,
@@ -166,6 +171,31 @@ def bounty_list_summary(bounties: list[dict[str, Any]]) -> dict[str, Any]:
         "bounties_shown": len(bounties),
         "open_awards": open_awards,
         "open_pool_mrwk": format_mrwk(open_pool_microunits),
+    }
+
+
+def payout_reconciliation_to_dict(check: AcceptedPayoutCheck) -> dict[str, Any]:
+    return {
+        "status": check.status,
+        "bounty_id": check.bounty_id,
+        "bounty_issue": check.bounty_issue,
+        "submission_id": check.submission_id,
+        "submitter_account": check.submitter_account,
+        "submission_url": check.submission_url,
+        "evidence_count": len(check.evidence),
+        "evidence": [
+            {
+                "proof_hash": evidence.proof_hash,
+                "proof_url": f"/proofs/{evidence.proof_hash}",
+                "ledger_sequence": evidence.ledger_sequence,
+                "ledger_type": evidence.ledger_type,
+                "reference": evidence.reference,
+                "to_account": evidence.to_account,
+                "amount_mrwk": evidence.amount_mrwk,
+                "matches_submission": evidence.matches_submission,
+            }
+            for evidence in check.evidence
+        ],
     }
 
 
@@ -776,6 +806,18 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             result = bounty_to_dict(bounty)
             result["accepted_awards"] = bounty_awards_to_dict(session, bounty.id)
             return result
+
+    @app.get("/api/v1/reconciliation/payouts")
+    def api_payout_reconciliation(
+        admin_login: str = Depends(require_admin_token),
+    ) -> dict[str, Any]:
+        with session_scope(db_url) as session:
+            checks = reconcile_accepted_payouts(session)
+            return {
+                "generated_by": admin_login,
+                "summary": payout_reconciliation_summary(checks),
+                "checks": [payout_reconciliation_to_dict(check) for check in checks],
+            }
 
     @app.post("/api/v1/bounties/{bounty_id}/pay")
     async def api_pay_bounty(

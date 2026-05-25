@@ -15,6 +15,7 @@ from app.ledger.service import (
     TREASURY_ACCOUNT,
     LedgerError,
     add_ledger_entry,
+    canonical_json,
     close_bounty,
     create_bounty,
     ensure_genesis,
@@ -26,7 +27,7 @@ from app.ledger.service import (
     validate_public_url,
 )
 from app.main import _safe_next_path, _signed_value, create_app
-from app.models import LedgerEntry, WebhookEvent
+from app.models import LedgerEntry, Proof, Submission, WebhookEvent
 from app.webhooks.github import handle_github_webhook
 
 
@@ -289,6 +290,94 @@ def test_admin_payout_api_requires_admin_token_not_cookie_auth(
     assert token_auth.json()["to_account"] == wallet_address
     with session_scope(sqlite_url) as session:
         assert get_balance(session, wallet_address) == 25_000_000
+
+
+def test_admin_payout_reconciliation_api_reports_missing_and_duplicate_evidence(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create_schema(sqlite_url)
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        missing_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=281,
+            issue_url="https://github.com/ramimbo/mergework/issues/281",
+            title="Reconcile missing payout",
+            reward_mrwk="15",
+            acceptance="Maintainer needs accepted-but-unpaid work surfaced.",
+        )
+        duplicate_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=282,
+            issue_url="https://github.com/ramimbo/mergework/issues/282",
+            title="Reconcile duplicate payout evidence",
+            reward_mrwk="15",
+            acceptance="Maintainer needs duplicate payment evidence surfaced.",
+        )
+        missing_submission = Submission(
+            bounty_id=missing_bounty.id,
+            submitter_account="github:alice",
+            url="https://github.com/ramimbo/mergework/pull/281",
+            status="accepted",
+            verifier_result=canonical_json({"label": "mrwk:accepted"}),
+        )
+        session.add(missing_submission)
+        proof = pay_bounty(
+            session,
+            bounty_id=duplicate_bounty.id,
+            to_account="github:bob",
+            submission_url="https://github.com/ramimbo/mergework/pull/282",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        session.add(
+            Proof(
+                hash="e" * 64,
+                ledger_sequence=proof.ledger_sequence,
+                bounty_id=duplicate_bounty.id,
+                submission_id=proof.submission_id,
+                kind="bounty_payment",
+                public_json=proof.public_json,
+            )
+        )
+
+    unauthorized = client.get("/api/v1/reconciliation/payouts")
+    response = client.get(
+        "/api/v1/reconciliation/payouts",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+    )
+
+    assert unauthorized.status_code == 401
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["generated_by"] == "api-token"
+    assert payload["summary"] == {
+        "accepted_submissions": 2,
+        "paid": 0,
+        "missing_payment": 1,
+        "duplicate_payment_evidence": 1,
+        "mismatched_payment_evidence": 0,
+    }
+    by_status = {check["status"]: check for check in payload["checks"]}
+    assert by_status["missing_payment"]["submission_url"] == (
+        "https://github.com/ramimbo/mergework/pull/281"
+    )
+    assert by_status["missing_payment"]["evidence"] == []
+    duplicate_check = by_status["duplicate_payment_evidence"]
+    assert duplicate_check["submission_url"] == "https://github.com/ramimbo/mergework/pull/282"
+    assert duplicate_check["evidence_count"] == 2
+    assert {evidence["proof_url"] for evidence in duplicate_check["evidence"]} == {
+        f"/proofs/{proof.hash}",
+        f"/proofs/{'e' * 64}",
+    }
+    assert all(evidence["matches_submission"] for evidence in duplicate_check["evidence"])
 
 
 def test_admin_payout_api_returns_400_for_malformed_json(
