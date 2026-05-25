@@ -81,6 +81,7 @@ API_DOCS_CSP = (
     "worker-src 'self' blob:"
 )
 API_DOCS_PATHS = {"/api/docs", "/api/redoc"}
+SQLITE_INTEGER_MAX = 2**63 - 1
 
 
 def _request_was_forwarded_https(request: Request) -> bool:
@@ -102,6 +103,15 @@ def _preserve_forwarded_https_redirect(request: Request, response: Response) -> 
     response.headers["location"] = urlunsplit(
         ("https", parsed.netloc, parsed.path, parsed.query, parsed.fragment)
     )
+
+
+def _issue_number_search_value(query: str) -> int | None:
+    if not query.isdigit():
+        return None
+    issue_number = int(query)
+    if issue_number > SQLITE_INTEGER_MAX:
+        return None
+    return issue_number
 
 
 def bounty_to_dict(bounty: Bounty) -> dict[str, Any]:
@@ -721,9 +731,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                         .replace("_", "\\_")
                     )
                     like_query = f"%{escaped_query}%"
-                    issue_number = None
-                    if normalized_query.isdigit():
-                        issue_number = int(normalized_query)
+                    issue_number = _issue_number_search_value(normalized_query)
                     text_filter = or_(
                         func.lower(Bounty.repo).like(like_query, escape="\\"),
                         func.lower(Bounty.title).like(like_query, escape="\\"),
