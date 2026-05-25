@@ -480,6 +480,198 @@ def test_reconcile_accepted_payouts_reports_missing_payment(sqlite_url: str) -> 
         assert checks[0].evidence == ()
 
 
+def test_reconcile_accepted_payouts_matches_legacy_proof_source_url(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=38,
+            issue_url="https://github.com/ramimbo/mergework/issues/38",
+            title="Reconcile legacy source proofs",
+            reward_mrwk="12",
+            acceptance="Maintainer applies mrwk:accepted.",
+        )
+        submission = Submission(
+            bounty_id=bounty.id,
+            submitter_account="github:dora",
+            url="https://github.com/ramimbo/mergework/pull/38",
+            status="accepted",
+            verifier_result=canonical_json({"label": "mrwk:accepted"}),
+        )
+        session.add(submission)
+        session.flush()
+        entry = add_ledger_entry(
+            session,
+            entry_type="bounty_payment",
+            from_account=reserve_account_for_bounty(bounty.id),
+            to_account="github:dora",
+            amount_microunits=bounty.reward_microunits,
+            reference=submission.url,
+        )
+        session.add(
+            Proof(
+                hash="a" * 64,
+                ledger_sequence=entry.sequence,
+                bounty_id=bounty.id,
+                submission_id=None,
+                kind="bounty_payment",
+                public_json=canonical_json(
+                    {
+                        "kind": "bounty_payment",
+                        "bounty_id": bounty.id,
+                        "submission_url": submission.url,
+                    }
+                ),
+            )
+        )
+        session.flush()
+
+        checks = reconcile_accepted_payouts(session)
+        summary = payout_reconciliation_summary(checks)
+
+        assert summary["paid"] == 1
+        assert summary["missing_payment"] == 0
+        assert checks[0].status == "paid"
+        assert checks[0].evidence[0].proof_hash == "a" * 64
+        assert checks[0].evidence[0].matches_submission is True
+
+
+def test_reconcile_accepted_payouts_reports_legacy_source_mismatch(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=39,
+            issue_url="https://github.com/ramimbo/mergework/issues/39",
+            title="Reconcile mismatched legacy proof",
+            reward_mrwk="12",
+            acceptance="Maintainer applies mrwk:accepted.",
+        )
+        submission = Submission(
+            bounty_id=bounty.id,
+            submitter_account="github:erin",
+            url="https://github.com/ramimbo/mergework/pull/39",
+            status="accepted",
+            verifier_result=canonical_json({"label": "mrwk:accepted"}),
+        )
+        session.add(submission)
+        session.flush()
+        entry = add_ledger_entry(
+            session,
+            entry_type="bounty_payment",
+            from_account=reserve_account_for_bounty(bounty.id),
+            to_account="github:mallory",
+            amount_microunits=bounty.reward_microunits,
+            reference=submission.url,
+        )
+        session.add(
+            Proof(
+                hash="b" * 64,
+                ledger_sequence=entry.sequence,
+                bounty_id=bounty.id,
+                submission_id=None,
+                kind="bounty_payment",
+                public_json=canonical_json(
+                    {
+                        "kind": "bounty_payment",
+                        "bounty_id": bounty.id,
+                        "submission_url": submission.url,
+                    }
+                ),
+            )
+        )
+        session.flush()
+
+        checks = reconcile_accepted_payouts(session)
+        summary = payout_reconciliation_summary(checks)
+
+        assert summary["mismatched_payment_evidence"] == 1
+        assert checks[0].status == "mismatched_payment_evidence"
+        assert checks[0].evidence[0].proof_hash == "b" * 64
+        assert checks[0].evidence[0].matches_submission is False
+
+
+def test_reconcile_accepted_payouts_rejects_wrong_explicit_submission_link(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=40,
+            issue_url="https://github.com/ramimbo/mergework/issues/40",
+            title="Reconcile explicit proof links",
+            reward_mrwk="12",
+            max_awards=2,
+            acceptance="Maintainer applies mrwk:accepted.",
+        )
+        first_submission = Submission(
+            bounty_id=bounty.id,
+            submitter_account="github:fran",
+            url="https://github.com/ramimbo/mergework/pull/40",
+            status="accepted",
+            verifier_result=canonical_json({"label": "mrwk:accepted"}),
+        )
+        second_submission = Submission(
+            bounty_id=bounty.id,
+            submitter_account="github:gabe",
+            url="https://github.com/ramimbo/mergework/pull/41",
+            status="accepted",
+            verifier_result=canonical_json({"label": "mrwk:accepted"}),
+        )
+        session.add_all([first_submission, second_submission])
+        session.flush()
+        entry = add_ledger_entry(
+            session,
+            entry_type="bounty_payment",
+            from_account=reserve_account_for_bounty(bounty.id),
+            to_account=first_submission.submitter_account,
+            amount_microunits=bounty.reward_microunits,
+            reference=first_submission.url,
+        )
+        session.add(
+            Proof(
+                hash="c" * 64,
+                ledger_sequence=entry.sequence,
+                bounty_id=bounty.id,
+                submission_id=second_submission.id,
+                kind="bounty_payment",
+                public_json=canonical_json(
+                    {
+                        "kind": "bounty_payment",
+                        "bounty_id": bounty.id,
+                        "submission_url": first_submission.url,
+                    }
+                ),
+            )
+        )
+        session.flush()
+
+        checks = reconcile_accepted_payouts(session)
+        checks_by_url = {check.submission_url: check for check in checks}
+
+        first_check = checks_by_url[first_submission.url]
+        assert first_check.status == "missing_payment"
+        assert first_check.evidence == ()
+        second_check = checks_by_url[second_submission.url]
+        assert second_check.status == "mismatched_payment_evidence"
+        assert second_check.evidence[0].proof_hash == "c" * 64
+        assert second_check.evidence[0].matches_submission is False
+
+
 def test_reconcile_accepted_payouts_reports_duplicate_payment_evidence(
     sqlite_url: str,
 ) -> None:
