@@ -1634,18 +1634,36 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         return response
 
     @app.get("/admin", response_class=HTMLResponse)
-    def admin_page(request: Request) -> Any:
+    def admin_page(
+        request: Request,
+        webhook_status: str | None = Query(None),
+        webhook_limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    ) -> Any:
         login = admin_login_from_request(request)
         if login is None:
             if _oauth_configured(settings):
                 return RedirectResponse("/auth/github/login?next=/admin", status_code=302)
             raise HTTPException(status_code=503, detail="GitHub OAuth is not configured")
+        normalized_status = webhook_status.strip().lower() if webhook_status is not None else ""
+        with session_scope(db_url) as session:
+            query = select(WebhookEvent)
+            if normalized_status:
+                query = query.where(func.lower(WebhookEvent.processed_status) == normalized_status)
+            webhook_events = session.scalars(
+                query.order_by(
+                    WebhookEvent.created_at.desc(), WebhookEvent.delivery_id.desc()
+                ).limit(webhook_limit)
+            ).all()
         return templates.TemplateResponse(
             request,
             "admin.html",
             {
                 "login": login,
                 "csrf_token": _csrf_token("admin-bounty", login, settings.cookie_secret),
+                "webhook_events": webhook_events,
+                "webhook_limit": webhook_limit,
+                "webhook_limit_options": [10, 25, 50, 100],
+                "webhook_status": normalized_status,
             },
         )
 
