@@ -863,6 +863,14 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
     assert account_api["transfer_status"] == (
         "Claim GitHub balances from /me after linking a registered mrwk1 wallet."
     )
+    assert account_api["accepted_work"] == {
+        "accepted_awards": 1,
+        "accepted_mrwk": "25",
+        "latest_ledger_sequence": 3,
+        "latest_submission_url": "https://github.com/ramimbo/mergework/pull/3",
+        "latest_proof_hash": proof.hash,
+        "latest_proof_url": f"/proofs/{proof.hash}",
+    }
     assert "Claim GitHub balances from /me" in account
     assert 'href="https://github.com/alice">@alice</a>' in account
     assert "Accepted work summary" in account

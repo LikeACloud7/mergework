@@ -176,7 +176,8 @@ current nonce, next nonce to sign with, and registration timestamp:
 ```
 
 Account responses identify the normalized ledger address, optional GitHub login,
-existence, current balance, and whether the account can move funds directly:
+existence, current balance, accepted-work summary, and whether the account can
+move funds directly:
 
 ```json
 {
@@ -185,7 +186,15 @@ existence, current balance, and whether the account can move funds directly:
   "github_login": "tatelyman",
   "exists": true,
   "balance_mrwk": "395",
-  "transfer_status": "Claim GitHub balances from /me after linking a registered mrwk1 wallet."
+  "transfer_status": "Claim GitHub balances from /me after linking a registered mrwk1 wallet.",
+  "accepted_work": {
+    "accepted_awards": 5,
+    "accepted_mrwk": "395",
+    "latest_ledger_sequence": 42,
+    "latest_submission_url": "https://github.com/ramimbo/mergework/pull/183",
+    "latest_proof_hash": "a29b9cf54f2ea4734d58e9371b20234f85936e95bd8c45687f0644ad6a9e6871",
+    "latest_proof_url": "/proofs/a29b9cf54f2ea4734d58e9371b20234f85936e95bd8c45687f0644ad6a9e6871"
+  }
 }
 ```
 

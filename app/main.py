@@ -866,6 +866,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             transfer_status = "MRWK wallet transfers are enabled for registered mrwk1 addresses."
         with session_scope(db_url) as session:
             account_row = session.get(Account, account)
+            accepted_work = account_accepted_summary(session, account)
             return {
                 "account": account,
                 "ledger_address": account,
@@ -873,6 +874,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 "exists": account_row is not None,
                 "balance_mrwk": format_mrwk(get_balance(session, account)),
                 "transfer_status": transfer_status,
+                "accepted_work": accepted_work,
             }
 
     @app.get("/api/v1/auth/me")
