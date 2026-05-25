@@ -977,7 +977,10 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 "result": {
                     "tools": [
                         {"name": "list_bounties", "description": "List open MRWK bounties"},
-                        {"name": "get_bounty", "description": "Get a bounty by id"},
+                        {
+                            "name": "get_bounty",
+                            "description": "Get a bounty by id, optionally with accepted awards",
+                        },
                         {"name": "get_balance", "description": "Get an account balance"},
                         {
                             "name": "register_wallet",
@@ -1413,6 +1416,14 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
             raise ValueError(f"{field} must be a string")
         return value
 
+    def optional_bool_arg(field: str, default: bool = False) -> bool:
+        value = args.get(field, default)
+        if value is None:
+            return default
+        if not isinstance(value, bool):
+            raise ValueError(f"{field} must be a boolean")
+        return value
+
     with session_scope(database_url) as session:
         if name == "list_bounties":
             bounties = session.scalars(
@@ -1423,7 +1434,10 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
             bounty = session.get(Bounty, positive_int_arg("id"))
             if bounty is None:
                 return "bounty not found"
-            return json.dumps(bounty_to_dict(bounty))
+            bounty_data = bounty_to_dict(bounty)
+            if optional_bool_arg("include_awards"):
+                bounty_data["awards"] = bounty_awards_to_dict(session, bounty.id)
+            return json.dumps(bounty_data)
         if name == "get_balance":
             account = _normalized_account(str_arg("account"))
             return f"{account}: {format_mrwk(get_balance(session, account))} MRWK"
