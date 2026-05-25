@@ -7,7 +7,6 @@ import re
 import secrets
 import time
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlencode, urlsplit, urlunsplit
@@ -23,11 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.db import create_schema, session_scope
-from app.ledger.reconciliation import (
-    AcceptedPayoutCheck,
-    payout_reconciliation_summary,
-    reconcile_accepted_payouts,
-)
+from app.ledger.reconciliation import payout_reconciliation_summary, reconcile_accepted_payouts
 from app.ledger.service import (
     GENESIS_SUPPLY_MICRO,
     TREASURY_ACCOUNT,
@@ -56,8 +51,21 @@ from app.models import (
     Proof,
     Submission,
     Wallet,
-    WalletTransfer,
     WebhookEvent,
+)
+from app.serializers import (
+    accepted_work_for_account,
+    account_accepted_summary,
+    activity_to_dict,
+    bounty_awards_to_dict,
+    bounty_list_summary,
+    bounty_to_dict,
+    ledger_to_dict,
+    payout_reconciliation_to_dict,
+    safe_accepted_work_for_account,
+    safe_account_accepted_summary,
+    wallet_to_dict,
+    wallet_transfer_to_dict,
 )
 from app.wallets import WalletError, normalize_wallet_address
 from app.webhooks.github import handle_github_webhook
@@ -136,29 +144,6 @@ def _issue_number_search_value(query: str) -> int | None:
     return issue_number if issue_number <= SQLITE_INTEGER_MAX else None
 
 
-def bounty_to_dict(bounty: Bounty) -> dict[str, Any]:
-    awards_remaining = max(0, bounty.max_awards - bounty.awards_paid)
-    if bounty.status != "open":
-        awards_remaining = 0
-    available_microunits = bounty.reward_microunits * awards_remaining
-    return {
-        "id": bounty.id,
-        "repo": bounty.repo,
-        "issue_number": bounty.issue_number,
-        "issue_url": bounty.issue_url,
-        "title": bounty.title,
-        "reward_mrwk": format_mrwk(bounty.reward_microunits),
-        "available_mrwk": format_mrwk(available_microunits),
-        "reserved_mrwk": format_mrwk(bounty.reserved_microunits),
-        "max_awards": bounty.max_awards,
-        "awards_paid": bounty.awards_paid,
-        "awards_remaining": awards_remaining,
-        "status": bounty.status,
-        "acceptance": bounty.acceptance,
-        "created_at": bounty.created_at.isoformat(),
-    }
-
-
 def _utc_now() -> datetime:
     return datetime.now(UTC)
 
@@ -228,34 +213,6 @@ def expire_stale_bounty_attempts(
     session.execute(query.values(status="expired", updated_at=now))
 
 
-def bounty_awards_to_dict(session: Session, bounty_id: int) -> list[dict[str, Any]]:
-    proofs = session.scalars(
-        select(Proof)
-        .where(Proof.bounty_id == bounty_id, Proof.kind == "bounty_payment")
-        .order_by(Proof.ledger_sequence.desc())
-    ).all()
-    awards: list[dict[str, Any]] = []
-    for proof in proofs:
-        data = json.loads(proof.public_json)
-        if not isinstance(data, dict) or data.get("kind") != "bounty_payment":
-            continue
-        proof_hash = str(proof.hash)
-        awards.append(
-            {
-                "proof_hash": proof_hash,
-                "proof_url": f"/proofs/{proof_hash}",
-                "ledger_sequence": proof.ledger_sequence,
-                "ledger_url": f"/ledger/{proof.ledger_sequence}",
-                "account": data.get("to_account"),
-                "amount_mrwk": data.get("amount_mrwk"),
-                "submission_url": data.get("submission_url"),
-                "accepted_by": data.get("accepted_by"),
-                "created_at": proof.created_at.isoformat(),
-            }
-        )
-    return awards
-
-
 def _payout_response_from_proof(proof: Proof, *, status: str) -> dict[str, Any]:
     data = json.loads(proof.public_json)
     if not isinstance(data, dict) or data.get("kind") != "bounty_payment":
@@ -288,308 +245,6 @@ def _existing_payout_proof_for_submission(
         .where(Proof.submission_id == submission.id, Proof.kind == "bounty_payment")
         .limit(1)
     )
-
-
-def bounty_list_summary(bounties: list[dict[str, Any]]) -> dict[str, Any]:
-    open_awards = sum(int(bounty["awards_remaining"]) for bounty in bounties)
-    open_pool_microunits = sum(
-        int(Decimal(str(bounty["reward_mrwk"])) * Decimal(1_000_000))
-        * int(bounty["awards_remaining"])
-        for bounty in bounties
-    )
-    return {
-        "bounties_shown": len(bounties),
-        "open_awards": open_awards,
-        "open_pool_mrwk": format_mrwk(open_pool_microunits),
-    }
-
-
-def payout_reconciliation_to_dict(check: AcceptedPayoutCheck) -> dict[str, Any]:
-    return {
-        "status": check.status,
-        "bounty_id": check.bounty_id,
-        "bounty_issue": check.bounty_issue,
-        "submission_id": check.submission_id,
-        "submitter_account": check.submitter_account,
-        "submission_url": check.submission_url,
-        "evidence_count": len(check.evidence),
-        "evidence": [
-            {
-                "proof_hash": evidence.proof_hash,
-                "proof_url": f"/proofs/{evidence.proof_hash}",
-                "ledger_sequence": evidence.ledger_sequence,
-                "ledger_type": evidence.ledger_type,
-                "reference": evidence.reference,
-                "to_account": evidence.to_account,
-                "amount_mrwk": evidence.amount_mrwk,
-                "matches_submission": evidence.matches_submission,
-            }
-            for evidence in check.evidence
-        ],
-    }
-
-
-def ledger_to_dict(entry: LedgerEntry, proof_hash: str | None = None) -> dict[str, Any]:
-    return {
-        "sequence": entry.sequence,
-        "type": entry.entry_type,
-        "from": entry.from_account,
-        "to": entry.to_account,
-        "amount_mrwk": format_mrwk(entry.amount_microunits),
-        "reference": entry.reference,
-        "previous_hash": entry.previous_hash,
-        "entry_hash": entry.entry_hash,
-        "proof_hash": proof_hash,
-        "created_at": entry.created_at.isoformat(),
-    }
-
-
-def _bounty_detail_url(bounty_id: int | None) -> str | None:
-    return f"/bounties/{bounty_id}" if bounty_id is not None else None
-
-
-def _activity_row(entry: LedgerEntry, proof: Proof) -> dict[str, Any] | None:
-    data = json.loads(proof.public_json)
-    if not isinstance(data, dict) or data.get("kind") != "bounty_payment":
-        return None
-    submission_url = str(data.get("submission_url") or entry.reference)
-    repo = data.get("repo")
-    issue_number = data.get("issue_number")
-    issue_url = None
-    if isinstance(repo, str) and isinstance(issue_number, int):
-        issue_url = f"https://github.com/{repo}/issues/{issue_number}"
-    return {
-        "ledger_sequence": entry.sequence,
-        "account": entry.to_account,
-        "amount_mrwk": format_mrwk(entry.amount_microunits),
-        "amount_microunits": entry.amount_microunits,
-        "submission_url": submission_url,
-        "bounty_repo": repo,
-        "bounty_issue_number": issue_number,
-        "bounty_issue_url": issue_url,
-        "proof_hash": proof.hash,
-        "proof_url": f"/proofs/{proof.hash}",
-        "bounty_id": proof.bounty_id,
-        "bounty_url": _bounty_detail_url(proof.bounty_id),
-        "created_at": entry.created_at.isoformat(),
-    }
-
-
-def _activity_search_query(query: str | None) -> str:
-    return (query or "").strip().lower()
-
-
-def _activity_row_matches(row: dict[str, Any], query: str) -> bool:
-    if not query:
-        return True
-    searchable_values = (
-        row["account"],
-        row["amount_mrwk"],
-        row["submission_url"],
-        row["proof_hash"],
-        row["bounty_id"],
-        row["bounty_repo"],
-        row["bounty_issue_url"],
-        row["bounty_issue_number"],
-    )
-    return any(query in str(value or "").lower() for value in searchable_values)
-
-
-def activity_to_dict(session: Session, query: str | None = None) -> dict[str, Any]:
-    search_query = _activity_search_query(query)
-    rows = session.execute(
-        select(LedgerEntry, Proof)
-        .join(Proof, Proof.ledger_sequence == LedgerEntry.sequence)
-        .where(LedgerEntry.entry_type == "bounty_payment", Proof.kind == "bounty_payment")
-        .order_by(LedgerEntry.sequence.desc())
-    ).all()
-    recent: list[dict[str, Any]] = []
-    seen_sequences: set[int] = set()
-    for entry, proof in rows:
-        if entry.sequence in seen_sequences:
-            continue
-        row = _activity_row(entry, proof)
-        if row is None or row["account"] is None:
-            continue
-        if not _activity_row_matches(row, search_query):
-            continue
-        seen_sequences.add(entry.sequence)
-        recent.append(row)
-
-    by_account: dict[str, dict[str, Any]] = {}
-    for row in recent:
-        account = str(row["account"])
-        contributor = by_account.setdefault(
-            account,
-            {
-                "account": account,
-                "accepted_awards": 0,
-                "accepted_microunits": 0,
-                "accepted_mrwk": "0",
-                "latest_submission_url": row["submission_url"],
-                "latest_bounty_repo": row["bounty_repo"],
-                "latest_bounty_issue_number": row["bounty_issue_number"],
-                "latest_bounty_issue_url": row["bounty_issue_url"],
-                "latest_proof_hash": row["proof_hash"],
-                "latest_proof_url": row["proof_url"],
-            },
-        )
-        contributor["accepted_awards"] += 1
-        contributor["accepted_microunits"] += int(row["amount_microunits"])
-        contributor["accepted_mrwk"] = format_mrwk(contributor["accepted_microunits"])
-
-    contributors = sorted(
-        by_account.values(),
-        key=lambda item: (-int(item["accepted_microunits"]), str(item["account"])),
-    )
-    for contributor in contributors:
-        del contributor["accepted_microunits"]
-
-    total_microunits = sum(int(row["amount_microunits"]) for row in recent)
-    for row in recent:
-        del row["amount_microunits"]
-
-    return {
-        "totals": {
-            "accepted_awards": len(recent),
-            "accepted_mrwk": format_mrwk(total_microunits),
-            "contributors": len(contributors),
-        },
-        "query": search_query,
-        "contributors": contributors,
-        "recent": recent[:100],
-    }
-
-
-def account_accepted_summary(session: Session, account: str) -> dict[str, Any]:
-    rows = session.execute(
-        select(LedgerEntry, Proof)
-        .join(Proof, Proof.ledger_sequence == LedgerEntry.sequence)
-        .where(
-            LedgerEntry.entry_type == "bounty_payment",
-            LedgerEntry.to_account == account,
-            Proof.kind == "bounty_payment",
-        )
-        .order_by(LedgerEntry.sequence.desc())
-    ).all()
-
-    accepted: list[dict[str, Any]] = []
-    total_microunits = 0
-    for entry, proof in rows:
-        row = _activity_row(entry, proof)
-        if row is None:
-            continue
-        total_microunits += int(row["amount_microunits"])
-        accepted.append(row)
-
-    latest = accepted[0] if accepted else None
-    return {
-        "accepted_awards": len(accepted),
-        "accepted_mrwk": format_mrwk(total_microunits),
-        "latest_ledger_sequence": latest["ledger_sequence"] if latest else None,
-        "latest_submission_url": latest["submission_url"] if latest else None,
-        "latest_proof_hash": latest["proof_hash"] if latest else None,
-        "latest_proof_url": latest["proof_url"] if latest else None,
-    }
-
-
-def accepted_work_for_account(session: Session, account: str) -> list[dict[str, Any]]:
-    rows = session.execute(
-        select(Proof, LedgerEntry)
-        .join(LedgerEntry, LedgerEntry.sequence == Proof.ledger_sequence)
-        .where(
-            Proof.kind == "bounty_payment",
-            LedgerEntry.entry_type == "bounty_payment",
-            LedgerEntry.to_account == account,
-        )
-        .order_by(LedgerEntry.sequence.desc())
-    ).all()
-    accepted_work: list[dict[str, Any]] = []
-    for proof, entry in rows:
-        data = json.loads(proof.public_json)
-        if not isinstance(data, dict) or data.get("kind") != "bounty_payment":
-            continue
-        repo = data.get("repo")
-        issue_number = data.get("issue_number")
-        issue_url = None
-        if isinstance(repo, str) and isinstance(issue_number, int):
-            issue_url = f"https://github.com/{repo}/issues/{issue_number}"
-        accepted_work.append(
-            {
-                "ledger_sequence": entry.sequence,
-                "ledger_url": f"/ledger/{entry.sequence}",
-                "proof_hash": proof.hash,
-                "proof_url": f"/proofs/{proof.hash}",
-                "amount_mrwk": format_mrwk(entry.amount_microunits),
-                "submission_url": data.get("submission_url"),
-                "issue_url": issue_url,
-                "repo": repo,
-                "issue_number": issue_number,
-                "bounty_id": proof.bounty_id,
-                "bounty_url": _bounty_detail_url(proof.bounty_id),
-                "accepted_by": data.get("accepted_by"),
-                "created_at": entry.created_at.isoformat(),
-            }
-        )
-    return accepted_work
-
-
-def empty_accepted_summary() -> dict[str, Any]:
-    return {
-        "accepted_awards": 0,
-        "accepted_mrwk": "0",
-        "latest_ledger_sequence": None,
-        "latest_submission_url": None,
-        "latest_proof_hash": None,
-        "latest_proof_url": None,
-    }
-
-
-def safe_account_accepted_summary(session: Session, account: str) -> dict[str, Any]:
-    try:
-        return account_accepted_summary(session, account)
-    except Exception:
-        return empty_accepted_summary()
-
-
-def safe_accepted_work_for_account(session: Session, account: str) -> list[dict[str, Any]]:
-    try:
-        return accepted_work_for_account(session, account)
-    except Exception:
-        return []
-
-
-def _wallet_timestamp(value: datetime) -> str:
-    if value.tzinfo is not None:
-        value = value.replace(tzinfo=None)
-    return value.isoformat()
-
-
-def wallet_to_dict(session: Session, wallet: Wallet) -> dict[str, Any]:
-    return {
-        "address": wallet.address,
-        "public_key_hex": wallet.public_key_hex,
-        "label": wallet.label,
-        "github_login": wallet.github_login,
-        "balance_mrwk": format_mrwk(get_balance(session, wallet.address)),
-        "nonce": wallet.nonce,
-        "next_nonce": wallet.nonce + 1,
-        "created_at": _wallet_timestamp(wallet.created_at),
-    }
-
-
-def wallet_transfer_to_dict(transfer: WalletTransfer) -> dict[str, Any]:
-    return {
-        "hash": transfer.hash,
-        "type": "wallet_transfer",
-        "ledger_sequence": transfer.ledger_sequence,
-        "from_address": transfer.from_address,
-        "to_address": transfer.to_address,
-        "amount_mrwk": format_mrwk(transfer.amount_microunits),
-        "nonce": transfer.nonce,
-        "memo": transfer.memo,
-        "created_at": transfer.created_at.isoformat(),
-    }
 
 
 def _host_without_port(request: Request) -> str:
