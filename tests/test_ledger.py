@@ -45,6 +45,67 @@ def test_genesis_creates_fixed_supply_once(sqlite_url: str) -> None:
         assert verify_supply_conservation(session) is True
 
 
+def test_add_ledger_entry_rejects_malformed_public_fields(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        base_kwargs = {
+            "entry_type": "manual_adjustment",
+            "from_account": TREASURY_ACCOUNT,
+            "to_account": "github:alice",
+            "amount_microunits": 1,
+            "reference": "manual:test",
+        }
+
+        bad_cases = (
+            ("entry_type", "manual\nadjustment", "entry_type must not contain control characters"),
+            ("entry_type", "   ", "entry_type is required"),
+            ("entry_type", "x" * 41, "entry_type is too long"),
+            ("from_account", "treasury:\nmrwk", "from_account must not contain control characters"),
+            ("from_account", "x" * 129, "from_account is too long"),
+            ("to_account", "github:\nalice", "to_account must not contain control characters"),
+            ("to_account", "github:" + "a" * 122, "to_account is too long"),
+            ("reference", "manual\nref", "reference must not contain control characters"),
+            ("reference", "   ", "reference is required"),
+            ("reference", "x" * 501, "reference is too long"),
+        )
+        for field, value, message in bad_cases:
+            kwargs = {**base_kwargs, field: value}
+            with pytest.raises(LedgerError, match=message):
+                add_ledger_entry(session, **kwargs)
+
+        nullable_entry = add_ledger_entry(
+            session,
+            entry_type=" manual_adjustment ",
+            from_account=None,
+            to_account=None,
+            amount_microunits=0,
+            reference=" manual:none ",
+        )
+
+        assert nullable_entry.entry_type == "manual_adjustment"
+        assert nullable_entry.from_account is None
+        assert nullable_entry.to_account is None
+        assert nullable_entry.reference == "manual:none"
+
+        balanced_entry = add_ledger_entry(
+            session,
+            entry_type=" manual_adjustment ",
+            from_account=f" {TREASURY_ACCOUNT} ",
+            to_account=" github:alice ",
+            amount_microunits=1,
+            reference=" manual:test ",
+        )
+
+        assert balanced_entry.entry_type == "manual_adjustment"
+        assert balanced_entry.from_account == TREASURY_ACCOUNT
+        assert balanced_entry.to_account == "github:alice"
+        assert balanced_entry.reference == "manual:test"
+        assert verify_hash_chain(session) is True
+        assert verify_supply_conservation(session) is True
+
+
 def test_make_engine_accepts_windows_absolute_sqlite_url(tmp_path) -> None:
     database_path = tmp_path / "nested" / "mergework.sqlite3"
     engine = make_engine(f"sqlite:///{database_path}")

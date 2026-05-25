@@ -185,6 +185,12 @@ def _normalize_repo_name(repo: str) -> str:
     return _clean_required_text(repo, "repo", 200).lower()
 
 
+def _clean_optional_account_id(value: str | None, field: str) -> str | None:
+    if value is None:
+        return None
+    return _clean_required_text(value, field, 128)
+
+
 def _clean_proof_metadata(verifier_result: dict[str, Any]) -> dict[str, Any]:
     clean = dict(verifier_result)
     for key, value in clean.items():
@@ -379,17 +385,21 @@ def add_ledger_entry(
         raise LedgerError("amount_microunits must be an integer")
     if amount_microunits < 0:
         raise LedgerError("ledger amount cannot be negative")
-    if from_account:
-        ensure_account(session, from_account)
-    if to_account:
-        ensure_account(session, to_account)
+    clean_entry_type = _clean_required_text(entry_type, "entry_type", 40)
+    clean_from_account = _clean_optional_account_id(from_account, "from_account")
+    clean_to_account = _clean_optional_account_id(to_account, "to_account")
+    clean_reference = _clean_required_text(reference, "reference", 500)
+    if clean_from_account:
+        ensure_account(session, clean_from_account)
+    if clean_to_account:
+        ensure_account(session, clean_to_account)
     entry = LedgerEntry(
         sequence=_next_sequence(session),
-        entry_type=entry_type,
-        from_account=from_account,
-        to_account=to_account,
+        entry_type=clean_entry_type,
+        from_account=clean_from_account,
+        to_account=clean_to_account,
         amount_microunits=amount_microunits,
-        reference=reference,
+        reference=clean_reference,
         previous_hash=_previous_hash(session),
         entry_hash="",
         created_at=utc_now(),
