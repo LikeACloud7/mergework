@@ -36,6 +36,7 @@ from app.wallets import (
 TREASURY_ACCOUNT = "treasury:mrwk"
 MICRO_UNITS = 1_000_000
 GENESIS_SUPPLY_MICRO = 100_000_000 * MICRO_UNITS
+SQLITE_INTEGER_MAX = 2**63 - 1
 GITHUB_LOGIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$")
 CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 MRWK_AMOUNT_RE = re.compile(r"^-?\d+(?:\.\d+)?$")
@@ -420,6 +421,8 @@ def create_bounty(
         raise LedgerError("max_awards is too large")
     reserved = reward * max_awards
     clean_repo = _normalize_repo_name(repo)
+    if issue_number > SQLITE_INTEGER_MAX:
+        raise LedgerError("issue_number is too large")
     existing_bounty = find_bounty_by_issue(session, clean_repo, issue_number)
     if existing_bounty is not None:
         raise LedgerError("bounty already exists for issue")
