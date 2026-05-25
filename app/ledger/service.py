@@ -82,7 +82,9 @@ def canonical_json(data: dict[str, Any]) -> str:
 
 
 def validate_public_url(url: str) -> str:
-    if any(ord(char) < 32 or ord(char) == 127 for char in url):
+    if not isinstance(url, str):
+        raise LedgerError("URL must be a string")
+    if CONTROL_CHAR_RE.search(url):
         raise LedgerError("URL must not contain control characters")
     clean = url.strip()
     if len(clean) > 500:
@@ -127,6 +129,8 @@ def reserve_account_for_bounty(bounty_id: int) -> str:
 
 
 def _normalize_github_login(github_login: str) -> str:
+    if not isinstance(github_login, str):
+        raise LedgerError("github login must be a string")
     normalized = github_login.strip().lower()
     if not GITHUB_LOGIN_RE.fullmatch(normalized):
         raise LedgerError("invalid github login")
@@ -154,6 +158,8 @@ def resolve_payout_account(session: Session, to_account: str) -> str:
 def _clean_optional_text(value: str | None, field: str, max_length: int) -> str | None:
     if value is None:
         return None
+    if not isinstance(value, str):
+        raise LedgerError(f"{field} must be a string")
     if CONTROL_CHAR_RE.search(value):
         raise LedgerError(f"{field} must not contain control characters")
     clean = value.strip()
@@ -163,6 +169,8 @@ def _clean_optional_text(value: str | None, field: str, max_length: int) -> str 
 
 
 def _clean_required_text(value: str, field: str, max_length: int) -> str:
+    if not isinstance(value, str):
+        raise LedgerError(f"{field} must be a string")
     if CONTROL_CHAR_RE.search(value):
         raise LedgerError(f"{field} must not contain control characters")
     clean = value.strip()
@@ -269,7 +277,10 @@ def register_wallet(
         raise LedgerError(str(exc)) from exc
     public_key = public_key_hex.strip().lower()
     existing = session.get(Wallet, address)
-    normalized_login = _normalize_github_login(github_login) if github_login else None
+    if github_login is None or github_login == "":
+        normalized_login = None
+    else:
+        normalized_login = _normalize_github_login(github_login)
     clean_label = _clean_optional_text(label, "wallet label", 160)
     if normalized_login:
         linked = session.scalar(

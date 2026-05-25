@@ -119,6 +119,67 @@ def test_resolve_payout_account_accepts_mixed_case_prefixes(sqlite_url: str) -> 
         assert resolve_payout_account(session, mixed_wallet) == wallet.address
 
 
+def test_bounty_service_rejects_non_string_text_fields(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+
+    base_bounty = {
+        "repo": "ramimbo/mergework",
+        "issue_number": 9,
+        "issue_url": "https://github.com/ramimbo/mergework/issues/9",
+        "title": "Validate text fields",
+        "reward_mrwk": "10",
+        "acceptance": "Accepted label",
+    }
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        for field, value, message in (
+            ("repo", 123, "repo must be a string"),
+            ("issue_url", 123, "URL must be a string"),
+            ("title", 123, "title must be a string"),
+            ("acceptance", 123, "acceptance must be a string"),
+        ):
+            payload = dict(base_bounty)
+            payload[field] = value
+            with pytest.raises(LedgerError, match=message):
+                create_bounty(session, **payload)
+
+        bounty = create_bounty(session, **base_bounty)
+
+        with pytest.raises(LedgerError, match="URL must be a string"):
+            pay_bounty(
+                session,
+                bounty_id=bounty.id,
+                to_account="github:alice",
+                submission_url=123,
+                accepted_by="maintainer",
+                verifier_result={"label": "mrwk:accepted"},
+            )
+        with pytest.raises(LedgerError, match="accepted_by must be a string"):
+            pay_bounty(
+                session,
+                bounty_id=bounty.id,
+                to_account="github:alice",
+                submission_url="https://github.com/ramimbo/mergework/pull/9",
+                accepted_by=123,
+                verifier_result={"label": "mrwk:accepted"},
+            )
+        with pytest.raises(LedgerError, match="closed_by must be a string"):
+            close_bounty(
+                session,
+                bounty_id=bounty.id,
+                closed_by=123,
+                reference="https://github.com/ramimbo/mergework/issues/9#close",
+            )
+        with pytest.raises(LedgerError, match="URL must be a string"):
+            close_bounty(
+                session,
+                bounty_id=bounty.id,
+                closed_by="maintainer",
+                reference=123,
+            )
+
+
 def test_create_bounty_rejects_non_positive_issue_number(sqlite_url: str) -> None:
     create_schema(sqlite_url)
 

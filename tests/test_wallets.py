@@ -68,6 +68,21 @@ def test_wallet_registration_rejects_label_control_characters(sqlite_url: str) -
         register_wallet(session, public_key_hex=public_hex, label="Main\nWallet")
 
 
+def test_wallet_registration_rejects_non_string_label_and_github_login(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    _, public_hex, _ = _keypair()
+
+    with session_scope(sqlite_url) as session:
+        for bad_label in (123, 0, False):
+            with pytest.raises(LedgerError, match="wallet label must be a string"):
+                register_wallet(session, public_key_hex=public_hex, label=bad_label)
+        for bad_login in (123, 0, False):
+            with pytest.raises(LedgerError, match="github login must be a string"):
+                register_wallet(session, public_key_hex=public_hex, github_login=bad_login)
+
+
 def test_signed_wallet_transfer_moves_balance_and_rejects_replay(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     sender_key, sender_public, sender_address = _keypair()
