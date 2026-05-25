@@ -302,6 +302,21 @@ button { cursor: pointer; color: white; background: var(--accent); border-color:
   padding: 10px 14px;
 }
 .inline-form { margin-top: 18px; max-width: 180px; }
+.webhook-table {
+  display: table;
+  table-layout: fixed;
+  width: 100%;
+}
+.webhook-table th,
+.webhook-table td {
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+.webhook-table code {
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-word;
+}
 .wallet-tool form + h2 { margin-top: 34px; }
 @media (max-width: 640px) {
   header { align-items: flex-start; flex-direction: column; }
@@ -314,4 +329,29 @@ button { cursor: pointer; color: white; background: var(--accent); border-color:
   .ledger-card-grid { grid-template-columns: 1fr; }
   .ledger-field--reference,
   .ledger-field--hash { grid-column: auto; }
+  .webhook-table,
+  .webhook-table tbody,
+  .webhook-table tr,
+  .webhook-table td {
+    display: block;
+    width: 100%;
+  }
+  .webhook-table thead {
+    display: none;
+  }
+  .webhook-table tr {
+    border-bottom: 1px solid var(--line);
+    padding: 8px 10px;
+  }
+  .webhook-table td {
+    border-bottom: 0;
+    padding: 4px 0;
+  }
+  .webhook-table td::before {
+    color: var(--muted);
+    content: attr(data-label);
+    display: block;
+    font-size: .82rem;
+    font-weight: 700;
+  }
 }

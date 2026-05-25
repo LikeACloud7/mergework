@@ -35,7 +35,7 @@
     <button type="submit">Filter</button>
   </form>
   {% if webhook_events %}
-  <table>
+  <table class="webhook-table">
     <thead>
       <tr>
         <th>Delivery</th>
@@ -48,11 +48,11 @@
     <tbody>
       {% for event in webhook_events %}
       <tr>
-        <td><code>{{ event.delivery_id }}</code></td>
-        <td>{{ event.event_type }}</td>
-        <td><code>{{ event.processed_status }}</code></td>
-        <td><code>{{ event.payload_hash }}</code></td>
-        <td>{{ event.created_at.isoformat() }}</td>
+        <td data-label="Delivery"><code>{{ event.delivery_id }}</code></td>
+        <td data-label="Event">{{ event.event_type }}</td>
+        <td data-label="Status"><code>{{ event.processed_status }}</code></td>
+        <td data-label="Payload hash"><code>{{ event.payload_hash }}</code></td>
+        <td data-label="Created">{{ event.created_at.isoformat() }}</td>
       </tr>
       {% endfor %}
     </tbody>
