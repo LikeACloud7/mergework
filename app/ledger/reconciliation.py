@@ -14,7 +14,7 @@ from app.models import Bounty, LedgerEntry, Proof, Submission
 
 GITHUB_SOURCE_PATH_RE = re.compile(
     r"/(?P<owner>[^/]+)/(?P<repo>[^/]+)/(?P<kind>issues|pull)/(?P<number>\d+)"
-    r"(?P<view>/(?:files|commits|checks|conversation))?/?",
+    r"(?P<view>/(?:files|commits|checks))?/?",
     re.IGNORECASE,
 )
 
@@ -157,6 +157,7 @@ def _canonical_source_url(url: str) -> str:
                 f"{match['kind'].lower()}/{match['number']}"
             )
             query = ""
+            fragment = ""
     return urlunsplit((parsed.scheme.lower(), netloc, path, query, fragment))
 
 

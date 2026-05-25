@@ -564,12 +564,14 @@ def test_duplicate_accepted_source_urls_groups_distinct_accepted_submissions(
             reward_mrwk="5",
             acceptance="Maintainer applies mrwk:accepted.",
         )
-        source_url = "https://github.com/ramimbo/mergework/pull/281#discussion_r1"
+        source_url = "https://github.com/ramimbo/mergework/pull/281"
         session.add_all(
             [
                 Submission(
                     bounty_id=first_bounty.id,
                     submitter_account="github:alice",
+                    # The bad port is deliberate; this also exercises case,
+                    # path, query, and fragment canonicalization in one URL.
                     url="https://github.com:bad/Ramimbo/MergeWork/PULL/281/files/"
                     "?diff=split#discussion_r1",
                     status="accepted",
