@@ -240,3 +240,62 @@ def test_submission_quality_gate_warns_when_live_payability_is_unverified(
     text_output = capsys.readouterr().out
     assert "Warning: MergeWork API bounty data unavailable: offline" in text_output
     assert "referenced bounty #319 payability could not be verified" in text_output
+
+
+def test_submission_quality_gate_fails_closed_bounty_before_unverified_warning() -> None:
+    result = evaluate_submission(
+        {
+            "submission_text": "Summary: work\n\nRefs #319\n\nValidation: pytest passed",
+            "bounties": [{"number": 319, "state": "CLOSED", "payability_verified": False}],
+            "pull_requests": [],
+        }
+    )
+
+    assert result["status"] == "fail"
+    assert {
+        "name": "bounty_payable",
+        "status": "fail",
+        "message": "referenced bounty #319 is closed or exhausted",
+    } in result["checks"]
+    assert {
+        "name": "bounty_payable",
+        "status": "warn",
+        "message": "referenced bounty #319 payability could not be verified",
+    } not in result["checks"]
+
+
+def test_submission_quality_gate_treats_incomplete_api_bounty_as_unverified(
+    monkeypatch,
+) -> None:
+    def fake_run(args, **kwargs):
+        if args[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="[]", stderr="")
+        if args[:3] == ["gh", "issue", "list"]:
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout=json.dumps([{"number": 319, "title": "MRWK bounty: gate", "state": "OPEN"}]),
+                stderr="",
+            )
+        raise AssertionError(args)
+
+    monkeypatch.setattr(submission_quality_gate.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        submission_quality_gate,
+        "_load_api_bounties",
+        lambda repo, api_host: {319: {"number": 319, "state": "OPEN", "awards_remaining": None}},
+    )
+
+    data = submission_quality_gate._load_live_context(
+        "ramimbo/mergework",
+        "Summary: work\n\nRefs #319\n\nValidation: pytest passed",
+        "https://api.example.test",
+    )
+    result = evaluate_submission(data)
+
+    assert result["status"] == "warn"
+    assert {
+        "name": "bounty_payable",
+        "status": "warn",
+        "message": "referenced bounty #319 payability could not be verified",
+    } in result["checks"]

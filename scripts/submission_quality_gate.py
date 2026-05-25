@@ -132,6 +132,14 @@ def evaluate_submission(data: dict[str, Any]) -> dict[str, Any]:
                     f"referenced bounty #{bounty_ref} was not available in input",
                 )
             )
+        elif not _bounty_is_payable(bounty):
+            checks.append(
+                _check(
+                    "bounty_payable",
+                    "fail",
+                    f"referenced bounty #{bounty_ref} is closed or exhausted",
+                )
+            )
         elif not _bounty_payability_verified(bounty):
             checks.append(
                 _check(
@@ -140,17 +148,9 @@ def evaluate_submission(data: dict[str, Any]) -> dict[str, Any]:
                     f"referenced bounty #{bounty_ref} payability could not be verified",
                 )
             )
-        elif _bounty_is_payable(bounty):
-            checks.append(
-                _check("bounty_payable", "pass", f"referenced bounty #{bounty_ref} is open")
-            )
         else:
             checks.append(
-                _check(
-                    "bounty_payable",
-                    "fail",
-                    f"referenced bounty #{bounty_ref} is closed or exhausted",
-                )
+                _check("bounty_payable", "pass", f"referenced bounty #{bounty_ref} is open")
             )
 
     if SUMMARY_RE.search(text):
@@ -288,17 +288,22 @@ def _load_live_context(repo: str, submission_text: str, api_host: str) -> dict[s
     except RuntimeError as exc:
         api_bounties = {}
         load_warnings.append(str(exc))
-    bounties = [
-        {
-            "number": issue["number"],
-            "title": issue.get("title"),
-            "state": issue.get("state"),
-            "awards_remaining": api_bounties.get(issue["number"], {}).get("awards_remaining"),
-            "payability_verified": issue["number"] in api_bounties,
-        }
-        for issue in issues
-        if "bounty" in str(issue.get("title", "")).lower()
-    ]
+    bounties = []
+    for issue in issues:
+        if "bounty" not in str(issue.get("title", "")).lower():
+            continue
+        api_bounty = api_bounties.get(issue["number"], {})
+        awards_remaining = api_bounty.get("awards_remaining")
+        bounties.append(
+            {
+                "number": issue["number"],
+                "title": issue.get("title"),
+                "state": issue.get("state"),
+                "awards_remaining": awards_remaining,
+                "payability_verified": issue["number"] in api_bounties
+                and awards_remaining is not None,
+            }
+        )
     data = {"submission_text": submission_text, "bounties": bounties, "pull_requests": prs}
     if load_warnings:
         data["load_warning"] = "; ".join(load_warnings)
