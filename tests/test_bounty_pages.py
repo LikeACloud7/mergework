@@ -73,6 +73,59 @@ def test_bounties_page_renders_and_filters_by_status(sqlite_url: str) -> None:
     assert 'href="/bounties?status=paid" aria-current="page"' in paid_rows_uppercase.text
 
 
+def test_bounties_summary_api_matches_public_list_filters(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        open_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=62,
+            issue_url="https://github.com/ramimbo/mergework/issues/62",
+            title="Open discovery bounty",
+            reward_mrwk="25",
+            max_awards=3,
+            acceptance="Discovery summary should show remaining public award slots.",
+        )
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=63,
+            issue_url="https://github.com/ramimbo/mergework/issues/63",
+            title="Docs cleanup bounty",
+            reward_mrwk="40",
+            acceptance="Docs cleanup.",
+        )
+        pay_bounty(
+            session,
+            bounty_id=open_bounty.id,
+            to_account="github:contributor",
+            submission_url="https://github.com/ramimbo/mergework/pull/62",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    summary = client.get("/api/v1/bounties/summary?q=discovery").json()
+    assert summary == {
+        "bounties_shown": 1,
+        "open_awards": 2,
+        "open_pool_mrwk": "50",
+    }
+
+    paid_summary = client.get("/api/v1/bounties/summary?status=paid&q=discovery").json()
+    assert paid_summary == {
+        "bounties_shown": 0,
+        "open_awards": 0,
+        "open_pool_mrwk": "0",
+    }
+
+    invalid = client.get("/api/v1/bounties/summary?status=bogus")
+    assert invalid.status_code == 400
+    assert invalid.json()["detail"] == "status must be one of: open, paid, closed"
+
+
 def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
