@@ -784,11 +784,11 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             return wallet_to_dict(session, wallet)
 
-    @app.get("/api/v1/wallets/register")
+    @app.get("/api/v1/wallets/register", include_in_schema=False)
     def api_register_wallet_get() -> None:
         post_only_route()
 
-    @app.get("/api/v1/wallets/link-github")
+    @app.get("/api/v1/wallets/link-github", include_in_schema=False)
     def api_link_wallet_github_get() -> None:
         post_only_route()
 
