@@ -4,7 +4,7 @@ import ipaddress
 import os
 import re
 from dataclasses import dataclass
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 
 @dataclass(frozen=True)
@@ -82,8 +82,16 @@ def _is_valid_dns_hostname(hostname: str) -> bool:
     return all(DNS_LABEL_RE.fullmatch(label) for label in labels)
 
 
-def _sqlite_database_errors(database_url: str) -> list[str]:
-    parsed = urlparse(database_url)
+def _postgres_query_includes_host(query: str) -> bool:
+    return any(value.strip() for value in parse_qs(query, keep_blank_values=True).get("host", ()))
+
+
+def _database_url_errors(database_url: str) -> list[str]:
+    try:
+        parsed = urlparse(database_url)
+    except ValueError:
+        return ["MERGEWORK_DATABASE_URL must include a valid database host"]
+
     is_sqlite = parsed.scheme == "sqlite" or parsed.scheme.startswith("sqlite+")
     is_postgres = (
         parsed.scheme in {"postgres", "postgresql"}
@@ -92,8 +100,28 @@ def _sqlite_database_errors(database_url: str) -> list[str]:
     )
     if not (is_sqlite or is_postgres):
         return ["MERGEWORK_DATABASE_URL must use sqlite, postgresql, or postgres"]
-    if not is_sqlite:
-        return []
+    if is_postgres:
+        errors: list[str] = []
+        try:
+            hostname = parsed.hostname
+        except ValueError:
+            errors.append("MERGEWORK_DATABASE_URL must include a valid database host")
+            hostname = None
+        if not hostname and not _postgres_query_includes_host(parsed.query):
+            errors.append("MERGEWORK_DATABASE_URL must include a database host")
+
+        authority = parsed.netloc.rsplit("@", 1)[-1]
+        try:
+            port = parsed.port
+        except ValueError:
+            errors.append("MERGEWORK_DATABASE_URL must include a valid database port")
+        else:
+            if port is None and authority.endswith(":"):
+                errors.append("MERGEWORK_DATABASE_URL must include a valid database port")
+
+        if parsed.path in ("", "/"):
+            errors.append("MERGEWORK_DATABASE_URL must include a database name")
+        return errors
 
     sqlite_path = parsed.path
     is_memory = database_url == "sqlite:///:memory:" or sqlite_path == "/:memory:"
@@ -111,7 +139,7 @@ def _sqlite_database_errors(database_url: str) -> list[str]:
 def validate_deploy_settings(settings: Settings) -> list[str]:
     errors: list[str] = []
     errors.extend(_required_env_value_errors("MERGEWORK_DATABASE_URL", settings.database_url))
-    errors.extend(_sqlite_database_errors(settings.database_url))
+    errors.extend(_database_url_errors(settings.database_url))
     errors.extend(_secret_errors("MERGEWORK_GITHUB_WEBHOOK_SECRET", settings.github_webhook_secret))
     errors.extend(
         _secret_errors("MERGEWORK_GITHUB_OAUTH_CLIENT_SECRET", settings.github_oauth_client_secret)

@@ -111,6 +111,40 @@ def test_deploy_readiness_rejects_non_persistent_sqlite_database_urls() -> None:
     assert "MERGEWORK_DATABASE_URL must use a persistent sqlite file" in empty_errors
 
 
+def test_deploy_readiness_rejects_malformed_postgres_database_urls() -> None:
+    missing_host_errors = validate_deploy_settings(
+        _settings(database_url="postgresql:///mergework")
+    )
+    empty_host_errors = validate_deploy_settings(
+        _settings(database_url="postgresql://:5432/mergework")
+    )
+    missing_database_errors = validate_deploy_settings(
+        _settings(database_url="postgresql://db.example.test")
+    )
+    empty_database_errors = validate_deploy_settings(
+        _settings(database_url="postgresql://db.example.test/")
+    )
+    invalid_port_errors = validate_deploy_settings(
+        _settings(database_url="postgresql://db.example.test:notaport/mergework")
+    )
+    out_of_range_port_errors = validate_deploy_settings(
+        _settings(database_url="postgresql://db.example.test:70000/mergework")
+    )
+    empty_port_errors = validate_deploy_settings(
+        _settings(database_url="postgresql://db.example.test:/mergework")
+    )
+    unmatched_bracket_errors = validate_deploy_settings(_settings(database_url="postgresql://[::1"))
+
+    assert "MERGEWORK_DATABASE_URL must include a database host" in missing_host_errors
+    assert "MERGEWORK_DATABASE_URL must include a database host" in empty_host_errors
+    assert "MERGEWORK_DATABASE_URL must include a database name" in missing_database_errors
+    assert "MERGEWORK_DATABASE_URL must include a database name" in empty_database_errors
+    assert "MERGEWORK_DATABASE_URL must include a valid database port" in invalid_port_errors
+    assert "MERGEWORK_DATABASE_URL must include a valid database port" in out_of_range_port_errors
+    assert "MERGEWORK_DATABASE_URL must include a valid database port" in empty_port_errors
+    assert "MERGEWORK_DATABASE_URL must include a valid database host" in unmatched_bracket_errors
+
+
 def test_deploy_readiness_rejects_database_url_missing_whitespace_or_control() -> None:
     missing_errors = validate_deploy_settings(_settings(database_url=""))
     blank_errors = validate_deploy_settings(_settings(database_url="   "))
@@ -130,6 +164,8 @@ def test_deploy_readiness_rejects_database_url_missing_whitespace_or_control() -
 
 
 def test_deploy_readiness_accepts_absolute_sqlite_and_external_database_urls() -> None:
+    socket_database_url = "postgresql://mergework:password@/mergework?host=/var/run/postgresql"
+
     assert (
         validate_deploy_settings(
             _settings(database_url="sqlite:////srv/mergework/data/app.sqlite3")
@@ -165,6 +201,7 @@ def test_deploy_readiness_accepts_absolute_sqlite_and_external_database_urls() -
         )
         == []
     )
+    assert validate_deploy_settings(_settings(database_url=socket_database_url)) == []
 
 
 def test_deploy_readiness_rejects_malformed_database_url_schemes() -> None:
