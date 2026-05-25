@@ -102,6 +102,8 @@ def _database_url_errors(database_url: str) -> list[str]:
         return ["MERGEWORK_DATABASE_URL must use sqlite, postgresql, or postgres"]
     if is_postgres:
         errors: list[str] = []
+        authority = parsed.netloc.rsplit("@", 1)[-1]
+        has_bracketed_host = authority.startswith("[")
         try:
             hostname = parsed.hostname
         except ValueError:
@@ -109,8 +111,13 @@ def _database_url_errors(database_url: str) -> list[str]:
             hostname = None
         if not hostname and not _postgres_query_includes_host(parsed.query):
             errors.append("MERGEWORK_DATABASE_URL must include a database host")
+        elif hostname:
+            try:
+                ipaddress.ip_address(hostname)
+            except ValueError:
+                if has_bracketed_host or not _is_valid_dns_hostname(hostname):
+                    errors.append("MERGEWORK_DATABASE_URL must include a valid database host")
 
-        authority = parsed.netloc.rsplit("@", 1)[-1]
         try:
             port = parsed.port
         except ValueError:

@@ -133,6 +133,12 @@ def test_deploy_readiness_rejects_malformed_postgres_database_urls() -> None:
     empty_port_errors = validate_deploy_settings(
         _settings(database_url="postgresql://db.example.test:/mergework")
     )
+    whitespace_host_errors = validate_deploy_settings(
+        _settings(database_url="postgresql://bad host/mergework")
+    )
+    underscore_host_errors = validate_deploy_settings(
+        _settings(database_url="postgresql://db_example.test/mergework")
+    )
     unmatched_bracket_errors = validate_deploy_settings(_settings(database_url="postgresql://[::1"))
 
     assert "MERGEWORK_DATABASE_URL must include a database host" in missing_host_errors
@@ -142,6 +148,8 @@ def test_deploy_readiness_rejects_malformed_postgres_database_urls() -> None:
     assert "MERGEWORK_DATABASE_URL must include a valid database port" in invalid_port_errors
     assert "MERGEWORK_DATABASE_URL must include a valid database port" in out_of_range_port_errors
     assert "MERGEWORK_DATABASE_URL must include a valid database port" in empty_port_errors
+    assert "MERGEWORK_DATABASE_URL must include a valid database host" in whitespace_host_errors
+    assert "MERGEWORK_DATABASE_URL must include a valid database host" in underscore_host_errors
     assert "MERGEWORK_DATABASE_URL must include a valid database host" in unmatched_bracket_errors
 
 
