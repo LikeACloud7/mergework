@@ -111,6 +111,14 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
     assert issue_search.status_code == 200
     assert [row["issue_number"] for row in issue_search.json()] == [65]
 
+    oversized_issue_search = client.get("/api/v1/bounties", params={"q": "9" * 40})
+    assert oversized_issue_search.status_code == 200
+    assert oversized_issue_search.json() == []
+
+    oversized_issue_page = client.get("/bounties", params={"q": "9" * 40})
+    assert oversized_issue_page.status_code == 200
+    assert "No bounties yet." in oversized_issue_page.text
+
     percent_search = client.get("/api/v1/bounties?q=%25")
     assert percent_search.status_code == 200
     assert [row["issue_number"] for row in percent_search.json()] == [66]
