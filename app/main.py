@@ -358,7 +358,14 @@ def _oauth_configured(settings: Settings) -> bool:
 
 
 def _safe_next_path(next_path: str | None) -> str:
-    if not next_path or not next_path.startswith("/") or next_path.startswith("//"):
+    if (
+        not next_path
+        or not next_path.startswith("/")
+        or next_path.startswith("//")
+        or len(next_path) > 2048
+        or "\\" in next_path
+        or any(ord(char) < 32 or 127 <= ord(char) < 160 for char in next_path)
+    ):
         return "/me"
     return next_path
 

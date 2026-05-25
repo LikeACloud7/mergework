@@ -25,7 +25,7 @@ from app.ledger.service import (
     register_wallet,
     validate_public_url,
 )
-from app.main import _signed_value, create_app
+from app.main import _safe_next_path, _signed_value, create_app
 from app.models import LedgerEntry, WebhookEvent
 from app.webhooks.github import handle_github_webhook
 
@@ -474,6 +474,28 @@ def test_admin_bounty_api_accepts_multi_award_count(
     assert body["reserved_mrwk"] == "75"
     assert body["max_awards"] == 3
     assert body["awards_remaining"] == 3
+
+
+@pytest.mark.parametrize(
+    ("next_path", "expected"),
+    [
+        (None, "/me"),
+        ("", "/me"),
+        ("https://evil.example/me", "/me"),
+        ("//evil.example/me", "/me"),
+        ("/\\evil.example/me", "/me"),
+        ("/me\nLocation: https://evil.example", "/me"),
+        ("/me" + chr(0x85), "/me"),
+        ("/me\x7f", "/me"),
+        ("/" + ("a" * 2048), "/me"),
+        ("/me", "/me"),
+        ("/bounties?status=open", "/bounties?status=open"),
+    ],
+)
+def test_oauth_next_path_rejects_external_or_headerlike_paths(
+    next_path: str | None, expected: str
+) -> None:
+    assert _safe_next_path(next_path) == expected
 
 
 def test_amount_parser_rejects_non_finite_values() -> None:
