@@ -1720,7 +1720,7 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
             issue_number = int(query_text)
         except ValueError:
             return None
-        return issue_number if issue_number <= 2**63 - 1 else None
+        return issue_number if issue_number <= SQLITE_INTEGER_MAX else None
 
     def list_limit_arg(default: int = 25) -> int:
         if "limit" not in args or args.get("limit") is None:
