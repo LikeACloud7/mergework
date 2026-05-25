@@ -5,6 +5,7 @@ import json
 import re
 import subprocess
 import sys
+from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from typing import Any
 from urllib.error import URLError
@@ -18,6 +19,8 @@ EVIDENCE_RE = re.compile(
 SUMMARY_RE = re.compile(r"\b(summary|what changed|changes?)\b", re.IGNORECASE)
 GH_TIMEOUT_SECONDS = 30
 DEFAULT_API_HOST = "https://api.mrwk.ltclab.site"
+DEFAULT_MAX_MAINTAINER_AGE_DAYS = 14
+MAINTAINER_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
 
 def _check(name: str, status: str, message: str) -> dict[str, str]:
@@ -42,6 +45,59 @@ def _bounty_is_payable(raw: dict[str, Any]) -> bool:
 
 def _bounty_payability_verified(raw: dict[str, Any]) -> bool:
     return raw.get("payability_verified", True) is not False
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _isoformat_utc(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _current_time(data: dict[str, Any]) -> datetime:
+    return _parse_datetime(data.get("now")) or datetime.now(UTC)
+
+
+def _maintainer_activity_check(
+    bounty_ref: int, bounty: dict[str, Any], now: datetime
+) -> dict[str, str] | None:
+    if "last_maintainer_activity_at" not in bounty and "maintainer_activity_verified" not in bounty:
+        return None
+    if bounty.get("maintainer_activity_verified") is False:
+        return _check(
+            "maintainer_activity",
+            "warn",
+            f"recent maintainer activity for bounty #{bounty_ref} could not be verified",
+        )
+    last_activity = _parse_datetime(bounty.get("last_maintainer_activity_at"))
+    if last_activity is None:
+        return _check(
+            "maintainer_activity",
+            "warn",
+            f"recent maintainer activity for bounty #{bounty_ref} could not be verified",
+        )
+    max_age_days = int(bounty.get("max_maintainer_age_days", DEFAULT_MAX_MAINTAINER_AGE_DAYS))
+    age_days = max(0, (now - last_activity).days)
+    if age_days > max_age_days:
+        return _check(
+            "maintainer_activity",
+            "warn",
+            f"last maintainer activity for bounty #{bounty_ref} was {age_days} days ago",
+        )
+    return _check(
+        "maintainer_activity",
+        "pass",
+        f"maintainer activity for bounty #{bounty_ref} was seen {age_days} days ago",
+    )
 
 
 def _title_from_submission(text: str) -> str:
@@ -104,6 +160,7 @@ def _similar_open_prs(
 
 def evaluate_submission(data: dict[str, Any]) -> dict[str, Any]:
     text = str(data.get("submission_text") or "")
+    now = _current_time(data)
     bounties = {
         int(item["number"]): item
         for item in data.get("bounties", [])
@@ -152,6 +209,9 @@ def evaluate_submission(data: dict[str, Any]) -> dict[str, Any]:
             checks.append(
                 _check("bounty_payable", "pass", f"referenced bounty #{bounty_ref} is open")
             )
+            activity_check = _maintainer_activity_check(bounty_ref, bounty, now)
+            if activity_check is not None:
+                checks.append(activity_check)
 
     if SUMMARY_RE.search(text):
         checks.append(_check("summary_present", "pass", "summary text found"))
@@ -219,6 +279,39 @@ def _run_gh_json(args: list[str]) -> Any:
     return json.loads(completed.stdout)
 
 
+def _load_issue_maintainer_activity(repo: str, issue_number: int) -> dict[str, Any]:
+    issue = _run_gh_json(
+        [
+            "gh",
+            "issue",
+            "view",
+            str(issue_number),
+            "--repo",
+            repo,
+            "--json",
+            "author,comments,createdAt",
+        ]
+    )
+    activity_times = []
+    repo_owner = repo.split("/", 1)[0].lower()
+    issue_author = str((issue.get("author") or {}).get("login") or "").lower()
+    created_at = _parse_datetime(issue.get("createdAt"))
+    if issue_author == repo_owner and created_at is not None:
+        activity_times.append(created_at)
+    for comment in issue.get("comments") or []:
+        if str(comment.get("authorAssociation") or "").upper() not in MAINTAINER_ASSOCIATIONS:
+            continue
+        created_at = _parse_datetime(comment.get("createdAt"))
+        if created_at is not None:
+            activity_times.append(created_at)
+    if not activity_times:
+        return {"maintainer_activity_verified": False}
+    return {
+        "maintainer_activity_verified": True,
+        "last_maintainer_activity_at": _isoformat_utc(max(activity_times)),
+    }
+
+
 def _load_api_bounties(repo: str, api_host: str) -> dict[int, dict[str, Any]]:
     url = f"{api_host.rstrip('/')}/api/v1/bounties?status=open"
     try:
@@ -243,7 +336,12 @@ def _load_api_bounties(repo: str, api_host: str) -> dict[int, dict[str, Any]]:
     return bounties
 
 
-def _load_live_context(repo: str, submission_text: str, api_host: str) -> dict[str, Any]:
+def _load_live_context(
+    repo: str,
+    submission_text: str,
+    api_host: str,
+    max_maintainer_age_days: int = DEFAULT_MAX_MAINTAINER_AGE_DAYS,
+) -> dict[str, Any]:
     load_warnings: list[str] = []
     try:
         prs = _run_gh_json(
@@ -288,6 +386,7 @@ def _load_live_context(repo: str, submission_text: str, api_host: str) -> dict[s
     except RuntimeError as exc:
         api_bounties = {}
         load_warnings.append(str(exc))
+    referenced_bounties = set(_bounty_refs(submission_text))
     bounties = []
     for issue in issues:
         if "bounty" not in str(issue.get("title", "")).lower():
@@ -304,6 +403,15 @@ def _load_live_context(repo: str, submission_text: str, api_host: str) -> dict[s
                 and awards_remaining is not None,
             }
         )
+        if issue["number"] in referenced_bounties:
+            try:
+                bounties[-1].update(_load_issue_maintainer_activity(repo, issue["number"]))
+                bounties[-1]["max_maintainer_age_days"] = max_maintainer_age_days
+            except (RuntimeError, FileNotFoundError, json.JSONDecodeError) as exc:
+                bounties[-1]["maintainer_activity_verified"] = False
+                load_warnings.append(
+                    f"maintainer activity unavailable for bounty #{issue['number']}: {exc}"
+                )
     data = {"submission_text": submission_text, "bounties": bounties, "pull_requests": prs}
     if load_warnings:
         data["load_warning"] = "; ".join(load_warnings)
@@ -340,6 +448,12 @@ def main(argv: list[str] | None = None) -> int:
     source.add_argument("--text-file", help="Read submission text and live context with gh.")
     parser.add_argument("--repo", default="ramimbo/mergework")
     parser.add_argument("--api-host", default=DEFAULT_API_HOST)
+    parser.add_argument(
+        "--max-maintainer-age-days",
+        type=int,
+        default=DEFAULT_MAX_MAINTAINER_AGE_DAYS,
+        help="Warn when the referenced bounty has no maintainer activity within this many days.",
+    )
     parser.add_argument("--format", choices=["json", "text"], default="text")
     args = parser.parse_args(argv)
 
@@ -347,7 +461,12 @@ def main(argv: list[str] | None = None) -> int:
         data = _load_input(args.input)
     else:
         with open(args.text_file, encoding="utf-8") as handle:
-            data = _load_live_context(args.repo, handle.read(), args.api_host)
+            data = _load_live_context(
+                args.repo,
+                handle.read(),
+                args.api_host,
+                args.max_maintainer_age_days,
+            )
     result = evaluate_submission(data)
     if data.get("load_warning"):
         result["load_warning"] = data["load_warning"]
