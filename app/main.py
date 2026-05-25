@@ -6,8 +6,7 @@ import json
 import re
 import secrets
 import time
-from datetime import datetime
-from decimal import Decimal
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlencode, urlsplit, urlunsplit
@@ -17,23 +16,13 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.activity import (
-    accepted_work_for_account,
-    account_accepted_summary,
-    activity_to_dict,
-    safe_accepted_work_for_account,
-    safe_account_accepted_summary,
-)
 from app.config import Settings, get_settings
 from app.db import create_schema, session_scope
-from app.ledger.reconciliation import (
-    AcceptedPayoutCheck,
-    payout_reconciliation_summary,
-    reconcile_accepted_payouts,
-)
+from app.ledger.reconciliation import payout_reconciliation_summary, reconcile_accepted_payouts
 from app.ledger.service import (
     GENESIS_SUPPLY_MICRO,
     TREASURY_ACCOUNT,
@@ -53,15 +42,30 @@ from app.ledger.service import (
     submit_wallet_transfer,
     validate_public_url,
 )
+from app.mcp import handle_mcp_request
 from app.models import (
     Account,
     Bounty,
+    BountyAttempt,
     LedgerEntry,
     Proof,
     Submission,
     Wallet,
-    WalletTransfer,
     WebhookEvent,
+)
+from app.serializers import (
+    accepted_work_for_account,
+    account_accepted_summary,
+    activity_to_dict,
+    bounty_awards_to_dict,
+    bounty_list_summary,
+    bounty_to_dict,
+    ledger_to_dict,
+    payout_reconciliation_to_dict,
+    safe_accepted_work_for_account,
+    safe_account_accepted_summary,
+    wallet_to_dict,
+    wallet_transfer_to_dict,
 )
 from app.wallets import WalletError, normalize_wallet_address
 from app.webhooks.github import handle_github_webhook
@@ -104,6 +108,9 @@ API_DOCS_CSP = (
 )
 API_DOCS_PATHS = {"/api/docs", "/api/redoc"}
 SQLITE_INTEGER_MAX = 2**63 - 1
+DEFAULT_ATTEMPT_TTL_SECONDS = 24 * 60 * 60
+MIN_ATTEMPT_TTL_SECONDS = 60
+MAX_ATTEMPT_TTL_SECONDS = 7 * 24 * 60 * 60
 
 
 def _request_was_forwarded_https(request: Request) -> bool:
@@ -137,55 +144,73 @@ def _issue_number_search_value(query: str) -> int | None:
     return issue_number if issue_number <= SQLITE_INTEGER_MAX else None
 
 
-def bounty_to_dict(bounty: Bounty) -> dict[str, Any]:
-    awards_remaining = max(0, bounty.max_awards - bounty.awards_paid)
-    if bounty.status != "open":
-        awards_remaining = 0
-    available_microunits = bounty.reward_microunits * awards_remaining
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _attempt_effective_status(attempt: BountyAttempt, now: datetime) -> str:
+    if attempt.status == "active" and _as_utc(attempt.expires_at) <= now:
+        return "expired"
+    return attempt.status
+
+
+def bounty_attempt_to_dict(attempt: BountyAttempt, now: datetime | None = None) -> dict[str, Any]:
+    now = now or _utc_now()
     return {
-        "id": bounty.id,
-        "repo": bounty.repo,
-        "issue_number": bounty.issue_number,
-        "issue_url": bounty.issue_url,
-        "title": bounty.title,
-        "reward_mrwk": format_mrwk(bounty.reward_microunits),
-        "available_mrwk": format_mrwk(available_microunits),
-        "reserved_mrwk": format_mrwk(bounty.reserved_microunits),
-        "max_awards": bounty.max_awards,
-        "awards_paid": bounty.awards_paid,
-        "awards_remaining": awards_remaining,
-        "status": bounty.status,
-        "acceptance": bounty.acceptance,
-        "created_at": bounty.created_at.isoformat(),
+        "id": attempt.id,
+        "bounty_id": attempt.bounty_id,
+        "submitter_account": attempt.submitter_account,
+        "source_url": attempt.source_url,
+        "status": _attempt_effective_status(attempt, now),
+        "expires_at": _as_utc(attempt.expires_at).isoformat(),
+        "created_at": _as_utc(attempt.created_at).isoformat(),
+        "updated_at": _as_utc(attempt.updated_at).isoformat(),
     }
 
 
-def bounty_awards_to_dict(session: Session, bounty_id: int) -> list[dict[str, Any]]:
-    proofs = session.scalars(
-        select(Proof)
-        .where(Proof.bounty_id == bounty_id, Proof.kind == "bounty_payment")
-        .order_by(Proof.ledger_sequence.desc())
-    ).all()
-    awards: list[dict[str, Any]] = []
-    for proof in proofs:
-        data = json.loads(proof.public_json)
-        if not isinstance(data, dict) or data.get("kind") != "bounty_payment":
-            continue
-        proof_hash = str(proof.hash)
-        awards.append(
-            {
-                "proof_hash": proof_hash,
-                "proof_url": f"/proofs/{proof_hash}",
-                "ledger_sequence": proof.ledger_sequence,
-                "ledger_url": f"/ledger/{proof.ledger_sequence}",
-                "account": data.get("to_account"),
-                "amount_mrwk": data.get("amount_mrwk"),
-                "submission_url": data.get("submission_url"),
-                "accepted_by": data.get("accepted_by"),
-                "created_at": proof.created_at.isoformat(),
-            }
-        )
-    return awards
+def _active_attempt_conditions(bounty_id: int, now: datetime) -> tuple[Any, ...]:
+    return (
+        BountyAttempt.bounty_id == bounty_id,
+        BountyAttempt.status == "active",
+        BountyAttempt.expires_at > now,
+    )
+
+
+def bounty_attempt_warnings(session: Session, bounty: Bounty, now: datetime) -> list[str]:
+    warnings: list[str] = []
+    awards_remaining = max(0, bounty.max_awards - bounty.awards_paid)
+    if bounty.status != "open":
+        warnings.append(f"bounty is {bounty.status}")
+        awards_remaining = 0
+    if awards_remaining <= 0:
+        warnings.append("bounty has no award slots remaining")
+    active_count = session.scalar(
+        select(func.count())
+        .select_from(BountyAttempt)
+        .where(*_active_attempt_conditions(bounty.id, now))
+    )
+    if active_count and active_count > 1:
+        warnings.append(f"bounty has {active_count} active attempts")
+    return warnings
+
+
+def expire_stale_bounty_attempts(
+    session: Session, bounty_id: int, now: datetime, submitter_account: str | None = None
+) -> None:
+    query = update(BountyAttempt).where(
+        BountyAttempt.bounty_id == bounty_id,
+        BountyAttempt.status == "active",
+        BountyAttempt.expires_at <= now,
+    )
+    if submitter_account is not None:
+        query = query.where(BountyAttempt.submitter_account == submitter_account)
+    session.execute(query.values(status="expired", updated_at=now))
 
 
 def _payout_response_from_proof(proof: Proof, *, status: str) -> dict[str, Any]:
@@ -220,93 +245,6 @@ def _existing_payout_proof_for_submission(
         .where(Proof.submission_id == submission.id, Proof.kind == "bounty_payment")
         .limit(1)
     )
-
-
-def bounty_list_summary(bounties: list[dict[str, Any]]) -> dict[str, Any]:
-    open_awards = sum(int(bounty["awards_remaining"]) for bounty in bounties)
-    open_pool_microunits = sum(
-        int(Decimal(str(bounty["reward_mrwk"])) * Decimal(1_000_000))
-        * int(bounty["awards_remaining"])
-        for bounty in bounties
-    )
-    return {
-        "bounties_shown": len(bounties),
-        "open_awards": open_awards,
-        "open_pool_mrwk": format_mrwk(open_pool_microunits),
-    }
-
-
-def payout_reconciliation_to_dict(check: AcceptedPayoutCheck) -> dict[str, Any]:
-    return {
-        "status": check.status,
-        "bounty_id": check.bounty_id,
-        "bounty_issue": check.bounty_issue,
-        "submission_id": check.submission_id,
-        "submitter_account": check.submitter_account,
-        "submission_url": check.submission_url,
-        "evidence_count": len(check.evidence),
-        "evidence": [
-            {
-                "proof_hash": evidence.proof_hash,
-                "proof_url": f"/proofs/{evidence.proof_hash}",
-                "ledger_sequence": evidence.ledger_sequence,
-                "ledger_type": evidence.ledger_type,
-                "reference": evidence.reference,
-                "to_account": evidence.to_account,
-                "amount_mrwk": evidence.amount_mrwk,
-                "matches_submission": evidence.matches_submission,
-            }
-            for evidence in check.evidence
-        ],
-    }
-
-
-def ledger_to_dict(entry: LedgerEntry, proof_hash: str | None = None) -> dict[str, Any]:
-    return {
-        "sequence": entry.sequence,
-        "type": entry.entry_type,
-        "from": entry.from_account,
-        "to": entry.to_account,
-        "amount_mrwk": format_mrwk(entry.amount_microunits),
-        "reference": entry.reference,
-        "previous_hash": entry.previous_hash,
-        "entry_hash": entry.entry_hash,
-        "proof_hash": proof_hash,
-        "created_at": entry.created_at.isoformat(),
-    }
-
-
-def _wallet_timestamp(value: datetime) -> str:
-    if value.tzinfo is not None:
-        value = value.replace(tzinfo=None)
-    return value.isoformat()
-
-
-def wallet_to_dict(session: Session, wallet: Wallet) -> dict[str, Any]:
-    return {
-        "address": wallet.address,
-        "public_key_hex": wallet.public_key_hex,
-        "label": wallet.label,
-        "github_login": wallet.github_login,
-        "balance_mrwk": format_mrwk(get_balance(session, wallet.address)),
-        "nonce": wallet.nonce,
-        "next_nonce": wallet.nonce + 1,
-        "created_at": _wallet_timestamp(wallet.created_at),
-    }
-
-
-def wallet_transfer_to_dict(transfer: WalletTransfer) -> dict[str, Any]:
-    return {
-        "hash": transfer.hash,
-        "type": "wallet_transfer",
-        "ledger_sequence": transfer.ledger_sequence,
-        "from_address": transfer.from_address,
-        "to_address": transfer.to_address,
-        "amount_mrwk": format_mrwk(transfer.amount_microunits),
-        "nonce": transfer.nonce,
-        "memo": transfer.memo,
-        "created_at": transfer.created_at.isoformat(),
-    }
 
 
 def _host_without_port(request: Request) -> str:
@@ -602,6 +540,15 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             return "api-token"
         raise HTTPException(status_code=401, detail="admin token required")
 
+    def attempt_submitter_account(data: dict[str, Any], github_login: str) -> str:
+        submitter_account = f"github:{github_login}"
+        if data.get("submitter_account") is None:
+            return submitter_account
+        requested_account = _normalized_account(_required_str(data, "submitter_account"))
+        if requested_account != submitter_account:
+            raise HTTPException(status_code=403, detail="submitter_account does not match login")
+        return submitter_account
+
     @app.get("/health")
     def health() -> dict[str, Any]:
         with session_scope(db_url) as session:
@@ -737,6 +684,157 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             result = bounty_to_dict(bounty)
             result["accepted_awards"] = bounty_awards_to_dict(session, bounty.id)
             return result
+
+    @app.get("/api/v1/bounties/{bounty_id}/attempts")
+    def api_bounty_attempts(bounty_id: int, include_expired: bool = Query(False)) -> dict[str, Any]:
+        bounty_id = _positive_bounty_id(bounty_id)
+        now = _utc_now()
+        with session_scope(db_url) as session:
+            bounty = session.get(Bounty, bounty_id)
+            if bounty is None:
+                raise HTTPException(status_code=404, detail="bounty not found")
+            query = select(BountyAttempt).where(BountyAttempt.bounty_id == bounty_id)
+            if not include_expired:
+                query = query.where(*_active_attempt_conditions(bounty_id, now))
+            attempts = session.scalars(
+                query.order_by(BountyAttempt.created_at.desc(), BountyAttempt.id.desc())
+            ).all()
+            return {
+                "bounty_id": bounty_id,
+                "warnings": bounty_attempt_warnings(session, bounty, now),
+                "attempts": [bounty_attempt_to_dict(attempt, now) for attempt in attempts],
+            }
+
+    @app.post("/api/v1/bounties/{bounty_id}/attempts")
+    async def api_create_bounty_attempt(
+        bounty_id: int,
+        request: Request,
+        github_login: str = Depends(require_github_login),
+    ) -> JSONResponse:
+        bounty_id = _positive_bounty_id(bounty_id)
+        data = await _json_object(request)
+        submitter_account = attempt_submitter_account(data, github_login)
+        ttl_seconds = _optional_int(data, "ttl_seconds", DEFAULT_ATTEMPT_TTL_SECONDS)
+        if ttl_seconds < MIN_ATTEMPT_TTL_SECONDS:
+            raise HTTPException(status_code=400, detail="ttl_seconds must be at least 60")
+        if ttl_seconds > MAX_ATTEMPT_TTL_SECONDS:
+            raise HTTPException(status_code=400, detail="ttl_seconds must be no more than 604800")
+        source = _optional_str(data, "source_url").strip()
+        try:
+            source_url = validate_public_url(source) if source else None
+        except LedgerError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        now = _utc_now()
+        with session_scope(db_url) as session:
+            bounty = session.get(Bounty, bounty_id)
+            if bounty is None:
+                raise HTTPException(status_code=404, detail="bounty not found")
+            expire_stale_bounty_attempts(session, bounty_id, now, submitter_account)
+            awards_remaining = max(0, bounty.max_awards - bounty.awards_paid)
+            if bounty.status != "open" or awards_remaining <= 0:
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "status": "not_available",
+                        "bounty_id": bounty_id,
+                        "warnings": bounty_attempt_warnings(session, bounty, now),
+                    },
+                )
+            existing = session.scalar(
+                select(BountyAttempt)
+                .where(
+                    *_active_attempt_conditions(bounty_id, now),
+                    BountyAttempt.submitter_account == submitter_account,
+                )
+                .order_by(BountyAttempt.created_at.desc(), BountyAttempt.id.desc())
+                .limit(1)
+            )
+            if existing is not None:
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "status": "duplicate_active_attempt",
+                        "attempt": bounty_attempt_to_dict(existing, now),
+                        "warnings": bounty_attempt_warnings(session, bounty, now),
+                    },
+                )
+            attempt = BountyAttempt(
+                bounty_id=bounty_id,
+                submitter_account=submitter_account,
+                source_url=source_url,
+                status="active",
+                expires_at=now + timedelta(seconds=ttl_seconds),
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(attempt)
+            try:
+                session.flush()
+            except IntegrityError:
+                session.rollback()
+                bounty = session.get(Bounty, bounty_id)
+                existing = session.scalar(
+                    select(BountyAttempt)
+                    .where(
+                        *_active_attempt_conditions(bounty_id, now),
+                        BountyAttempt.submitter_account == submitter_account,
+                    )
+                    .order_by(BountyAttempt.created_at.desc(), BountyAttempt.id.desc())
+                    .limit(1)
+                )
+                if bounty is None or existing is None:
+                    raise HTTPException(
+                        status_code=409, detail="active attempt already exists"
+                    ) from None
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "status": "duplicate_active_attempt",
+                        "attempt": bounty_attempt_to_dict(existing, now),
+                        "warnings": bounty_attempt_warnings(session, bounty, now),
+                    },
+                )
+            return JSONResponse(
+                status_code=201,
+                content={
+                    "status": "registered",
+                    "attempt": bounty_attempt_to_dict(attempt, now),
+                    "warnings": bounty_attempt_warnings(session, bounty, now),
+                },
+            )
+
+    @app.post("/api/v1/bounty-attempts/{attempt_id}/release")
+    async def api_release_bounty_attempt(
+        attempt_id: int,
+        request: Request,
+        github_login: str = Depends(require_github_login),
+    ) -> dict[str, Any]:
+        if attempt_id <= 0:
+            raise HTTPException(status_code=400, detail="attempt id must be positive")
+        if attempt_id > SQLITE_INTEGER_MAX:
+            raise HTTPException(status_code=400, detail="attempt id is too large")
+        data = await _json_object(request)
+        submitter_account = attempt_submitter_account(data, github_login)
+        now = _utc_now()
+        with session_scope(db_url) as session:
+            attempt = session.get(BountyAttempt, attempt_id)
+            if attempt is None:
+                raise HTTPException(status_code=404, detail="attempt not found")
+            if attempt.submitter_account != submitter_account:
+                raise HTTPException(status_code=403, detail="submitter_account does not match")
+            effective_status = _attempt_effective_status(attempt, now)
+            if effective_status != "active":
+                return {
+                    "status": f"already_{effective_status}",
+                    "attempt": bounty_attempt_to_dict(attempt, now),
+                }
+            attempt.status = "released"
+            attempt.updated_at = now
+            session.flush()
+            return {
+                "status": "released",
+                "attempt": bounty_attempt_to_dict(attempt, now),
+            }
 
     @app.get("/api/v1/reconciliation/payouts")
     def api_payout_reconciliation(
@@ -1028,119 +1126,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.post("/mcp")
     async def mcp(request: Request) -> Any:
-        try:
-            payload = await request.json()
-        except ValueError:
-            return JSONResponse(
-                {
-                    "jsonrpc": "2.0",
-                    "id": None,
-                    "error": {"code": -32700, "message": "parse error"},
-                },
-                status_code=400,
-            )
-        if not isinstance(payload, dict):
-            return JSONResponse(
-                {
-                    "jsonrpc": "2.0",
-                    "id": None,
-                    "error": {"code": -32600, "message": "invalid request"},
-                },
-                status_code=400,
-            )
-        response_id = payload.get("id")
-        method = payload.get("method")
-        if method == "tools/list":
-            return {
-                "jsonrpc": "2.0",
-                "id": response_id,
-                "result": {
-                    "tools": [
-                        {
-                            "name": "list_bounties",
-                            "description": (
-                                "List MRWK bounties with optional status, q, and limit filters"
-                            ),
-                        },
-                        {
-                            "name": "get_bounty",
-                            "description": "Get a bounty by id, optionally with accepted awards",
-                        },
-                        {"name": "get_balance", "description": "Get an account balance"},
-                        {
-                            "name": "register_wallet",
-                            "description": "Register an MRWK wallet public key",
-                        },
-                        {"name": "get_wallet", "description": "Get an MRWK wallet by address"},
-                        {
-                            "name": "submit_wallet_transfer",
-                            "description": "Submit a signed MRWK wallet transfer",
-                        },
-                        {"name": "get_ledger_entry", "description": "Get a ledger entry"},
-                        {"name": "get_proof", "description": "Get a public proof by hash"},
-                        {
-                            "name": "submit_work_proof",
-                            "description": (
-                                "Return submission instructions, optionally for a bounty_id "
-                                "or issue_number"
-                            ),
-                        },
-                    ]
-                },
-            }
-        if method != "tools/call":
-            return {
-                "jsonrpc": "2.0",
-                "id": response_id,
-                "error": {"code": -32601, "message": "unknown method"},
-            }
-        params = payload.get("params")
-        if params is None:
-            params = {}
-        if not isinstance(params, dict):
-            return {
-                "jsonrpc": "2.0",
-                "id": response_id,
-                "error": {"code": -32602, "message": "invalid params"},
-            }
-        name = params.get("name")
-        args = params.get("arguments", {})
-        if args is None:
-            args = {}
-        if not isinstance(args, dict):
-            return {
-                "jsonrpc": "2.0",
-                "id": response_id,
-                "error": {"code": -32602, "message": "invalid params"},
-            }
-        if not isinstance(name, str):
-            return {
-                "jsonrpc": "2.0",
-                "id": response_id,
-                "error": {"code": -32602, "message": "tool name is required"},
-            }
-        try:
-            tool_result = _call_mcp_tool(db_url, name, args)
-        except (KeyError, TypeError, ValueError, LedgerError, HTTPException):
-            return {
-                "jsonrpc": "2.0",
-                "id": response_id,
-                "error": {"code": -32602, "message": "invalid tool arguments"},
-            }
-        if isinstance(tool_result, dict):
-            return {
-                "jsonrpc": "2.0",
-                "id": response_id,
-                "result": {
-                    "content": [{"type": "text", "text": json.dumps(tool_result)}],
-                    "structuredContent": tool_result,
-                },
-            }
-        return {
-            "jsonrpc": "2.0",
-            "id": response_id,
-            "result": {"content": [{"type": "text", "text": tool_result}]},
-        }
+        return await handle_mcp_request(request, db_url, _call_mcp_tool)
 
     @app.get("/", response_class=HTMLResponse)
     def hub(request: Request) -> HTMLResponse:
@@ -1506,12 +1492,21 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | 
         if isinstance(value, bool):
             raise ValueError(f"{field} must be an integer")
         if isinstance(value, int):
-            return value
-        if isinstance(value, str):
+            parsed = value
+        elif isinstance(value, str):
             clean = value.strip()
             if clean and clean.lstrip("+-").isdigit():
-                return int(clean)
-        raise ValueError(f"{field} must be an integer")
+                try:
+                    parsed = int(clean)
+                except ValueError as exc:
+                    raise ValueError(f"{field} must be an integer") from exc
+            else:
+                raise ValueError(f"{field} must be an integer")
+        else:
+            raise ValueError(f"{field} must be an integer")
+        if parsed < -SQLITE_INTEGER_MAX - 1 or parsed > SQLITE_INTEGER_MAX:
+            raise ValueError(f"{field} is too large")
+        return parsed
 
     def positive_int_arg(field: str) -> int:
         value = int_arg(field)

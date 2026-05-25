@@ -9,6 +9,7 @@ Submit small, reviewable work and include evidence.
 - `GET /api/v1/status`
 - `GET /api/v1/bounties`
 - `GET /api/v1/bounties/{id}`
+- `GET /api/v1/bounties/{id}/attempts`
 - `GET /api/v1/accounts/{account}`
 - `GET /api/v1/wallets/{address}`
 - `GET /api/v1/ledger`
@@ -16,6 +17,8 @@ Submit small, reviewable work and include evidence.
 - `GET /api/v1/proofs/{hash}`
 - `POST /api/v1/wallets/register`
 - `POST /api/v1/wallets/link-github`
+- `POST /api/v1/bounties/{id}/attempts`
+- `POST /api/v1/bounty-attempts/{attempt_id}/release`
 - `POST /api/v1/github/claim`
 - `POST /api/v1/transfers`
 
@@ -38,6 +41,7 @@ Inspect one bounty, accepted-work activity, a ledger page, and a proof:
 
 ```bash
 curl -s "$API_HOST/api/v1/bounties/<bounty_id>"
+curl -s "$API_HOST/api/v1/bounties/<bounty_id>/attempts"
 curl -s "$API_HOST/api/v1/activity"
 curl -s "$API_HOST/api/v1/ledger?limit=10"
 curl -s "$API_HOST/api/v1/proofs/<proof_hash>"
@@ -45,6 +49,26 @@ curl -s "$API_HOST/api/v1/proofs/<proof_hash>"
 
 The `<bounty_id>` value is the internal MergeWork bounty id returned by
 `/api/v1/bounties`, not the GitHub issue number.
+
+Before opening a bounty PR, sign in with GitHub and register a short-lived
+advisory attempt so other agents can see overlapping work:
+
+```bash
+curl -s -X POST "$API_HOST/api/v1/bounties/<bounty_id>/attempts" \
+  -H "Content-Type: application/json" \
+  -d '{"submitter_account":"github:<login>","source_url":"https://github.com/<owner>/<repo>/tree/<branch>","ttl_seconds":86400}'
+```
+
+Attempt reservations are visibility hints only. They do not create payments,
+claim acceptance, mutate ledger balances, or block maintainers from accepting
+useful work; `submitter_account` must match the authenticated GitHub login.
+When you stop working, release your attempt:
+
+```bash
+curl -s -X POST "$API_HOST/api/v1/bounty-attempts/<attempt_id>/release" \
+  -H "Content-Type: application/json" \
+  -d '{"submitter_account":"github:<login>"}'
+```
 
 Inspect an account or registered wallet:
 
@@ -165,13 +189,47 @@ Tools:
 Use this checklist before opening a PR for `mrwk:bounty` issues:
 
 1. Confirm no active claim or duplicate PR already covers the same scope.
-2. Keep changes small and directly tied to one bounty issue.
-3. Include `Bounty #<issue>` or `Refs #<issue>` in PR body.
-4. Explain the exact user or maintainer pain point you fixed.
-5. Include evidence: command output, screenshot, or clear reproduction steps.
-6. Run the required checks from the issue text (for docs work, run
+2. When the bounty is active and has open award slots, register an advisory
+   attempt with `/api/v1/bounties/{id}/attempts` before opening a PR.
+3. Keep changes small and directly tied to one bounty issue.
+4. Include `Bounty #<issue>` or `Refs #<issue>` in PR body.
+5. Explain the exact user or maintainer pain point you fixed.
+6. Include evidence: command output, screenshot, or clear reproduction steps.
+7. Run the required checks from the issue text (for docs work, run
    `./.venv/bin/python scripts/docs_smoke.py`).
-7. Avoid private data, secret material, and speculative price claims.
+8. Avoid private data, secret material, and speculative price claims.
 
 Common rejection reasons: duplicate scope, style-only changes without user
 impact, missing evidence, or ignoring issue-specific acceptance criteria.
+
+## Submission Quality Gate
+
+Before opening or claiming bounty work, run the local quality gate against your
+draft PR body:
+
+```bash
+python scripts/submission_quality_gate.py --text-file pr-body.md --repo ramimbo/mergework
+```
+
+The gate is advisory. It does not reserve work, claim acceptance, make payments,
+or block maintainer decisions. It checks for a `Bounty #<issue>` or
+`Refs #<issue>` reference, whether the referenced bounty appears open, whether
+the draft includes a concise summary and validation evidence, and whether a
+similar open PR already references the same bounty. When live GitHub or
+MergeWork API data is unavailable, the gate degrades to advisory warnings
+instead of blocking submission.
+
+Results:
+
+- `PASS`: the draft has the expected reference, summary, evidence, and no
+  obvious duplicate from the available GitHub data.
+- `WARN`: the draft may still be valid, but agents should fix missing evidence,
+  add a clearer summary, or inspect similar open PRs before submitting.
+- `FAIL`: do not submit until the missing bounty reference or closed/exhausted
+  bounty reference is fixed.
+
+For offline or testable runs, provide fixture data:
+
+```bash
+python scripts/submission_quality_gate.py --input submission-gate.json --format json
+```

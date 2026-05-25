@@ -97,6 +97,30 @@ Use `limit` to control the number of delivery rows returned (`1` to `200`,
 default `50`), for example:
 `/api/v1/admin/webhook-events?status=missing_submitter&limit=100`.
 
+### PR Queue Health
+
+Use the queue-health script before accepting busy bounty rounds:
+
+```bash
+python scripts/pr_queue_health.py --repo ramimbo/mergework --format text
+```
+
+Live mode requires an authenticated GitHub CLI with access to the repository.
+The command only reads PRs and issues; it does not close PRs, label issues, or
+post comments. It reports missing bounty references, closed or exhausted bounty
+references, dirty or unknown merge state, `mrwk:needs-info`, and likely duplicate
+PR scope within the same bounty issue.
+
+For offline checks, save fixture data and run:
+
+```bash
+python scripts/pr_queue_health.py --input queue.json --format json --fail-on-issues
+```
+
+`--fail-on-issues` exits nonzero when queue-health problems are found, which lets
+maintainers add the check to local release or payout workflows without requiring
+live GitHub access.
+
 ### Final Checks
 
 1. Confirm the webhook or admin API records one ledger payment for that award.

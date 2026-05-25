@@ -1,13 +1,126 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ledger.service import format_mrwk
-from app.models import LedgerEntry, Proof
+from app.ledger.reconciliation import AcceptedPayoutCheck
+from app.ledger.service import format_mrwk, get_balance
+from app.models import Bounty, LedgerEntry, Proof, Wallet, WalletTransfer
+
+
+def bounty_to_dict(bounty: Bounty) -> dict[str, Any]:
+    """Serialize a bounty row for public API and page consumers."""
+    awards_remaining = max(0, bounty.max_awards - bounty.awards_paid)
+    if bounty.status != "open":
+        awards_remaining = 0
+    available_microunits = bounty.reward_microunits * awards_remaining
+    return {
+        "id": bounty.id,
+        "repo": bounty.repo,
+        "issue_number": bounty.issue_number,
+        "issue_url": bounty.issue_url,
+        "title": bounty.title,
+        "reward_mrwk": format_mrwk(bounty.reward_microunits),
+        "available_mrwk": format_mrwk(available_microunits),
+        "reserved_mrwk": format_mrwk(bounty.reserved_microunits),
+        "max_awards": bounty.max_awards,
+        "awards_paid": bounty.awards_paid,
+        "awards_remaining": awards_remaining,
+        "status": bounty.status,
+        "acceptance": bounty.acceptance,
+        "created_at": bounty.created_at.isoformat(),
+    }
+
+
+def bounty_awards_to_dict(session: Session, bounty_id: int) -> list[dict[str, Any]]:
+    """Return accepted award proof rows for a bounty."""
+    proofs = session.scalars(
+        select(Proof)
+        .where(Proof.bounty_id == bounty_id, Proof.kind == "bounty_payment")
+        .order_by(Proof.ledger_sequence.desc())
+    ).all()
+    awards: list[dict[str, Any]] = []
+    for proof in proofs:
+        data = json.loads(proof.public_json)
+        if not isinstance(data, dict) or data.get("kind") != "bounty_payment":
+            continue
+        proof_hash = str(proof.hash)
+        awards.append(
+            {
+                "proof_hash": proof_hash,
+                "proof_url": f"/proofs/{proof_hash}",
+                "ledger_sequence": proof.ledger_sequence,
+                "ledger_url": f"/ledger/{proof.ledger_sequence}",
+                "account": data.get("to_account"),
+                "amount_mrwk": data.get("amount_mrwk"),
+                "submission_url": data.get("submission_url"),
+                "accepted_by": data.get("accepted_by"),
+                "created_at": proof.created_at.isoformat(),
+            }
+        )
+    return awards
+
+
+def bounty_list_summary(bounties: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate visible bounty rows into capacity totals."""
+    open_awards = sum(int(bounty["awards_remaining"]) for bounty in bounties)
+    open_pool_microunits = sum(
+        int(Decimal(str(bounty["reward_mrwk"])) * Decimal(1_000_000))
+        * int(bounty["awards_remaining"])
+        for bounty in bounties
+    )
+    return {
+        "bounties_shown": len(bounties),
+        "open_awards": open_awards,
+        "open_pool_mrwk": format_mrwk(open_pool_microunits),
+    }
+
+
+def payout_reconciliation_to_dict(check: AcceptedPayoutCheck) -> dict[str, Any]:
+    """Serialize a payout reconciliation check and its evidence."""
+    return {
+        "status": check.status,
+        "bounty_id": check.bounty_id,
+        "bounty_issue": check.bounty_issue,
+        "submission_id": check.submission_id,
+        "submitter_account": check.submitter_account,
+        "submission_url": check.submission_url,
+        "evidence_count": len(check.evidence),
+        "evidence": [
+            {
+                "proof_hash": evidence.proof_hash,
+                "proof_url": f"/proofs/{evidence.proof_hash}",
+                "ledger_sequence": evidence.ledger_sequence,
+                "ledger_type": evidence.ledger_type,
+                "reference": evidence.reference,
+                "to_account": evidence.to_account,
+                "amount_mrwk": evidence.amount_mrwk,
+                "matches_submission": evidence.matches_submission,
+            }
+            for evidence in check.evidence
+        ],
+    }
+
+
+def ledger_to_dict(entry: LedgerEntry, proof_hash: str | None = None) -> dict[str, Any]:
+    """Serialize a ledger entry with an optional public proof hash."""
+    return {
+        "sequence": entry.sequence,
+        "type": entry.entry_type,
+        "from": entry.from_account,
+        "to": entry.to_account,
+        "amount_mrwk": format_mrwk(entry.amount_microunits),
+        "reference": entry.reference,
+        "previous_hash": entry.previous_hash,
+        "entry_hash": entry.entry_hash,
+        "proof_hash": proof_hash,
+        "created_at": entry.created_at.isoformat(),
+    }
 
 
 def _bounty_detail_url(bounty_id: int | None) -> str | None:
@@ -72,6 +185,7 @@ def _activity_row_matches(row: dict[str, Any], query: str) -> bool:
 
 
 def activity_to_dict(session: Session, query: str | None = None) -> dict[str, Any]:
+    """Build the public activity feed and contributor totals."""
     search_query = _activity_search_query(query)
     rows = session.execute(
         select(LedgerEntry, Proof)
@@ -138,6 +252,7 @@ def activity_to_dict(session: Session, query: str | None = None) -> dict[str, An
 
 
 def account_accepted_summary(session: Session, account: str) -> dict[str, Any]:
+    """Summarize accepted work paid to one ledger account."""
     rows = session.execute(
         select(LedgerEntry, Proof)
         .join(Proof, Proof.ledger_sequence == LedgerEntry.sequence)
@@ -170,6 +285,7 @@ def account_accepted_summary(session: Session, account: str) -> dict[str, Any]:
 
 
 def accepted_work_for_account(session: Session, account: str) -> list[dict[str, Any]]:
+    """Return accepted work proof rows for one ledger account."""
     rows = session.execute(
         select(Proof, LedgerEntry)
         .join(LedgerEntry, LedgerEntry.sequence == Proof.ledger_sequence)
@@ -211,6 +327,7 @@ def accepted_work_for_account(session: Session, account: str) -> list[dict[str, 
 
 
 def empty_accepted_summary() -> dict[str, Any]:
+    """Return the stable empty shape for accepted-work summaries."""
     return {
         "accepted_awards": 0,
         "accepted_mrwk": "0",
@@ -222,6 +339,7 @@ def empty_accepted_summary() -> dict[str, Any]:
 
 
 def safe_account_accepted_summary(session: Session, account: str) -> dict[str, Any]:
+    """Return an accepted-work summary, falling back to the empty shape."""
     try:
         return account_accepted_summary(session, account)
     except Exception:
@@ -229,7 +347,43 @@ def safe_account_accepted_summary(session: Session, account: str) -> dict[str, A
 
 
 def safe_accepted_work_for_account(session: Session, account: str) -> list[dict[str, Any]]:
+    """Return accepted-work rows, falling back to an empty list."""
     try:
         return accepted_work_for_account(session, account)
     except Exception:
         return []
+
+
+def _wallet_timestamp(value: datetime) -> str:
+    if value.tzinfo is not None:
+        value = value.replace(tzinfo=None)
+    return value.isoformat()
+
+
+def wallet_to_dict(session: Session, wallet: Wallet) -> dict[str, Any]:
+    """Serialize a registered wallet and its current ledger balance."""
+    return {
+        "address": wallet.address,
+        "public_key_hex": wallet.public_key_hex,
+        "label": wallet.label,
+        "github_login": wallet.github_login,
+        "balance_mrwk": format_mrwk(get_balance(session, wallet.address)),
+        "nonce": wallet.nonce,
+        "next_nonce": wallet.nonce + 1,
+        "created_at": _wallet_timestamp(wallet.created_at),
+    }
+
+
+def wallet_transfer_to_dict(transfer: WalletTransfer) -> dict[str, Any]:
+    """Serialize a signed wallet transfer record."""
+    return {
+        "hash": transfer.hash,
+        "type": "wallet_transfer",
+        "ledger_sequence": transfer.ledger_sequence,
+        "from_address": transfer.from_address,
+        "to_address": transfer.to_address,
+        "amount_mrwk": format_mrwk(transfer.amount_microunits),
+        "nonce": transfer.nonce,
+        "memo": transfer.memo,
+        "created_at": transfer.created_at.isoformat(),
+    }
