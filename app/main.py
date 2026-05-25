@@ -285,9 +285,24 @@ def _normalized_account(account: str) -> str:
     if re.search(r"[\x00-\x1f\x7f]", account):
         raise HTTPException(status_code=400, detail="account must not contain control characters")
     clean = account.strip()
-    if clean.lower().startswith("mrwk1"):
+    lower = clean.lower()
+    if lower == TREASURY_ACCOUNT:
+        return TREASURY_ACCOUNT
+    if lower.startswith("treasury:"):
+        raise HTTPException(status_code=400, detail="treasury account must be treasury:mrwk")
+    if lower.startswith("reserve:"):
+        reserve_prefix = "reserve:bounty:"
+        if not lower.startswith(reserve_prefix):
+            raise HTTPException(
+                status_code=400, detail="reserve account must use reserve:bounty:<id>"
+            )
+        bounty_id = lower.removeprefix(reserve_prefix)
+        if not bounty_id.isdigit() or int(bounty_id) <= 0:
+            raise HTTPException(status_code=400, detail="reserve bounty id must be positive")
+        return f"{reserve_prefix}{int(bounty_id)}"
+    if lower.startswith("mrwk1"):
         return clean.lower()
-    if clean.lower().startswith("github:"):
+    if lower.startswith("github:"):
         login = clean.split(":", 1)[1].lower()
         if not GITHUB_LOGIN_RE.fullmatch(login):
             raise HTTPException(status_code=400, detail="github login must be valid")
