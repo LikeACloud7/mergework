@@ -1442,8 +1442,7 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
             )
             return json.dumps(wallet_to_dict(session, wallet))
         if name == "get_wallet":
-            address = normalize_wallet_address(str_arg("address"))
-            wallet_row = session.get(Wallet, address)
+            wallet_row = session.get(Wallet, _normalized_wallet_address(str_arg("address")))
             if wallet_row is None:
                 return "wallet not found"
             return json.dumps(wallet_to_dict(session, wallet_row))
