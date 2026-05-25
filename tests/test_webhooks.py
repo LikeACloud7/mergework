@@ -295,6 +295,52 @@ def test_accepted_label_requires_submitter_login(sqlite_url: str) -> None:
         assert event.processed_status == "missing_submitter"
 
 
+def test_accepted_issue_label_rejects_boolean_issue_number(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    body = json.dumps(
+        {
+            "action": "labeled",
+            "label": {"name": "mrwk:accepted"},
+            "issue": {
+                "number": True,
+                "html_url": "https://github.com/ramimbo/mergework/issues/1",
+                "user": {"login": "alice"},
+            },
+            "repository": {"full_name": "ramimbo/mergework"},
+            "sender": {"login": "maintainer"},
+        },
+        separators=(",", ":"),
+    ).encode()
+    headers = {
+        "X-GitHub-Delivery": "delivery-boolean-issue-number",
+        "X-GitHub-Event": "issues",
+        "X-Hub-Signature-256": _signature("secret", body),
+    }
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=1,
+            issue_url="https://github.com/ramimbo/mergework/issues/1",
+            title="Real issue one bounty",
+            reward_mrwk="25",
+            acceptance="Boolean issue numbers must not match this bounty.",
+        )
+
+    result = handle_github_webhook(
+        sqlite_url, headers, body, "secret", accepted_labelers=("maintainer",)
+    )
+
+    assert result == {"status": "missing_issue"}
+    with session_scope(sqlite_url) as session:
+        assert get_balance(session, "github:alice") == 0
+        event = session.get(WebhookEvent, "delivery-boolean-issue-number")
+        assert event is not None
+        assert event.processed_status == "missing_issue"
+
+
 def test_accepted_label_requires_sender_login(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     body = json.dumps(
