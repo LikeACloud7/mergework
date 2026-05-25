@@ -583,6 +583,7 @@ def pay_bounty(
     clean_verifier_result = _clean_proof_metadata(verifier_result)
     if "accepted_by" in clean_verifier_result:
         clean_verifier_result["accepted_by"] = clean_accepted_by
+    clean_to_account = _clean_required_text(to_account, "to_account", 128)
     clean_submission_url = validate_public_url(submission_url)
     existing_submission = session.scalar(
         select(Submission)
@@ -614,7 +615,7 @@ def pay_bounty(
 
     submission = Submission(
         bounty_id=bounty.id,
-        submitter_account=to_account,
+        submitter_account=clean_to_account,
         url=clean_submission_url,
         status="accepted",
         verifier_result=canonical_json(clean_verifier_result),
@@ -628,7 +629,7 @@ def pay_bounty(
         session,
         entry_type="bounty_payment",
         from_account=reserve_account,
-        to_account=to_account,
+        to_account=clean_to_account,
         amount_microunits=bounty.reward_microunits,
         reference=clean_submission_url,
     )
@@ -639,7 +640,7 @@ def pay_bounty(
         "issue_number": bounty.issue_number,
         "submission_url": clean_submission_url,
         "accepted_by": clean_accepted_by,
-        "to_account": to_account,
+        "to_account": clean_to_account,
         "amount_mrwk": format_mrwk(bounty.reward_microunits),
         "ledger_sequence": ledger_entry.sequence,
         "ledger_hash": ledger_entry.entry_hash,
