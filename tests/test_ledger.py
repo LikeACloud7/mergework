@@ -71,20 +71,35 @@ def test_add_ledger_entry_rejects_malformed_public_fields(sqlite_url: str) -> No
             with pytest.raises(LedgerError, match=message):
                 add_ledger_entry(session, **kwargs)
 
-        entry = add_ledger_entry(
+        nullable_entry = add_ledger_entry(
             session,
             entry_type=" manual_adjustment ",
             from_account=None,
+            to_account=None,
+            amount_microunits=0,
+            reference=" manual:none ",
+        )
+
+        assert nullable_entry.entry_type == "manual_adjustment"
+        assert nullable_entry.from_account is None
+        assert nullable_entry.to_account is None
+        assert nullable_entry.reference == "manual:none"
+
+        balanced_entry = add_ledger_entry(
+            session,
+            entry_type=" manual_adjustment ",
+            from_account=f" {TREASURY_ACCOUNT} ",
             to_account=" github:alice ",
             amount_microunits=1,
             reference=" manual:test ",
         )
 
-        assert entry.entry_type == "manual_adjustment"
-        assert entry.from_account is None
-        assert entry.to_account == "github:alice"
-        assert entry.reference == "manual:test"
+        assert balanced_entry.entry_type == "manual_adjustment"
+        assert balanced_entry.from_account == TREASURY_ACCOUNT
+        assert balanced_entry.to_account == "github:alice"
+        assert balanced_entry.reference == "manual:test"
         assert verify_hash_chain(session) is True
+        assert verify_supply_conservation(session) is True
 
 
 def test_make_engine_accepts_windows_absolute_sqlite_url(tmp_path) -> None:
