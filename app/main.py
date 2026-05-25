@@ -40,6 +40,7 @@ from app.ledger.service import (
     submit_wallet_transfer,
 )
 from app.models import Account, Bounty, LedgerEntry, Proof, Wallet, WalletTransfer
+from app.wallets import WalletError, normalize_wallet_address
 from app.webhooks.github import handle_github_webhook
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -383,6 +384,13 @@ def _positive_ledger_sequence(sequence: int) -> int:
     if sequence <= 0:
         raise HTTPException(status_code=400, detail="ledger sequence must be positive")
     return sequence
+
+
+def _normalized_wallet_address(address: str) -> str:
+    try:
+        return normalize_wallet_address(address)
+    except WalletError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _signed_value(value: str, secret: str) -> str:
@@ -786,8 +794,9 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.get("/api/v1/wallets/{address}")
     def api_wallet(address: str) -> dict[str, Any]:
+        address = _normalized_wallet_address(address)
         with session_scope(db_url) as session:
-            wallet = session.get(Wallet, address.lower())
+            wallet = session.get(Wallet, address)
             if wallet is None:
                 raise HTTPException(status_code=404, detail="wallet not found")
             return wallet_to_dict(session, wallet)
@@ -1103,8 +1112,9 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.get("/wallets/{address}", response_class=HTMLResponse)
     def wallet_page(request: Request, address: str) -> HTMLResponse:
+        address = _normalized_wallet_address(address)
         with session_scope(db_url) as session:
-            wallet = session.get(Wallet, address.lower())
+            wallet = session.get(Wallet, address)
             if wallet is None:
                 raise HTTPException(status_code=404, detail="wallet not found")
             wallet_data = wallet_to_dict(session, wallet)
