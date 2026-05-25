@@ -13,6 +13,10 @@
       <strong>{% if issue_card_url %}<a href="{{ issue_card_url }}">{{ proof.repo }} #{{ proof.issue_number }}</a>{% else %}{{ proof.repo }} #{{ proof.issue_number }}{% endif %}</strong>
     </article>
     <article>
+      <span>MergeWork bounty</span>
+      <strong><a href="/bounties/{{ proof.bounty_id }}">#{{ proof.bounty_id }}</a></strong>
+    </article>
+    <article>
       <span>Ledger entry</span>
       <strong><a href="/ledger/{{ proof.ledger_sequence }}">#{{ proof.ledger_sequence }}</a></strong>
     </article>
@@ -30,6 +34,8 @@
     <dt>Issue</dt>
     {% set issue_url = safe_public_url("https://github.com/" ~ proof.repo ~ "/issues/" ~ proof.issue_number) %}
     <dd>{% if issue_url %}<a href="{{ issue_url }}">{{ proof.repo }} #{{ proof.issue_number }}</a>{% else %}{{ proof.repo }} #{{ proof.issue_number }}{% endif %}</dd>
+    <dt>MergeWork bounty</dt>
+    <dd><a href="/bounties/{{ proof.bounty_id }}">#{{ proof.bounty_id }}</a></dd>
     <dt>Accepted by</dt>
     <dd>{{ proof.accepted_by }}</dd>
     <dt>Paid to</dt>
