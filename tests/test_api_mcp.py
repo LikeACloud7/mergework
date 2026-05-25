@@ -859,6 +859,32 @@ def test_mcp_get_bounty_rejects_non_positive_id(sqlite_url: str, bounty_id: int)
     }
 
 
+def test_mcp_get_wallet_returns_not_found_for_unregistered_wallet(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    unregistered_wallet = "mrwk1" + "a" * 40
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 13,
+            "method": "tools/call",
+            "params": {"name": "get_wallet", "arguments": {"address": unregistered_wallet}},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "jsonrpc": "2.0",
+        "id": 13,
+        "result": {"content": [{"type": "text", "text": "wallet not found"}]},
+    }
+
+
 @pytest.mark.parametrize(
     ("tool_name", "arguments", "request_id"),
     [
