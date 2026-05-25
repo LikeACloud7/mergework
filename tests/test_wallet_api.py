@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -550,6 +551,32 @@ def test_wallet_pages_do_not_require_manual_nonce(sqlite_url: str, monkeypatch) 
     assert me.count('name="private_key_hex" rows="5" autocomplete="off"') == 2
     assert "Clear this field after use. Never share your private key." in transfer
     assert "Clear this field after use. Never share your private key." in me
+
+
+def test_github_wallet_actions_clear_private_key_after_submit_attempt() -> None:
+    wallet_js = Path("app/static/wallet.js").read_text(encoding="utf-8")
+    set_result = "setText(resultSelector, result);"
+    set_error = "setText(resultSelector, error.message);"
+    finally_block = "} finally {"
+    clear_private_key = "clearPrivateKeyField(form);"
+    refresh_nonce = "await getNextNonce(address, statusSelector);"
+
+    assert "function clearPrivateKeyField(form)" in wallet_js
+    assert 'for (const action of ["link-github", "claim-github"])' in wallet_js
+    idx_set_result = wallet_js.find(set_result)
+    idx_refresh_nonce = wallet_js.find(refresh_nonce, idx_set_result)
+    idx_set_error = wallet_js.find(set_error, idx_refresh_nonce)
+    idx_finally = wallet_js.find(finally_block, idx_set_error)
+    idx_clear_private_key = wallet_js.find(clear_private_key, idx_finally)
+
+    assert -1 not in {
+        idx_set_result,
+        idx_refresh_nonce,
+        idx_set_error,
+        idx_finally,
+        idx_clear_private_key,
+    }
+    assert idx_set_result < idx_refresh_nonce < idx_set_error < idx_finally < idx_clear_private_key
 
 
 def test_reject_self_transfer(sqlite_url: str) -> None:

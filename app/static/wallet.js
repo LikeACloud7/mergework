@@ -215,6 +215,13 @@ function setupTransfer() {
   });
 }
 
+function clearPrivateKeyField(form) {
+  const privateKeyField = form.querySelector('[name="private_key_hex"]');
+  if (privateKeyField) {
+    privateKeyField.value = "";
+  }
+}
+
 function setupGithubActions() {
   const root = document.querySelector("[data-github-tool]");
   if (!root) {
@@ -248,6 +255,8 @@ function setupGithubActions() {
         await getNextNonce(address, statusSelector);
       } catch (error) {
         setText(resultSelector, error.message);
+      } finally {
+        clearPrivateKeyField(form);
       }
     });
   }
