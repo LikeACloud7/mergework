@@ -1,14 +1,22 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
+from urllib.parse import urlsplit, urlunsplit
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ledger.service import format_mrwk
 from app.models import Bounty, LedgerEntry, Proof, Submission
+
+GITHUB_SOURCE_PATH_RE = re.compile(
+    r"/(?P<owner>[^/]+)/(?P<repo>[^/]+)/(?P<kind>issues|pull)/(?P<number>\d+)"
+    r"(?P<view>/(?:files|commits|checks|conversation))?/?",
+    re.IGNORECASE,
+)
 
 PayoutReconciliationStatus = Literal[
     "paid",
@@ -40,6 +48,21 @@ class AcceptedPayoutCheck:
     evidence: tuple[PayoutEvidence, ...]
 
 
+@dataclass(frozen=True)
+class AcceptedSourceReference:
+    bounty_id: int
+    bounty_issue: str
+    submission_id: int
+    submitter_account: str
+    submission_url: str
+
+
+@dataclass(frozen=True)
+class DuplicateAcceptedSourceUrl:
+    source_url: str
+    submissions: tuple[AcceptedSourceReference, ...]
+
+
 def reconcile_accepted_payouts(session: Session) -> list[AcceptedPayoutCheck]:
     submissions = session.scalars(
         select(Submission).where(Submission.status == "accepted").order_by(Submission.id)
@@ -64,6 +87,32 @@ def reconcile_accepted_payouts(session: Session) -> list[AcceptedPayoutCheck]:
     return checks
 
 
+def duplicate_accepted_source_urls(session: Session) -> list[DuplicateAcceptedSourceUrl]:
+    rows = session.execute(
+        select(Submission, Bounty)
+        .join(Bounty, Bounty.id == Submission.bounty_id)
+        .where(Submission.status == "accepted")
+        .order_by(Submission.id)
+    ).all()
+    groups: dict[str, list[AcceptedSourceReference]] = {}
+    for submission, bounty in rows:
+        source_url = _canonical_source_url(submission.url)
+        groups.setdefault(source_url, []).append(
+            AcceptedSourceReference(
+                bounty_id=bounty.id,
+                bounty_issue=f"{bounty.repo}#{bounty.issue_number}",
+                submission_id=submission.id,
+                submitter_account=submission.submitter_account,
+                submission_url=submission.url,
+            )
+        )
+    return [
+        DuplicateAcceptedSourceUrl(source_url=source_url, submissions=tuple(submissions))
+        for source_url, submissions in groups.items()
+        if len(submissions) > 1
+    ]
+
+
 def payout_reconciliation_summary(checks: Sequence[AcceptedPayoutCheck]) -> dict[str, int]:
     summary = {
         "accepted_submissions": len(checks),
@@ -75,6 +124,37 @@ def payout_reconciliation_summary(checks: Sequence[AcceptedPayoutCheck]) -> dict
     for check in checks:
         summary[check.status] += 1
     return summary
+
+
+def duplicate_source_summary(groups: Sequence[DuplicateAcceptedSourceUrl]) -> dict[str, int]:
+    return {
+        "duplicate_source_urls": len(groups),
+        "duplicate_source_submissions": sum(len(group.submissions) for group in groups),
+    }
+
+
+def _canonical_source_url(url: str) -> str:
+    clean = url.strip()
+    parsed = urlsplit(clean)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return clean
+    host = (parsed.hostname or "").lower()
+    port = parsed.port
+    if (parsed.scheme.lower(), port) in {("http", 80), ("https", 443)}:
+        port = None
+    netloc = f"{host}:{port}" if port is not None else host
+    path = parsed.path.rstrip("/") or parsed.path
+    query = parsed.query
+    fragment = parsed.fragment
+    if host == "github.com":
+        match = GITHUB_SOURCE_PATH_RE.fullmatch(path)
+        if match:
+            path = (
+                f"/{match['owner'].lower()}/{match['repo'].lower()}/"
+                f"{match['kind'].lower()}/{match['number']}"
+            )
+            query = ""
+    return urlunsplit((parsed.scheme.lower(), netloc, path, query, fragment))
 
 
 def _payout_evidence(
