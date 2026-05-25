@@ -122,6 +122,16 @@ def test_pr_queue_health_wraps_gh_failures(monkeypatch) -> None:
         pr_queue_health._run_gh_json(["gh", "pr", "list"])
 
 
+def test_pr_queue_health_wraps_gh_timeouts(monkeypatch) -> None:
+    def fake_run(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=["gh", "pr", "list"], timeout=30)
+
+    monkeypatch.setattr(pr_queue_health.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="gh command timed out"):
+        pr_queue_health._run_gh_json(["gh", "pr", "list"])
+
+
 def test_pr_queue_health_fails_fast_when_issue_fetch_hits_cap(monkeypatch) -> None:
     def fake_run(args, **kwargs):
         if args[:3] == ["gh", "pr", "list"]:
