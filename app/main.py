@@ -156,7 +156,26 @@ def _activity_row(entry: LedgerEntry, proof: Proof) -> dict[str, Any] | None:
     }
 
 
-def activity_to_dict(session: Session) -> dict[str, Any]:
+def _activity_search_query(query: str | None) -> str:
+    return (query or "").strip().lower()
+
+
+def _activity_row_matches(row: dict[str, Any], query: str) -> bool:
+    if not query:
+        return True
+    searchable_values = (
+        row["account"],
+        row["amount_mrwk"],
+        row["submission_url"],
+        row["proof_hash"],
+        row["bounty_id"],
+        row["bounty_issue_number"],
+    )
+    return any(query in str(value or "").lower() for value in searchable_values)
+
+
+def activity_to_dict(session: Session, query: str | None = None) -> dict[str, Any]:
+    search_query = _activity_search_query(query)
     rows = session.execute(
         select(LedgerEntry, Proof)
         .join(Proof, Proof.ledger_sequence == LedgerEntry.sequence)
@@ -170,6 +189,8 @@ def activity_to_dict(session: Session) -> dict[str, Any]:
             continue
         row = _activity_row(entry, proof)
         if row is None or row["account"] is None:
+            continue
+        if not _activity_row_matches(row, search_query):
             continue
         seen_sequences.add(entry.sequence)
         recent.append(row)
@@ -210,6 +231,7 @@ def activity_to_dict(session: Session) -> dict[str, Any]:
             "accepted_mrwk": format_mrwk(total_microunits),
             "contributors": len(contributors),
         },
+        "query": search_query,
         "contributors": contributors,
         "recent": recent[:100],
     }
@@ -839,9 +861,9 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             return data
 
     @app.get("/api/v1/activity")
-    def api_activity() -> dict[str, Any]:
+    def api_activity(q: str | None = Query(None)) -> dict[str, Any]:
         with session_scope(db_url) as session:
-            return activity_to_dict(session)
+            return activity_to_dict(session, q)
 
     @app.post("/webhooks/github")
     async def github_webhook(request: Request) -> JSONResponse:
@@ -1027,8 +1049,8 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         )
 
     @app.get("/activity", response_class=HTMLResponse)
-    def activity_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "activity.html", api_activity())
+    def activity_page(request: Request, q: str | None = Query(None)) -> HTMLResponse:
+        return templates.TemplateResponse(request, "activity.html", api_activity(q))
 
     @app.get("/accounts/{account}", response_class=HTMLResponse)
     def account_page(request: Request, account: str) -> HTMLResponse:
