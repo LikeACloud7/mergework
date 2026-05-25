@@ -750,13 +750,24 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                     accepted_by=accepted_by,
                     verifier_result=verifier_result,
                 )
+                bounty = session.get(Bounty, bounty_id)
+                if bounty is None:
+                    raise LedgerError("bounty not found")
+                bounty_state = bounty_to_dict(bounty)
+                proof_payload = json.loads(proof.public_json)
             except LedgerError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             return {
                 "status": "paid",
                 "bounty_id": bounty_id,
+                "bounty_status": bounty_state["status"],
+                "awards_paid": bounty_state["awards_paid"],
+                "awards_remaining": bounty_state["awards_remaining"],
                 "to_account": to_account,
+                "submission_url": proof_payload["submission_url"],
                 "proof_hash": proof.hash,
+                "proof_url": f"/proofs/{proof.hash}",
+                "ledger_sequence": proof.ledger_sequence,
             }
 
     @app.post("/api/v1/bounties/{bounty_id}/close")

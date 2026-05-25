@@ -26,7 +26,7 @@ from app.ledger.service import (
     validate_public_url,
 )
 from app.main import _safe_next_path, _signed_value, create_app
-from app.models import LedgerEntry, WebhookEvent
+from app.models import Bounty, LedgerEntry, WebhookEvent
 from app.webhooks.github import handle_github_webhook
 
 
@@ -289,6 +289,81 @@ def test_admin_payout_api_requires_admin_token_not_cookie_auth(
     assert token_auth.json()["to_account"] == wallet_address
     with session_scope(sqlite_url) as session:
         assert get_balance(session, wallet_address) == 25_000_000
+
+
+def test_admin_payout_api_reports_award_state_and_blocks_duplicate_submission(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create_schema(sqlite_url)
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=283,
+            issue_url="https://github.com/ramimbo/mergework/issues/283",
+            title="Webhook and admin payout observability",
+            reward_mrwk="15",
+            max_awards=2,
+            acceptance="Maintainer needs visible payout state and duplicate protection.",
+        )
+        bounty_id = bounty.id
+
+    headers = {"x-mergework-admin-token": "admin-token-for-tests"}
+    first_payload = {
+        "to_account": "github:alice",
+        "submission_url": "https://github.com/ramimbo/mergework/pull/283",
+        "accepted_by": "maintainer",
+    }
+    first = client.post(f"/api/v1/bounties/{bounty_id}/pay", headers=headers, json=first_payload)
+
+    assert first.status_code == 200
+    first_body = first.json()
+    assert first_body["status"] == "paid"
+    assert first_body["bounty_id"] == bounty_id
+    assert first_body["bounty_status"] == "open"
+    assert first_body["awards_paid"] == 1
+    assert first_body["awards_remaining"] == 1
+    assert first_body["to_account"] == "github:alice"
+    assert first_body["submission_url"] == "https://github.com/ramimbo/mergework/pull/283"
+    assert first_body["proof_hash"]
+    assert first_body["proof_url"] == f"/proofs/{first_body['proof_hash']}"
+    assert isinstance(first_body["ledger_sequence"], int)
+
+    duplicate = client.post(
+        f"/api/v1/bounties/{bounty_id}/pay",
+        headers=headers,
+        json={**first_payload, "to_account": "github:carol"},
+    )
+
+    assert duplicate.status_code == 400
+    assert duplicate.json()["detail"] == "submission already paid"
+    with session_scope(sqlite_url) as session:
+        bounty = session.get(Bounty, bounty_id)
+        assert bounty is not None
+        assert bounty.awards_paid == 1
+        assert bounty.status == "open"
+        assert get_balance(session, "github:alice") == 15_000_000
+
+    final = client.post(
+        f"/api/v1/bounties/{bounty_id}/pay",
+        headers=headers,
+        json={
+            "to_account": "github:bob",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/284",
+            "accepted_by": "maintainer",
+        },
+    )
+
+    assert final.status_code == 200
+    assert final.json()["bounty_status"] == "paid"
+    assert final.json()["awards_paid"] == 2
+    assert final.json()["awards_remaining"] == 0
 
 
 def test_admin_payout_api_returns_400_for_malformed_json(
