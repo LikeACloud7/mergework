@@ -35,6 +35,27 @@ curl -s "$API_HOST/api/v1/ledger?limit=10"
 curl -s "$API_HOST/api/v1/ledger/<sequence>"
 ```
 
+Ledger entries use the internal immutable sequence number as the API path key.
+Recent-list and single-entry responses share the same shape:
+
+```json
+{
+  "sequence": 329,
+  "type": "bounty_reserve",
+  "from": "treasury:mrwk",
+  "to": "reserve:bounty:36",
+  "amount_mrwk": "500",
+  "reference": "https://github.com/ramimbo/mergework/issues/164",
+  "previous_hash": "25c9c46690780ffc5fe49a71c29c9d6343fe4ecbf9d0b98b56ce9dc5c94dd58a",
+  "entry_hash": "248e1e38f90ac42897486a2b52a938ad51f31849250c4a979358e9721ec7c64e",
+  "proof_hash": null,
+  "created_at": "2026-05-24T20:44:00.019706"
+}
+```
+
+`proof_hash` is `null` for non-proof ledger entries such as bounty reserves. It
+contains a proof hash for bounty-payment ledger entries that have a public proof.
+
 Read accepted-work activity summarized from proof-backed bounty payments:
 
 ```bash
