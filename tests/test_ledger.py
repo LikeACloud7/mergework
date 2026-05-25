@@ -11,6 +11,7 @@ from app.ledger.service import (
     GENESIS_SUPPLY_MICRO,
     TREASURY_ACCOUNT,
     LedgerError,
+    add_ledger_entry,
     canonical_json,
     close_bounty,
     create_bounty,
@@ -51,6 +52,26 @@ def test_make_engine_accepts_windows_absolute_sqlite_url(tmp_path) -> None:
         engine.dispose()
 
     assert database_path.parent.exists()
+
+
+@pytest.mark.parametrize("amount_microunits", [True, 1.5, "1"])
+def test_add_ledger_entry_rejects_non_integer_amounts(
+    sqlite_url: str, amount_microunits: object
+) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+        with pytest.raises(LedgerError, match="amount_microunits must be an integer"):
+            add_ledger_entry(
+                session,
+                entry_type="bad_amount",
+                from_account=TREASURY_ACCOUNT,
+                to_account="github:alice",
+                amount_microunits=amount_microunits,  # type: ignore[arg-type]
+                reference="test-bad-amount",
+            )
 
 
 def test_bounty_reserve_and_payout_conserve_supply(sqlite_url: str) -> None:
