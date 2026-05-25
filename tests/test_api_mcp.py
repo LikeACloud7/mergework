@@ -754,6 +754,31 @@ def test_mcp_get_proof_reports_unknown_hash(sqlite_url: str) -> None:
     assert result["result"]["content"][0]["text"] == "proof not found"
 
 
+def test_mcp_get_proof_rejects_malformed_hash(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "get_proof", "arguments": {"hash": "not-a-proof-hash"}},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "error": {"code": -32602, "message": "invalid tool arguments"},
+    }
+
+
 def test_host_specific_homepages(sqlite_url: str) -> None:
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 
