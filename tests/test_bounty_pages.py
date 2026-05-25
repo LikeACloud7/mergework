@@ -82,6 +82,15 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
             reward_mrwk="100",
             acceptance="Private admin-only cleanup.",
         )
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=66,
+            issue_url="https://github.com/ramimbo/mergework/issues/66",
+            title="Literal 100% release_note path",
+            reward_mrwk="100",
+            acceptance=r"Document C:\work\mergework examples.",
+        )
 
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 
@@ -96,6 +105,18 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
     issue_search = client.get("/api/v1/bounties?q=65")
     assert issue_search.status_code == 200
     assert [row["issue_number"] for row in issue_search.json()] == [65]
+
+    percent_search = client.get("/api/v1/bounties?q=%25")
+    assert percent_search.status_code == 200
+    assert [row["issue_number"] for row in percent_search.json()] == [66]
+
+    underscore_search = client.get("/api/v1/bounties?q=_")
+    assert underscore_search.status_code == 200
+    assert [row["issue_number"] for row in underscore_search.json()] == [66]
+
+    backslash_search = client.get("/api/v1/bounties", params={"q": "\\"})
+    assert backslash_search.status_code == 200
+    assert [row["issue_number"] for row in backslash_search.json()] == [66]
 
 
 def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:

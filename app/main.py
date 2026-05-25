@@ -517,14 +517,20 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             if query_text is not None:
                 normalized_query = query_text.strip()
                 if normalized_query:
-                    like_query = f"%{normalized_query.lower()}%"
+                    escaped_query = (
+                        normalized_query.lower()
+                        .replace("\\", "\\\\")
+                        .replace("%", "\\%")
+                        .replace("_", "\\_")
+                    )
+                    like_query = f"%{escaped_query}%"
                     issue_number = None
                     if normalized_query.isdigit():
                         issue_number = int(normalized_query)
                     text_filter = or_(
-                        func.lower(Bounty.repo).like(like_query),
-                        func.lower(Bounty.title).like(like_query),
-                        func.lower(Bounty.acceptance).like(like_query),
+                        func.lower(Bounty.repo).like(like_query, escape="\\"),
+                        func.lower(Bounty.title).like(like_query, escape="\\"),
+                        func.lower(Bounty.acceptance).like(like_query, escape="\\"),
                     )
                     if issue_number is not None:
                         text_filter = or_(text_filter, Bounty.issue_number == issue_number)
