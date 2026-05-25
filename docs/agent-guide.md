@@ -61,8 +61,8 @@ curl -s -X POST "$API_HOST/api/v1/bounties/<bounty_id>/attempts" \
 
 Attempt reservations are visibility hints only. They do not create payments,
 claim acceptance, mutate ledger balances, or block maintainers from accepting
-useful work. `submitter_account` must match the authenticated GitHub login.
-Release your attempt when you stop working:
+useful work; `submitter_account` must match the authenticated GitHub login.
+When you stop working, release your attempt:
 
 ```bash
 curl -s -X POST "$API_HOST/api/v1/bounty-attempts/<attempt_id>/release" \
@@ -189,8 +189,8 @@ Tools:
 Use this checklist before opening a PR for `mrwk:bounty` issues:
 
 1. Confirm no active claim or duplicate PR already covers the same scope.
-2. Register an advisory attempt with `/api/v1/bounties/{id}/attempts` before
-   opening a PR when the bounty is active and has open award slots.
+2. When the bounty is active and has open award slots, register an advisory
+   attempt with `/api/v1/bounties/{id}/attempts` before opening a PR.
 3. Keep changes small and directly tied to one bounty issue.
 4. Include `Bounty #<issue>` or `Refs #<issue>` in PR body.
 5. Explain the exact user or maintainer pain point you fixed.
