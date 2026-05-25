@@ -7,6 +7,8 @@ import subprocess
 import sys
 from difflib import SequenceMatcher
 from typing import Any
+from urllib.error import URLError
+from urllib.request import urlopen
 
 BOUNTY_REF_RE = re.compile(r"(?:bounty|refs?|fixes|closes)\s+#(\d+)", re.IGNORECASE)
 EVIDENCE_RE = re.compile(
@@ -14,6 +16,8 @@ EVIDENCE_RE = re.compile(
     re.IGNORECASE,
 )
 SUMMARY_RE = re.compile(r"\b(summary|what changed|changes?)\b", re.IGNORECASE)
+GH_TIMEOUT_SECONDS = 30
+DEFAULT_API_HOST = "https://api.mrwk.ltclab.site"
 
 
 def _check(name: str, status: str, message: str) -> dict[str, str]:
@@ -180,18 +184,55 @@ def evaluate_submission(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _run_gh_json(args: list[str]) -> Any:
-    completed = subprocess.run(
-        args,
-        check=True,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    command = " ".join(args)
+    try:
+        completed = subprocess.run(
+            args,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=GH_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"gh command timed out after {GH_TIMEOUT_SECONDS}s: {command}") from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            "gh command failed "
+            f"(exit {exc.returncode}): {command}\n"
+            f"stdout:\n{exc.stdout or exc.output or ''}\n"
+            f"stderr:\n{exc.stderr or ''}"
+        ) from exc
     return json.loads(completed.stdout)
 
 
-def _load_live_context(repo: str, submission_text: str) -> dict[str, Any]:
+def _load_api_bounties(repo: str, api_host: str) -> dict[int, dict[str, Any]]:
+    url = f"{api_host.rstrip('/')}/api/v1/bounties?status=open"
+    try:
+        with urlopen(url, timeout=GH_TIMEOUT_SECONDS) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, URLError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"MergeWork API bounty data unavailable: {exc}") from exc
+    if not isinstance(payload, list):
+        raise RuntimeError("MergeWork API bounty data must be a list")
+    bounties: dict[int, dict[str, Any]] = {}
+    for item in payload:
+        if not isinstance(item, dict) or item.get("repo") != repo:
+            continue
+        issue_number = item.get("issue_number")
+        if not isinstance(issue_number, int):
+            continue
+        bounties[issue_number] = {
+            "number": issue_number,
+            "state": item.get("status", "open"),
+            "awards_remaining": item.get("awards_remaining"),
+        }
+    return bounties
+
+
+def _load_live_context(repo: str, submission_text: str, api_host: str) -> dict[str, Any]:
+    load_warnings: list[str] = []
     try:
         prs = _run_gh_json(
             [
@@ -223,24 +264,32 @@ def _load_live_context(repo: str, submission_text: str) -> dict[str, Any]:
                 "number,title,state",
             ]
         )
-    except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError) as exc:
+    except (RuntimeError, FileNotFoundError, json.JSONDecodeError) as exc:
         return {
             "submission_text": submission_text,
             "bounties": [],
             "pull_requests": [],
             "load_warning": f"live GitHub data unavailable: {exc}",
         }
+    try:
+        api_bounties = _load_api_bounties(repo, api_host)
+    except RuntimeError as exc:
+        api_bounties = {}
+        load_warnings.append(str(exc))
     bounties = [
         {
             "number": issue["number"],
             "title": issue.get("title"),
             "state": issue.get("state"),
-            "awards_remaining": 1 if issue.get("state") == "OPEN" else 0,
+            "awards_remaining": api_bounties.get(issue["number"], {}).get("awards_remaining"),
         }
         for issue in issues
         if "bounty" in str(issue.get("title", "")).lower()
     ]
-    return {"submission_text": submission_text, "bounties": bounties, "pull_requests": prs}
+    data = {"submission_text": submission_text, "bounties": bounties, "pull_requests": prs}
+    if load_warnings:
+        data["load_warning"] = "; ".join(load_warnings)
+    return data
 
 
 def _load_input(path: str) -> dict[str, Any]:
@@ -270,6 +319,7 @@ def main(argv: list[str] | None = None) -> int:
     source.add_argument("--input", help="Read gate input from a JSON fixture file.")
     source.add_argument("--text-file", help="Read submission text and live context with gh.")
     parser.add_argument("--repo", default="ramimbo/mergework")
+    parser.add_argument("--api-host", default=DEFAULT_API_HOST)
     parser.add_argument("--format", choices=["json", "text"], default="text")
     args = parser.parse_args(argv)
 
@@ -277,7 +327,7 @@ def main(argv: list[str] | None = None) -> int:
         data = _load_input(args.input)
     else:
         with open(args.text_file, encoding="utf-8") as handle:
-            data = _load_live_context(args.repo, handle.read())
+            data = _load_live_context(args.repo, handle.read(), args.api_host)
     result = evaluate_submission(data)
     if data.get("load_warning"):
         result["load_warning"] = data["load_warning"]

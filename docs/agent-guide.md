@@ -189,7 +189,9 @@ The gate is advisory. It does not reserve work, claim acceptance, make payments,
 or block maintainer decisions. It checks for a `Bounty #<issue>` or
 `Refs #<issue>` reference, whether the referenced bounty appears open, whether
 the draft includes a concise summary and validation evidence, and whether a
-similar open PR already references the same bounty.
+similar open PR already references the same bounty. When live GitHub or
+MergeWork API data is unavailable, the gate degrades to advisory warnings
+instead of blocking submission.
 
 Results:
 
