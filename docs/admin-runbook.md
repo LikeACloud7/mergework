@@ -61,6 +61,11 @@ curl -X POST https://api.mrwk.ltclab.site/api/v1/bounties/<id>/pay \
 ```
 
 `to_account` must be a registered `mrwk1...` wallet or `github:{login}`.
+Successful responses include `submission_id`, `ledger_sequence`, `ledger_url`,
+`proof_hash`, and `proof_url` so operators can reconcile the payment without
+scraping the ledger. If the same bounty/submission URL is paid twice, the API
+returns `409` with `status: "already_paid"` and the existing proof links instead
+of creating another ledger entry.
 
 Manual payout checklist:
 
