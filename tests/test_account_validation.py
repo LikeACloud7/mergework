@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.db import create_schema, session_scope
-from app.ledger.service import ensure_genesis
+from app.ledger.service import create_bounty, ensure_genesis
 from app.main import create_app
 
 
@@ -110,3 +111,115 @@ def test_account_page_rejects_empty_github_login(sqlite_url: str) -> None:
     client = _setup_app(sqlite_url)
     resp = client.get("/accounts/github:%20")
     assert resp.status_code == 400
+
+
+def test_account_views_normalize_treasury_account(sqlite_url: str) -> None:
+    client = _setup_app(sqlite_url)
+
+    api_resp = client.get("/api/v1/accounts/Treasury:MRWK")
+    page_resp = client.get("/accounts/Treasury:MRWK")
+    mcp_resp = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "id": 1,
+            "params": {"name": "get_balance", "arguments": {"account": "Treasury:MRWK"}},
+        },
+    )
+
+    assert api_resp.status_code == 200
+    assert api_resp.json()["account"] == "treasury:mrwk"
+    assert api_resp.json()["exists"] is True
+    assert page_resp.status_code == 200
+    assert mcp_resp.status_code == 200
+    assert mcp_resp.json()["result"]["content"][0]["text"].startswith("treasury:mrwk: ")
+
+
+@pytest.mark.parametrize("account", ["treasury:", "treasury:ops"])
+def test_account_views_reject_malformed_treasury_accounts(sqlite_url: str, account: str) -> None:
+    client = _setup_app(sqlite_url)
+
+    api_resp = client.get(f"/api/v1/accounts/{account}")
+    page_resp = client.get(f"/accounts/{account}")
+    mcp_resp = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "id": 1,
+            "params": {"name": "get_balance", "arguments": {"account": account}},
+        },
+    )
+
+    assert api_resp.status_code == 400
+    assert page_resp.status_code == 400
+    assert mcp_resp.status_code == 200
+    assert mcp_resp.json()["error"]["code"] == -32602
+
+
+def test_account_views_accept_valid_reserve_bounty_account(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=122,
+            issue_url="https://github.com/ramimbo/mergework/issues/122",
+            title="Useful small fixes",
+            reward_mrwk="50",
+            acceptance="Accepted focused fix.",
+        )
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    api_resp = client.get("/api/v1/accounts/reserve:bounty:1")
+    page_resp = client.get("/accounts/reserve:bounty:1")
+    mcp_resp = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "id": 1,
+            "params": {"name": "get_balance", "arguments": {"account": "Reserve:Bounty:001"}},
+        },
+    )
+
+    assert api_resp.status_code == 200
+    assert api_resp.json()["account"] == "reserve:bounty:1"
+    assert api_resp.json()["exists"] is True
+    assert page_resp.status_code == 200
+    assert mcp_resp.status_code == 200
+    assert mcp_resp.json()["result"]["content"][0]["text"] == "reserve:bounty:1: 50 MRWK"
+
+
+@pytest.mark.parametrize(
+    "account",
+    [
+        "reserve:",
+        "reserve:wallet:1",
+        "reserve:bounty:",
+        "reserve:bounty:0",
+        "reserve:bounty:-1",
+        "reserve:bounty:not-a-number",
+    ],
+)
+def test_account_views_reject_malformed_reserve_accounts(sqlite_url: str, account: str) -> None:
+    client = _setup_app(sqlite_url)
+
+    api_resp = client.get(f"/api/v1/accounts/{account}")
+    page_resp = client.get(f"/accounts/{account}")
+    mcp_resp = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "id": 1,
+            "params": {"name": "get_balance", "arguments": {"account": account}},
+        },
+    )
+
+    assert api_resp.status_code == 400
+    assert page_resp.status_code == 400
+    assert mcp_resp.status_code == 200
+    assert mcp_resp.json()["error"]["code"] == -32602
