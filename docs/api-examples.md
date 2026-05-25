@@ -30,8 +30,8 @@ The bounties list returns public bounty rows. `status` can be omitted or set to
   "reward_mrwk": "100",
   "reserved_mrwk": "500",
   "max_awards": 5,
-  "awards_paid": 0,
-  "awards_remaining": 5,
+  "awards_paid": 4,
+  "awards_remaining": 1,
   "status": "open",
   "acceptance": "Focused public-facing enhancements that help contributors find bounties, inspect accepted work, or understand proof/account activity, with tests. Duplicate, marketing-only, docs-only, broad redesign, or unrelated changes do not qualify.",
   "created_at": "2026-05-24T20:44:00.015953"
@@ -39,7 +39,9 @@ The bounties list returns public bounty rows. `status` can be omitted or set to
 ```
 
 Use `id` for the single-bounty API path. Use `issue_number` and `issue_url` when
-linking back to the source GitHub issue.
+linking back to the source GitHub issue. Award counters can change as accepted
+work is paid; refresh concrete examples against the live API before relying on
+available slot counts.
 
 Read a single bounty with its internal `id` from `/api/v1/bounties`:
 
