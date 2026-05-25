@@ -424,6 +424,10 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     tools = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).json()
     assert tools["result"]["tools"][0]["name"] == "list_bounties"
     assert "status, q, and limit filters" in tools["result"]["tools"][0]["description"]
+    submit_tool = next(
+        tool for tool in tools["result"]["tools"] if tool["name"] == "submit_work_proof"
+    )
+    assert "bounty_id or issue_number" in submit_tool["description"]
 
     balance = client.post(
         "/mcp",
@@ -923,6 +927,190 @@ def test_mcp_get_proof_rejects_malformed_hash(sqlite_url: str) -> None:
     assert response.json() == {
         "jsonrpc": "2.0",
         "id": 3,
+        "error": {"code": -32602, "message": "invalid tool arguments"},
+    }
+
+
+def test_mcp_submit_work_proof_returns_bounty_specific_guidance(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=284,
+            issue_url="https://github.com/ramimbo/mergework/issues/284",
+            title="Agent MCP bounty workflow",
+            reward_mrwk="100",
+            max_awards=3,
+            acceptance="Improve MCP behavior with focused tests.",
+        )
+        bounty_id = bounty.id
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    by_issue = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "submit_work_proof",
+                "arguments": {"issue_number": 284},
+            },
+        },
+    ).json()
+    text = by_issue["result"]["content"][0]["text"]
+
+    assert "Bounty #284: Agent MCP bounty workflow" in text
+    assert f"Internal bounty id: {bounty_id}" in text
+    assert "Repository: ramimbo/mergework" in text
+    assert "Issue: https://github.com/ramimbo/mergework/issues/284" in text
+    assert "Status: open (open for submissions); awards remaining: 3 of 3" in text
+    assert "Reward: 100 MRWK per accepted award" in text
+    assert "Acceptance: Improve MCP behavior with focused tests." in text
+    assert "/claim" in text
+    assert "Do not include private keys" in text
+
+    by_id = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "submit_work_proof",
+                "arguments": {"bounty_id": bounty_id},
+            },
+        },
+    ).json()
+
+    assert by_id["result"]["content"][0]["text"] == text
+
+
+def test_mcp_submit_work_proof_keeps_generic_guidance(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "submit_work_proof", "arguments": {}},
+        },
+    ).json()
+
+    assert result["result"]["content"][0]["text"] == (
+        "Open a focused PR or issue, reference the MRWK bounty, include test evidence, "
+        "and wait for a maintainer to apply mrwk:accepted."
+    )
+
+
+def test_mcp_submit_work_proof_reports_unknown_bounty(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "submit_work_proof",
+                "arguments": {"issue_number": 999},
+            },
+        },
+    ).json()
+
+    assert result["result"]["content"][0]["text"] == "bounty not found"
+
+
+@pytest.mark.parametrize(
+    ("arguments", "request_id"),
+    [
+        ({"bounty_id": 0}, 21),
+        ({"bounty_id": True}, 22),
+        ({"issue_number": 0}, 23),
+        ({"issue_number": 1.5}, 24),
+        ({"bounty_id": 1, "issue_number": 1}, 25),
+    ],
+)
+def test_mcp_submit_work_proof_rejects_invalid_bounty_selectors(
+    sqlite_url: str, arguments: dict[str, object], request_id: int
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/call",
+            "params": {"name": "submit_work_proof", "arguments": arguments},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "error": {"code": -32602, "message": "invalid tool arguments"},
+    }
+
+
+def test_mcp_submit_work_proof_rejects_ambiguous_issue_number(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=284,
+            issue_url="https://github.com/ramimbo/mergework/issues/284",
+            title="First bounty",
+            reward_mrwk="100",
+            acceptance="First acceptance.",
+        )
+        create_bounty(
+            session,
+            repo="example/mergework",
+            issue_number=284,
+            issue_url="https://github.com/example/mergework/issues/284",
+            title="Second bounty",
+            reward_mrwk="100",
+            acceptance="Second acceptance.",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 26,
+            "method": "tools/call",
+            "params": {"name": "submit_work_proof", "arguments": {"issue_number": 284}},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "jsonrpc": "2.0",
+        "id": 26,
         "error": {"code": -32602, "message": "invalid tool arguments"},
     }
 

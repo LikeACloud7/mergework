@@ -1075,7 +1075,10 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                         {"name": "get_proof", "description": "Get a public proof by hash"},
                         {
                             "name": "submit_work_proof",
-                            "description": "Return submission instructions",
+                            "description": (
+                                "Return submission instructions, optionally for a bounty_id "
+                                "or issue_number"
+                            ),
                         },
                     ]
                 },
@@ -1523,6 +1526,38 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
             raise ValueError("limit must be at most 100")
         return value
 
+    def work_proof_guidance(bounty: Bounty) -> str:
+        bounty_data = bounty_to_dict(bounty)
+        availability = (
+            "open for submissions"
+            if bounty_data["status"] == "open" and bounty_data["awards_remaining"] > 0
+            else "not currently open for new submissions"
+        )
+        return "\n".join(
+            [
+                f"Bounty #{bounty_data['issue_number']}: {bounty_data['title']}",
+                f"Internal bounty id: {bounty_data['id']}",
+                f"Repository: {bounty_data['repo']}",
+                f"Issue: {bounty_data['issue_url']}",
+                (
+                    f"Status: {bounty_data['status']} ({availability}); "
+                    f"awards remaining: {bounty_data['awards_remaining']} "
+                    f"of {bounty_data['max_awards']}"
+                ),
+                f"Reward: {bounty_data['reward_mrwk']} MRWK per accepted award",
+                f"Acceptance: {bounty_data['acceptance']}",
+                (
+                    "Submit: open a focused PR or issue that links this bounty, include "
+                    "specific test or behavior evidence, then comment /claim with the PR "
+                    "or evidence URL and verification summary."
+                ),
+                (
+                    "Do not include private keys, seed material, secrets, deployment "
+                    "credentials, private vulnerability details, or price claims."
+                ),
+            ]
+        )
+
     with session_scope(database_url) as session:
         if name == "list_bounties":
             status = optional_clean_str_arg("status") or "open"
@@ -1608,6 +1643,25 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str:
                 }
             )
         if name == "submit_work_proof":
+            has_bounty_id = "bounty_id" in args and args.get("bounty_id") is not None
+            has_issue_number = "issue_number" in args and args.get("issue_number") is not None
+            if has_bounty_id and has_issue_number:
+                raise ValueError("use bounty_id or issue_number, not both")
+            if has_bounty_id:
+                bounty = session.get(Bounty, positive_int_arg("bounty_id"))
+                return "bounty not found" if bounty is None else work_proof_guidance(bounty)
+            if has_issue_number:
+                bounties = session.scalars(
+                    select(Bounty)
+                    .where(Bounty.issue_number == positive_int_arg("issue_number"))
+                    .order_by(Bounty.id.desc())
+                    .limit(2)
+                ).all()
+                if not bounties:
+                    return "bounty not found"
+                if len(bounties) > 1:
+                    raise ValueError("issue_number matches multiple bounties")
+                return work_proof_guidance(bounties[0])
             return (
                 "Open a focused PR or issue, reference the MRWK bounty, include test evidence, "
                 "and wait for a maintainer to apply mrwk:accepted."
