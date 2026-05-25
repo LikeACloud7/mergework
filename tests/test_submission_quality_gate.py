@@ -197,3 +197,46 @@ def test_submission_quality_gate_live_bounties_use_api_award_capacity(monkeypatc
         "status": "fail",
         "message": "referenced bounty #319 is closed or exhausted",
     } in result["checks"]
+
+
+def test_submission_quality_gate_warns_when_live_payability_is_unverified(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    def fake_run(args, **kwargs):
+        if args[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="[]", stderr="")
+        if args[:3] == ["gh", "issue", "list"]:
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout=json.dumps([{"number": 319, "title": "MRWK bounty: gate", "state": "OPEN"}]),
+                stderr="",
+            )
+        raise AssertionError(args)
+
+    def fake_load_api_bounties(repo, api_host):
+        raise RuntimeError("MergeWork API bounty data unavailable: offline")
+
+    monkeypatch.setattr(submission_quality_gate.subprocess, "run", fake_run)
+    monkeypatch.setattr(submission_quality_gate, "_load_api_bounties", fake_load_api_bounties)
+    text_path = tmp_path / "draft.md"
+    text_path.write_text(
+        "Summary: work\n\nRefs #319\n\nValidation: pytest passed",
+        encoding="utf-8",
+    )
+
+    assert main(["--text-file", str(text_path), "--format", "json"]) == 0
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "warn"
+    assert "load_warning" in output
+    assert {
+        "name": "bounty_payable",
+        "status": "warn",
+        "message": "referenced bounty #319 payability could not be verified",
+    } in output["checks"]
+
+    assert main(["--text-file", str(text_path), "--format", "text"]) == 0
+    text_output = capsys.readouterr().out
+    assert "Warning: MergeWork API bounty data unavailable: offline" in text_output
+    assert "referenced bounty #319 payability could not be verified" in text_output

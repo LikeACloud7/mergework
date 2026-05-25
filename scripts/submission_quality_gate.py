@@ -40,6 +40,10 @@ def _bounty_is_payable(raw: dict[str, Any]) -> bool:
         return False
 
 
+def _bounty_payability_verified(raw: dict[str, Any]) -> bool:
+    return raw.get("payability_verified", True) is not False
+
+
 def _title_from_submission(text: str) -> str:
     for line in text.splitlines():
         clean = line.strip(" -:\t")
@@ -126,6 +130,14 @@ def evaluate_submission(data: dict[str, Any]) -> dict[str, Any]:
                     "bounty_payable",
                     "warn",
                     f"referenced bounty #{bounty_ref} was not available in input",
+                )
+            )
+        elif not _bounty_payability_verified(bounty):
+            checks.append(
+                _check(
+                    "bounty_payable",
+                    "warn",
+                    f"referenced bounty #{bounty_ref} payability could not be verified",
                 )
             )
         elif _bounty_is_payable(bounty):
@@ -282,6 +294,7 @@ def _load_live_context(repo: str, submission_text: str, api_host: str) -> dict[s
             "title": issue.get("title"),
             "state": issue.get("state"),
             "awards_remaining": api_bounties.get(issue["number"], {}).get("awards_remaining"),
+            "payability_verified": issue["number"] in api_bounties,
         }
         for issue in issues
         if "bounty" in str(issue.get("title", "")).lower()
@@ -302,6 +315,8 @@ def _load_input(path: str) -> dict[str, Any]:
 
 def format_text(result: dict[str, Any]) -> str:
     lines = [f"Submission quality gate: {result['status'].upper()}"]
+    if result.get("load_warning"):
+        lines.append(f"Warning: {result['load_warning']}")
     if result.get("bounty_reference") is not None:
         lines.append(f"Bounty reference: #{result['bounty_reference']}")
     for check in result["checks"]:
