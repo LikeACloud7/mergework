@@ -985,6 +985,16 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 "accepted_work": accepted_work,
             }
 
+    @app.get("/api/v1/accounts/{account}/accepted-work")
+    def api_account_accepted_work(account: str) -> dict[str, Any]:
+        account = _normalized_account(account)
+        with session_scope(db_url) as session:
+            return {
+                "account": account,
+                "summary": account_accepted_summary(session, account),
+                "accepted_work": accepted_work_for_account(session, account),
+            }
+
     @app.get("/api/v1/auth/me")
     def api_auth_me(request: Request) -> dict[str, Any]:
         login = github_login_from_request(request)
