@@ -215,6 +215,38 @@ def activity_to_dict(session: Session) -> dict[str, Any]:
     }
 
 
+def account_accepted_summary(session: Session, account: str) -> dict[str, Any]:
+    rows = session.execute(
+        select(LedgerEntry, Proof)
+        .join(Proof, Proof.ledger_sequence == LedgerEntry.sequence)
+        .where(
+            LedgerEntry.entry_type == "bounty_payment",
+            LedgerEntry.to_account == account,
+            Proof.kind == "bounty_payment",
+        )
+        .order_by(LedgerEntry.sequence.desc())
+    ).all()
+
+    accepted: list[dict[str, Any]] = []
+    total_microunits = 0
+    for entry, proof in rows:
+        row = _activity_row(entry, proof)
+        if row is None:
+            continue
+        total_microunits += int(row["amount_microunits"])
+        accepted.append(row)
+
+    latest = accepted[0] if accepted else None
+    return {
+        "accepted_awards": len(accepted),
+        "accepted_mrwk": format_mrwk(total_microunits),
+        "latest_ledger_sequence": latest["ledger_sequence"] if latest else None,
+        "latest_submission_url": latest["submission_url"] if latest else None,
+        "latest_proof_hash": latest["proof_hash"] if latest else None,
+        "latest_proof_url": latest["proof_url"] if latest else None,
+    }
+
+
 def _wallet_timestamp(value: datetime) -> str:
     if value.tzinfo is not None:
         value = value.replace(tzinfo=None)
@@ -1003,6 +1035,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         account = _normalized_account(account)
         with session_scope(db_url) as session:
             account_data = api_account(account)
+            accepted_summary = account_accepted_summary(session, account)
             entries = session.scalars(
                 select(LedgerEntry)
                 .where(or_(LedgerEntry.from_account == account, LedgerEntry.to_account == account))
@@ -1012,7 +1045,13 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             proofs = _proof_hashes_by_sequence(session, [entry.sequence for entry in entries])
             transactions = [ledger_to_dict(entry, proofs.get(entry.sequence)) for entry in entries]
         return templates.TemplateResponse(
-            request, "account.html", {"account": account_data, "transactions": transactions}
+            request,
+            "account.html",
+            {
+                "account": account_data,
+                "accepted_summary": accepted_summary,
+                "transactions": transactions,
+            },
         )
 
     @app.get("/wallets", response_class=HTMLResponse)
