@@ -15,6 +15,7 @@ from app.ledger.service import (
     close_bounty,
     create_bounty,
     ensure_genesis,
+    find_bounty_by_issue,
     get_balance,
     pay_bounty,
     register_wallet,
@@ -117,15 +118,17 @@ def test_create_bounty_rejects_duplicate_repo_issue(sqlite_url: str) -> None:
 
     with session_scope(sqlite_url) as session:
         ensure_genesis(session)
-        create_bounty(
+        bounty = create_bounty(
             session,
-            repo="ramimbo/mergework",
+            repo="Ramimbo/MergeWork",
             issue_number=7,
             issue_url="https://github.com/ramimbo/mergework/issues/7",
             title="Original bounty",
             reward_mrwk="25",
             acceptance="First bounty for this issue.",
         )
+        assert bounty.repo == "ramimbo/mergework"
+        assert find_bounty_by_issue(session, "RAMIMBO/MERGEWORK", 7) == bounty
 
         with pytest.raises(LedgerError, match="bounty already exists for issue"):
             create_bounty(
@@ -137,6 +140,30 @@ def test_create_bounty_rejects_duplicate_repo_issue(sqlite_url: str) -> None:
                 reward_mrwk="25",
                 acceptance="Second bounty for this issue should be rejected cleanly.",
             )
+
+
+def test_find_bounty_by_issue_matches_legacy_mixed_case_repo(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = Bounty(
+            repo="Ramimbo/MergeWork",
+            issue_number=77,
+            issue_url="https://github.com/ramimbo/mergework/issues/77",
+            title="Legacy mixed-case bounty",
+            reward_microunits=25_000_000,
+            reserved_microunits=25_000_000,
+            max_awards=1,
+            awards_paid=0,
+            status="open",
+            acceptance="Legacy rows should still match GitHub repo identity.",
+        )
+        session.add(bounty)
+        session.flush()
+
+        assert find_bounty_by_issue(session, "ramimbo/mergework", 77) == bounty
+        assert find_bounty_by_issue(session, "RAMIMBO/MERGEWORK", 77) == bounty
 
 
 def test_multi_award_bounty_pays_distinct_submissions_until_exhausted(
