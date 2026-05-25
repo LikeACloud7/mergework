@@ -845,6 +845,7 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
     entry = client.get("/ledger/3").text
     proof_page = client.get(f"/proofs/{proof.hash}").text
     account_api = client.get("/api/v1/accounts/github:alice").json()
+    accepted_work_api = client.get("/api/v1/accounts/github:alice/accepted-work").json()
     account = client.get("/accounts/github:alice").text
 
     assert "/ledger/3" in ledger
@@ -863,6 +864,31 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
     assert account_api["transfer_status"] == (
         "Claim GitHub balances from /me after linking a registered mrwk1 wallet."
     )
+    assert accepted_work_api["account"] == "github:alice"
+    assert accepted_work_api["summary"] == {
+        "accepted_awards": 1,
+        "accepted_mrwk": "25",
+        "latest_ledger_sequence": 3,
+        "latest_submission_url": "https://github.com/ramimbo/mergework/pull/3",
+        "latest_proof_hash": proof.hash,
+        "latest_proof_url": f"/proofs/{proof.hash}",
+    }
+    accepted_work = accepted_work_api["accepted_work"]
+    assert len(accepted_work) == 1
+    assert accepted_work[0]["created_at"]
+    assert accepted_work[0] | {"created_at": "<checked>"} == {
+        "ledger_sequence": 3,
+        "ledger_url": "/ledger/3",
+        "proof_hash": proof.hash,
+        "proof_url": f"/proofs/{proof.hash}",
+        "amount_mrwk": "25",
+        "submission_url": "https://github.com/ramimbo/mergework/pull/3",
+        "issue_url": "https://github.com/ramimbo/mergework/issues/2",
+        "repo": "ramimbo/mergework",
+        "issue_number": 2,
+        "accepted_by": "maintainer",
+        "created_at": "<checked>",
+    }
     assert "Claim GitHub balances from /me" in account
     assert 'href="https://github.com/alice">@alice</a>' in account
     assert "Accepted work summary" in account
