@@ -152,3 +152,24 @@ def test_agent_guide_documents_activity_endpoint() -> None:
 
     assert "GET /api/v1/activity" in guide
     assert "accepted-work activity" in guide
+
+
+def test_api_examples_document_activity_response_shape() -> None:
+    examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
+
+    assert "/api/v1/activity?q=p3xill" in examples
+    assert '"totals": {' in examples
+    assert '"accepted_awards": 2' in examples
+    assert '"accepted_mrwk": "115"' in examples
+    assert '"contributors": [' in examples
+    assert '"account": "github:p3xill"' in examples
+    assert (
+        '"latest_submission_url": "https://github.com/ramimbo/mergework/pull/226#pullrequestreview-4354910919"'
+        in examples
+    )
+    assert '"recent": [' in examples
+    assert '"ledger_sequence": 399' in examples
+    assert '"bounty_id": 37' in examples
+    assert '"bounty_issue_number": 219' in examples
+    assert "newest ledger sequence" in examples
+    assert "/api/v1/proofs/<proof_hash>" in examples

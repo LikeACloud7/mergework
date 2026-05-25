@@ -102,7 +102,52 @@ Read accepted-work activity summarized from proof-backed bounty payments:
 
 ```bash
 curl -s "$API_HOST/api/v1/activity"
+curl -s "$API_HOST/api/v1/activity?q=p3xill"
 ```
+
+The optional `q` parameter filters activity rows by account, amount, submission
+URL, proof hash, internal bounty id, or GitHub issue number. The response groups
+matching proof-backed bounty payments into `totals`, contributor rollups, and
+the most recent payment rows:
+
+```json
+{
+  "totals": {
+    "accepted_awards": 2,
+    "accepted_mrwk": "115",
+    "contributors": 1
+  },
+  "query": "p3xill",
+  "contributors": [
+    {
+      "account": "github:p3xill",
+      "accepted_awards": 2,
+      "accepted_mrwk": "115",
+      "latest_submission_url": "https://github.com/ramimbo/mergework/pull/226#pullrequestreview-4354910919",
+      "latest_proof_hash": "99f78d41b9a493ba2e6136cba0b0762f013a913c9d90c562976282e93d00b81f",
+      "latest_proof_url": "/proofs/99f78d41b9a493ba2e6136cba0b0762f013a913c9d90c562976282e93d00b81f"
+    }
+  ],
+  "recent": [
+    {
+      "ledger_sequence": 399,
+      "account": "github:p3xill",
+      "amount_mrwk": "40",
+      "submission_url": "https://github.com/ramimbo/mergework/pull/226#pullrequestreview-4354910919",
+      "proof_hash": "99f78d41b9a493ba2e6136cba0b0762f013a913c9d90c562976282e93d00b81f",
+      "proof_url": "/proofs/99f78d41b9a493ba2e6136cba0b0762f013a913c9d90c562976282e93d00b81f",
+      "bounty_id": 37,
+      "bounty_issue_number": 219,
+      "created_at": "2026-05-25T08:25:28.316705"
+    }
+  ]
+}
+```
+
+`contributors` is sorted by accepted MRWK amount, while `recent` is sorted by
+newest ledger sequence and capped to the latest 100 matching rows. Use
+`proof_hash` with `/api/v1/proofs/<proof_hash>` to inspect the public proof
+payload for a payment.
 
 Inspect a proof, account, or registered wallet:
 
