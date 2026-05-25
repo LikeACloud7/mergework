@@ -39,6 +39,11 @@
             {% set latest_submission_url = safe_public_url(contributor.latest_submission_url) %}
             <dd>{% if latest_submission_url %}<a href="{{ latest_submission_url }}">{{ contributor.latest_submission_url | replace("https://github.com/", "") }}</a>{% else %}<code>{{ contributor.latest_submission_url }}</code>{% endif %}</dd>
           </div>
+          <div class="ledger-field ledger-field--reference reference-cell">
+            <dt>Latest bounty</dt>
+            {% set latest_bounty_issue_url = safe_public_url(contributor.latest_bounty_issue_url) %}
+            <dd>{% if latest_bounty_issue_url %}<a href="{{ latest_bounty_issue_url }}">{{ contributor.latest_bounty_repo }} #{{ contributor.latest_bounty_issue_number }}</a>{% else %}-{% endif %}</dd>
+          </div>
           <div class="ledger-field ledger-field--proof">
             <dt>Latest proof</dt>
             <dd><a href="{{ contributor.latest_proof_url }}">{{ contributor.latest_proof_hash[:12] }}</a></dd>

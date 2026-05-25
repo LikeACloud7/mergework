@@ -87,6 +87,9 @@ def test_activity_api_summarizes_proof_backed_bounty_payments(sqlite_url: str) -
         "accepted_awards": 2,
         "accepted_mrwk": "50",
         "latest_submission_url": "https://github.com/ramimbo/mergework/issues/10#issuecomment-1",
+        "latest_bounty_repo": "ramimbo/mergework",
+        "latest_bounty_issue_number": 10,
+        "latest_bounty_issue_url": "https://github.com/ramimbo/mergework/issues/10",
         "latest_proof_hash": second_proof.hash,
         "latest_proof_url": f"/proofs/{second_proof.hash}",
     }
@@ -206,6 +209,7 @@ def test_activity_page_renders_empty_and_paid_states(sqlite_url: str) -> None:
     assert 'role="search"' in paid.text
     assert 'name="q"' in paid.text
     assert f'href="/bounties/{bounty.id}">Bounty #{bounty.id}</a>' in paid.text
+    assert "Latest bounty" in paid.text
     assert 'href="https://github.com/ramimbo/mergework/issues/12"' in paid.text
     assert 'href="https://github.com/ramimbo/mergework/pull/12"' in paid.text
     assert f'href="/proofs/{proof.hash}"' in paid.text
