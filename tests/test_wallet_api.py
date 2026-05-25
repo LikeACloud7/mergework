@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -550,6 +551,18 @@ def test_wallet_pages_do_not_require_manual_nonce(sqlite_url: str, monkeypatch) 
     assert me.count('name="private_key_hex" rows="5" autocomplete="off"') == 2
     assert "Clear this field after use. Never share your private key." in transfer
     assert "Clear this field after use. Never share your private key." in me
+
+
+def test_github_wallet_actions_clear_private_key_after_success() -> None:
+    wallet_js = Path("app/static/wallet.js").read_text(encoding="utf-8")
+
+    assert "function clearPrivateKeyField(form)" in wallet_js
+    assert 'for (const action of ["link-github", "claim-github"])' in wallet_js
+    assert (
+        "setText(resultSelector, result);\n"
+        "        clearPrivateKeyField(form);\n"
+        "        await getNextNonce(address, statusSelector);"
+    ) in wallet_js
 
 
 def test_reject_self_transfer(sqlite_url: str) -> None:
