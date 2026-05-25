@@ -286,6 +286,21 @@ def test_accepted_label_handles_malformed_object_fields(sqlite_url: str) -> None
             },
             "missing_issue",
         ),
+        (
+            "delivery-malformed-submission-url",
+            {
+                "action": "labeled",
+                "label": {"name": "mrwk:accepted"},
+                "issue": {
+                    "number": 44,
+                    "html_url": {"href": "https://github.com/ramimbo/mergework/issues/44"},
+                    "user": {"login": "alice"},
+                },
+                "repository": {"full_name": "ramimbo/mergework"},
+                "sender": {"login": "maintainer"},
+            },
+            "malformed_submission_url",
+        ),
     ]
 
     with session_scope(sqlite_url) as session:
