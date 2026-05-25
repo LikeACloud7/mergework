@@ -123,6 +123,34 @@ def bounty_to_dict(bounty: Bounty) -> dict[str, Any]:
     }
 
 
+def bounty_awards_to_dict(session: Session, bounty_id: int) -> list[dict[str, Any]]:
+    proofs = session.scalars(
+        select(Proof)
+        .where(Proof.bounty_id == bounty_id, Proof.kind == "bounty_payment")
+        .order_by(Proof.ledger_sequence.desc())
+    ).all()
+    awards: list[dict[str, Any]] = []
+    for proof in proofs:
+        data = json.loads(proof.public_json)
+        if not isinstance(data, dict) or data.get("kind") != "bounty_payment":
+            continue
+        proof_hash = str(proof.hash)
+        awards.append(
+            {
+                "proof_hash": proof_hash,
+                "proof_url": f"/proofs/{proof_hash}",
+                "ledger_sequence": proof.ledger_sequence,
+                "ledger_url": f"/ledger/{proof.ledger_sequence}",
+                "account": data.get("to_account"),
+                "amount_mrwk": data.get("amount_mrwk"),
+                "submission_url": data.get("submission_url"),
+                "accepted_by": data.get("accepted_by"),
+                "created_at": proof.created_at.isoformat(),
+            }
+        )
+    return awards
+
+
 def ledger_to_dict(entry: LedgerEntry, proof_hash: str | None = None) -> dict[str, Any]:
     return {
         "sequence": entry.sequence,
@@ -665,7 +693,9 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             bounty = session.get(Bounty, bounty_id)
             if bounty is None:
                 raise HTTPException(status_code=404, detail="bounty not found")
-            return bounty_to_dict(bounty)
+            result = bounty_to_dict(bounty)
+            result["accepted_awards"] = bounty_awards_to_dict(session, bounty.id)
+            return result
 
     @app.post("/api/v1/bounties/{bounty_id}/pay")
     async def api_pay_bounty(
