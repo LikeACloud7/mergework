@@ -100,6 +100,8 @@ def validate_public_url(url: str) -> str:
         raise LedgerError("URL must include a valid host")
     if parsed.username is not None or parsed.password is not None:
         raise LedgerError("URL must not include credentials")
+    if hostname.lower() == "localhost":
+        raise LedgerError("URL must use a public host")
     try:
         ip = ipaddress.ip_address(hostname)
     except ValueError:
