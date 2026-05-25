@@ -502,7 +502,9 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             "future_path": "public snapshots, bridges, and onchain claims",
         }
 
-    def list_bounties_by_status(status: str | None = None) -> list[dict[str, Any]]:
+    def list_bounties_by_status(
+        status: str | None = None, query_text: str | None = None
+    ) -> list[dict[str, Any]]:
         with session_scope(db_url) as session:
             query = select(Bounty)
             if status is not None:
@@ -512,12 +514,29 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                         status_code=400, detail="status must be one of: open, paid, closed"
                     )
                 query = query.where(Bounty.status == normalized_status)
+            if query_text is not None:
+                normalized_query = query_text.strip()
+                if normalized_query:
+                    like_query = f"%{normalized_query.lower()}%"
+                    issue_number = None
+                    if normalized_query.isdigit():
+                        issue_number = int(normalized_query)
+                    text_filter = or_(
+                        func.lower(Bounty.repo).like(like_query),
+                        func.lower(Bounty.title).like(like_query),
+                        func.lower(Bounty.acceptance).like(like_query),
+                    )
+                    if issue_number is not None:
+                        text_filter = or_(text_filter, Bounty.issue_number == issue_number)
+                    query = query.where(text_filter)
             bounties = session.scalars(query.order_by(Bounty.id.desc())).all()
             return [bounty_to_dict(bounty) for bounty in bounties]
 
     @app.get("/api/v1/bounties")
-    def api_bounties(status: str | None = Query(None)) -> list[dict[str, Any]]:
-        return list_bounties_by_status(status)
+    def api_bounties(
+        status: str | None = Query(None), q: str | None = Query(None)
+    ) -> list[dict[str, Any]]:
+        return list_bounties_by_status(status, q)
 
     @app.post("/api/v1/bounties")
     async def api_create_bounty(
@@ -923,14 +942,18 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         )
 
     @app.get("/bounties", response_class=HTMLResponse)
-    def bounties_page(request: Request, status: str | None = Query(None)) -> HTMLResponse:
+    def bounties_page(
+        request: Request, status: str | None = Query(None), q: str | None = Query(None)
+    ) -> HTMLResponse:
         selected_status = status.strip().lower() if status is not None else None
+        query_text = q.strip() if q is not None else ""
         return templates.TemplateResponse(
             request,
             "bounties.html",
             {
-                "bounties": list_bounties_by_status(status),
+                "bounties": list_bounties_by_status(status, q),
                 "selected_status": selected_status,
+                "query_text": query_text,
             },
         )
 
