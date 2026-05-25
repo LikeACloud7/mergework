@@ -171,6 +171,10 @@ def test_accepted_pr_label_rejects_malformed_issue_reference_suffixes(
             "delivery-pr-malformed-url-hyphen-ref",
             "Implements https://github.com/ramimbo/mergework/issues/3-abc",
         ),
+        (
+            "delivery-pr-malformed-url-underscore-ref",
+            "Implements https://github.com/ramimbo/mergework/issues/3_abc",
+        ),
     ]
 
     with session_scope(sqlite_url) as session:
