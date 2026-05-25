@@ -35,9 +35,10 @@ DNS_LABEL_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
 
 
 def _csv_env(name: str, default: str = "") -> tuple[str, ...]:
-    return tuple(
-        item.strip().lower() for item in os.environ.get(name, default).split(",") if item.strip()
-    )
+    raw_value = os.environ.get(name, default)
+    if not raw_value.strip():
+        return ()
+    return tuple(item.strip().lower() for item in raw_value.split(","))
 
 
 def _secret_errors(name: str, value: str) -> list[str]:
@@ -66,7 +67,12 @@ def _required_env_value_errors(name: str, value: str) -> list[str]:
 
 
 def _invalid_github_logins(logins: tuple[str, ...]) -> list[str]:
-    return sorted({login for login in logins if not GITHUB_LOGIN_RE.fullmatch(login)})
+    return sorted({login for login in logins if login and not GITHUB_LOGIN_RE.fullmatch(login)})
+
+
+def _duplicate_github_logins(logins: tuple[str, ...]) -> bool:
+    present_logins = [login for login in logins if login]
+    return len(set(present_logins)) != len(present_logins)
 
 
 def _is_valid_dns_hostname(hostname: str) -> bool:
@@ -129,21 +135,25 @@ def validate_deploy_settings(settings: Settings) -> list[str]:
     if not settings.admin_logins:
         errors.append("MERGEWORK_ADMIN_LOGINS must list admin GitHub logins")
     else:
-        if len(set(settings.admin_logins)) != len(settings.admin_logins):
+        if "" in settings.admin_logins:
+            errors.append("MERGEWORK_ADMIN_LOGINS must not include empty entries")
+        if _duplicate_github_logins(settings.admin_logins):
             errors.append("MERGEWORK_ADMIN_LOGINS must not include duplicate logins")
         if _invalid_github_logins(settings.admin_logins):
             errors.append("MERGEWORK_ADMIN_LOGINS must contain valid GitHub logins")
     if not settings.github_accepted_labelers:
         errors.append("MERGEWORK_GITHUB_ACCEPTED_LABELERS must list maintainer logins")
     else:
-        if len(set(settings.github_accepted_labelers)) != len(settings.github_accepted_labelers):
+        if "" in settings.github_accepted_labelers:
+            errors.append("MERGEWORK_GITHUB_ACCEPTED_LABELERS must not include empty entries")
+        if _duplicate_github_logins(settings.github_accepted_labelers):
             errors.append("MERGEWORK_GITHUB_ACCEPTED_LABELERS must not include duplicate logins")
         if _invalid_github_logins(settings.github_accepted_labelers):
             errors.append("MERGEWORK_GITHUB_ACCEPTED_LABELERS must contain valid GitHub logins")
     if settings.admin_logins and settings.github_accepted_labelers:
-        non_admin_labelers = sorted(
-            set(settings.github_accepted_labelers) - set(settings.admin_logins)
-        )
+        admin_login_set = {login for login in settings.admin_logins if login}
+        accepted_labeler_set = {login for login in settings.github_accepted_labelers if login}
+        non_admin_labelers = sorted(accepted_labeler_set - admin_login_set)
         if non_admin_labelers:
             errors.append(
                 "MERGEWORK_GITHUB_ACCEPTED_LABELERS must be included in MERGEWORK_ADMIN_LOGINS"
