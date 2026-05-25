@@ -74,6 +74,24 @@ Manual payout checklist:
 Do not apply `mrwk:accepted` to maintainer-authored bounty issues for payment;
 those issues require the manual payout path.
 
+### Webhook Outcome Inspection
+
+Use the admin-token webhook events API to inspect recent delivery outcomes before
+retrying labels or making manual payouts:
+
+```bash
+curl -s "https://api.mrwk.ltclab.site/api/v1/admin/webhook-events?status=missing_submitter" \
+  -H "x-mergework-admin-token: $MERGEWORK_ADMIN_TOKEN"
+```
+
+The response includes delivery ID, GitHub event type, payload hash, processed
+status, and timestamp. This is useful for confirming duplicate deliveries,
+missing submitters, exhausted bounties, and already-paid submissions without
+guessing from GitHub labels alone.
+Use `limit` to control the number of delivery rows returned (`1` to `200`,
+default `50`), for example:
+`/api/v1/admin/webhook-events?status=missing_submitter&limit=100`.
+
 ### Final Checks
 
 1. Confirm the webhook or admin API records one ledger payment for that award.
