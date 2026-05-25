@@ -143,6 +143,58 @@ def test_pay_bounty_rejects_non_json_serializable_verifier_result_values(
         assert session.query(Proof).count() == 0
 
 
+def test_pay_bounty_rejects_blank_or_control_character_account(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=8,
+            issue_url="https://github.com/ramimbo/mergework/issues/8",
+            title="Reject malformed payout accounts",
+            reward_mrwk="50",
+            max_awards=2,
+            acceptance="Accepted PRs must record a clean payout account.",
+        )
+
+        for account, message in (
+            ("   ", "to_account is required"),
+            ("github:alice\nbad", "to_account must not contain control characters"),
+        ):
+            with pytest.raises(LedgerError, match=message):
+                pay_bounty(
+                    session,
+                    bounty_id=bounty.id,
+                    to_account=account,
+                    submission_url="https://github.com/ramimbo/mergework/pull/8",
+                    accepted_by="maintainer",
+                    verifier_result={"label": "mrwk:accepted"},
+                )
+
+        session.refresh(bounty)
+        assert bounty.status == "open"
+        assert bounty.awards_paid == 0
+        assert get_balance(session, reserve_account_for_bounty(bounty.id)) == 100_000_000
+        assert session.scalars(select(Submission)).all() == []
+        assert session.scalars(select(Proof)).all() == []
+
+        proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account=" github:alice ",
+            submission_url="https://github.com/ramimbo/mergework/pull/8",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        submission = session.scalars(select(Submission)).one()
+
+        assert submission.submitter_account == "github:alice"
+        assert get_balance(session, "github:alice") == 50_000_000
+        assert '"to_account":"github:alice"' in proof.public_json
+
+
 def test_resolve_payout_account_accepts_mixed_case_prefixes(sqlite_url: str) -> None:
     create_schema(sqlite_url)
 
