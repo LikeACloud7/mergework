@@ -428,6 +428,8 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
         tool for tool in tools["result"]["tools"] if tool["name"] == "submit_work_proof"
     )
     assert "bounty_id or issue_number" in submit_tool["description"]
+    bounty_tool = next(tool for tool in tools["result"]["tools"] if tool["name"] == "get_bounty")
+    assert "accepted awards" in bounty_tool["description"]
 
     balance = client.post(
         "/mcp",
@@ -670,6 +672,75 @@ def test_mcp_rejects_unknown_tool_name(sqlite_url: str) -> None:
     }
 
 
+def test_mcp_get_bounty_can_include_accepted_awards(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=284,
+            issue_url="https://github.com/ramimbo/mergework/issues/284",
+            title="MCP accepted awards",
+            reward_mrwk="75",
+            acceptance="Agents should inspect accepted award proofs.",
+        )
+        proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/284",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        bounty_id = bounty.id
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    default_result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "get_bounty", "arguments": {"id": bounty_id}},
+        },
+    ).json()
+    default_payload = json.loads(default_result["result"]["content"][0]["text"])
+    assert "awards" not in default_payload
+
+    result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "get_bounty",
+                "arguments": {"id": bounty_id, "include_awards": True},
+            },
+        },
+    ).json()
+    payload = json.loads(result["result"]["content"][0]["text"])
+    assert payload["id"] == bounty_id
+    assert payload["status"] == "paid"
+    assert payload["awards_paid"] == 1
+    assert payload["awards_remaining"] == 0
+    assert payload["awards"] == [
+        {
+            "proof_hash": proof.hash,
+            "proof_url": f"/proofs/{proof.hash}",
+            "ledger_sequence": proof.ledger_sequence,
+            "ledger_url": f"/ledger/{proof.ledger_sequence}",
+            "account": "github:alice",
+            "amount_mrwk": "75",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/284",
+            "accepted_by": "maintainer",
+            "created_at": proof.created_at.replace(tzinfo=None).isoformat(),
+        }
+    ]
+
+
 def test_mcp_get_bounty_rejects_fractional_id(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
@@ -694,6 +765,47 @@ def test_mcp_get_bounty_rejects_fractional_id(sqlite_url: str) -> None:
             "id": 12,
             "method": "tools/call",
             "params": {"name": "get_bounty", "arguments": {"id": bounty_id + 0.9}},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "jsonrpc": "2.0",
+        "id": 12,
+        "error": {"code": -32602, "message": "invalid tool arguments"},
+    }
+
+
+@pytest.mark.parametrize("include_awards", ["true", 1, []])
+def test_mcp_get_bounty_rejects_non_boolean_include_awards(
+    sqlite_url: str, include_awards: object
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=104,
+            issue_url="https://github.com/ramimbo/mergework/issues/104",
+            title="MCP awards flag validation",
+            reward_mrwk="75",
+            acceptance="MCP tools should reject non-boolean include_awards.",
+        )
+        bounty_id = bounty.id
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "tools/call",
+            "params": {
+                "name": "get_bounty",
+                "arguments": {"id": bounty_id, "include_awards": include_awards},
+            },
         },
     )
 
