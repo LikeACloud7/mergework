@@ -694,7 +694,12 @@ def _parse_int(value: Any, field: str) -> int:
     if isinstance(value, str):
         clean = value.strip()
         if clean and clean.lstrip("+-").isdigit():
-            return int(clean)
+            try:
+                return int(clean)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=400, detail=f"{field} must be an integer"
+                ) from exc
     raise HTTPException(status_code=400, detail=f"{field} must be an integer")
 
 

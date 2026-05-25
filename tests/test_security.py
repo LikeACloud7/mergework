@@ -239,7 +239,7 @@ def test_admin_bounty_api_rejects_fractional_integer_fields(
         headers={"x-mergework-admin-token": "admin-token-for-tests"},
         json={**payload, "max_awards": 1.5},
     )
-    oversized_issue = client.post(
+    oversized_integer_issue = client.post(
         "/api/v1/bounties",
         headers={"x-mergework-admin-token": "admin-token-for-tests"},
         json={
@@ -248,13 +248,27 @@ def test_admin_bounty_api_rejects_fractional_integer_fields(
             "issue_url": f"https://github.com/ramimbo/mergework/issues/{2**63}",
         },
     )
+    oversized_string_issue = client.post(
+        "/api/v1/bounties",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json={**payload, "issue_number": "9" * 5000},
+    )
+    oversized_string_awards = client.post(
+        "/api/v1/bounties",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json={**payload, "max_awards": "9" * 5000},
+    )
 
     assert fractional_issue.status_code == 400
     assert fractional_issue.json()["detail"] == "issue_number must be an integer"
     assert fractional_awards.status_code == 400
     assert fractional_awards.json()["detail"] == "max_awards must be an integer"
-    assert oversized_issue.status_code == 400
-    assert oversized_issue.json()["detail"] == "issue_number is too large"
+    assert oversized_integer_issue.status_code == 400
+    assert oversized_integer_issue.json()["detail"] == "issue_number is too large"
+    assert oversized_string_issue.status_code == 400
+    assert oversized_string_issue.json()["detail"] == "issue_number must be an integer"
+    assert oversized_string_awards.status_code == 400
+    assert oversized_string_awards.json()["detail"] == "max_awards must be an integer"
 
 
 def test_admin_webhook_events_api_lists_and_filters_processing_outcomes(
