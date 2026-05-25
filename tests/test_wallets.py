@@ -19,6 +19,7 @@ from app.ledger.service import (
     wallet_link_payload,
     wallet_transfer_payload,
 )
+from app.models import Wallet
 from app.wallets import address_from_public_key_hex, canonical_wallet_json
 
 
@@ -310,3 +311,116 @@ def test_linked_wallet_can_claim_existing_github_balance(sqlite_url: str) -> Non
         assert entry.entry_type == "github_claim"
         assert get_balance(session, "github:alice") == 0
         assert get_balance(session, address) == 25_000_000
+
+
+def test_github_claim_rejects_wrong_linked_login_without_moving_balance(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    private_key, public_hex, address = _keypair()
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        register_wallet(session, public_key_hex=public_hex, label="Alice")
+        add_ledger_entry(
+            session,
+            entry_type="legacy_payment",
+            from_account=TREASURY_ACCOUNT,
+            to_account="github:alice",
+            amount_microunits=25_000_000,
+            reference="alice-legacy",
+        )
+        add_ledger_entry(
+            session,
+            entry_type="legacy_payment",
+            from_account=TREASURY_ACCOUNT,
+            to_account="github:bob",
+            amount_microunits=10_000_000,
+            reference="bob-legacy",
+        )
+        link_payload = wallet_link_payload(address=address, github_login="alice", nonce=1)
+        link_wallet_to_github(
+            session,
+            address=address,
+            github_login="alice",
+            nonce=1,
+            signature_hex=_sign(private_key, link_payload),
+        )
+
+        wrong_login_payload = wallet_claim_payload(address=address, github_login="bob", nonce=2)
+        with pytest.raises(LedgerError, match="wallet is not linked to github login"):
+            submit_github_claim(
+                session,
+                address=address,
+                github_login="bob",
+                nonce=2,
+                signature_hex=_sign(private_key, wrong_login_payload),
+            )
+
+        assert get_balance(session, "github:alice") == 25_000_000
+        assert get_balance(session, "github:bob") == 10_000_000
+        assert get_balance(session, address) == 0
+
+        claim_payload = wallet_claim_payload(address=address, github_login="alice", nonce=2)
+        submit_github_claim(
+            session,
+            address=address,
+            github_login="alice",
+            nonce=2,
+            signature_hex=_sign(private_key, claim_payload),
+        )
+
+        assert get_balance(session, "github:alice") == 0
+        assert get_balance(session, "github:bob") == 10_000_000
+        assert get_balance(session, address) == 25_000_000
+
+
+def test_zero_balance_github_claim_rejects_without_advancing_nonce(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    private_key, public_hex, address = _keypair()
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        register_wallet(session, public_key_hex=public_hex, label="Alice")
+        link_payload = wallet_link_payload(address=address, github_login="alice", nonce=1)
+        link_wallet_to_github(
+            session,
+            address=address,
+            github_login="alice",
+            nonce=1,
+            signature_hex=_sign(private_key, link_payload),
+        )
+
+        claim_payload = wallet_claim_payload(address=address, github_login="alice", nonce=2)
+        claim_signature = _sign(private_key, claim_payload)
+        with pytest.raises(LedgerError, match="no github balance to claim"):
+            submit_github_claim(
+                session,
+                address=address,
+                github_login="alice",
+                nonce=2,
+                signature_hex=claim_signature,
+            )
+
+        wallet = session.get(Wallet, address)
+        assert wallet is not None
+        assert wallet.nonce == 1
+        add_ledger_entry(
+            session,
+            entry_type="legacy_payment",
+            from_account=TREASURY_ACCOUNT,
+            to_account="github:alice",
+            amount_microunits=12_000_000,
+            reference="late-legacy",
+        )
+        submit_github_claim(
+            session,
+            address=address,
+            github_login="alice",
+            nonce=2,
+            signature_hex=claim_signature,
+        )
+
+        assert wallet.nonce == 2
+        assert get_balance(session, "github:alice") == 0
+        assert get_balance(session, address) == 12_000_000
