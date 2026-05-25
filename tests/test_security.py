@@ -201,11 +201,16 @@ def test_admin_page_renders_safe_webhook_events_for_cookie_admin(
     assert re.search(
         r"<code>missing_submitter</code>\s*</span>\s*<strong>2</strong>", all_events.text
     )
+    summary_match = re.search(
+        r'<div class="bounty-list-summary"[^>]*>.*?</div>', all_events.text, flags=re.S
+    )
+    assert summary_match is not None
+    summary_html = summary_match.group(0)
     status_summary_positions = [
-        all_events.text.index("<code>missing_submitter</code>"),
-        all_events.text.index("<code>bounty_not_found</code>"),
-        all_events.text.index("<code>exhausted_bounty</code>"),
-        all_events.text.index("<code>paid</code>"),
+        summary_html.index("<code>missing_submitter</code>"),
+        summary_html.index("<code>bounty_not_found</code>"),
+        summary_html.index("<code>exhausted_bounty</code>"),
+        summary_html.index("<code>paid</code>"),
     ]
     assert status_summary_positions == sorted(status_summary_positions)
     assert "paid" in all_events.text
