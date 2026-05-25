@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import parse_qs, urlparse
+
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -16,7 +18,7 @@ from app.ledger.service import (
     wallet_claim_payload,
     wallet_link_payload,
 )
-from app.main import _signed_value, create_app
+from app.main import _signed_value, _verified_value, create_app
 from app.wallets import address_from_public_key_hex, canonical_wallet_json
 
 
@@ -428,6 +430,23 @@ def test_github_login_redirects_when_oauth_is_configured(sqlite_url: str, monkey
     assert response.headers["location"].startswith("https://github.com/login/oauth/authorize?")
     assert "client_id=client-id" in response.headers["location"]
     assert "mrwk_oauth_state" in response.cookies
+
+
+def test_github_login_stores_safe_default_for_backslash_next(sqlite_url: str, monkeypatch) -> None:
+    monkeypatch.setenv("MERGEWORK_GITHUB_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setenv("MERGEWORK_GITHUB_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "test-cookie-secret")
+    monkeypatch.setenv("MERGEWORK_PUBLIC_BASE_URL", "https://mrwk.example.test")
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get("/auth/github/login?next=/%5Cevil.example/path", follow_redirects=False)
+
+    assert response.status_code == 302
+    query = parse_qs(urlparse(response.headers["location"]).query)
+    state_value = _verified_value(query["state"][0], "test-cookie-secret", 600)
+    assert state_value is not None
+    _nonce, next_path = state_value.split(",", 1)
+    assert next_path == "/me"
 
 
 def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) -> None:
