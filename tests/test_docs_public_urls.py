@@ -91,6 +91,7 @@ def test_api_examples_document_bounty_list_response_shape() -> None:
     assert '"repo": "ramimbo/mergework"' in examples
     assert '"issue_number": 164' in examples
     assert '"reward_mrwk": "100"' in examples
+    assert '"available_mrwk": "100"' in examples
     assert '"reserved_mrwk": "500"' in examples
     assert '"awards_paid": 4' in examples
     assert '"awards_remaining": 1' in examples

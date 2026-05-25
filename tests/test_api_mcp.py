@@ -182,6 +182,7 @@ def test_bounty_api_reports_multi_award_capacity(sqlite_url: str) -> None:
     bounty = client.get("/api/v1/bounties").json()[0]
 
     assert bounty["reward_mrwk"] == "25"
+    assert bounty["available_mrwk"] == "100"
     assert bounty["reserved_mrwk"] == "100"
     assert bounty["max_awards"] == 4
     assert bounty["awards_paid"] == 0
@@ -228,6 +229,7 @@ def test_bounty_api_reports_paid_multi_award_as_exhausted(sqlite_url: str) -> No
     assert body["max_awards"] == 2
     assert body["awards_paid"] == 2
     assert body["awards_remaining"] == 0
+    assert body["available_mrwk"] == "0"
     assert body["reserved_mrwk"] == "30"
 
 
@@ -269,6 +271,7 @@ def test_bounty_api_reports_closed_multi_award_as_unavailable(sqlite_url: str) -
     assert body["max_awards"] == 3
     assert body["awards_paid"] == 1
     assert body["awards_remaining"] == 0
+    assert body["available_mrwk"] == "0"
     assert body["reserved_mrwk"] == "30"
 
 
