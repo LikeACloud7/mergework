@@ -252,10 +252,11 @@ function setupGithubActions() {
           body: JSON.stringify({address, nonce, signature_hex: signature}),
         });
         setText(resultSelector, result);
-        clearPrivateKeyField(form);
         await getNextNonce(address, statusSelector);
       } catch (error) {
         setText(resultSelector, error.message);
+      } finally {
+        clearPrivateKeyField(form);
       }
     });
   }
