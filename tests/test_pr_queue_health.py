@@ -6,7 +6,7 @@ import subprocess
 import pytest
 
 from scripts import pr_queue_health
-from scripts.pr_queue_health import analyze_queue, format_text_report, main
+from scripts.pr_queue_health import analyze_queue, format_markdown_report, format_text_report, main
 
 
 def test_pr_queue_health_flags_required_queue_cases(tmp_path, capsys) -> None:
@@ -105,6 +105,97 @@ def test_pr_queue_health_text_report_is_pasteable() -> None:
     assert "PR queue health summary" in text
     assert "pull requests: 1" in text
     assert "No queue-health issues found." in text
+
+
+def test_pr_queue_health_markdown_report_includes_required_sections() -> None:
+    report = analyze_queue(
+        {
+            "bounties": [
+                {"number": 292, "state": "OPEN", "awards_remaining": 13},
+                {"number": 293, "state": "CLOSED", "awards_remaining": 0},
+            ],
+            "pull_requests": [
+                {
+                    "number": 1,
+                    "title": "Add public bounty summary API",
+                    "url": "https://github.com/ramimbo/mergework/pull/1",
+                    "body": "Refs #293",
+                    "merge_state": "clean",
+                    "labels": [],
+                },
+                {
+                    "number": 2,
+                    "title": "Improve bounty filters",
+                    "url": "https://github.com/ramimbo/mergework/pull/2",
+                    "body": "",
+                    "merge_state": "clean",
+                    "labels": [],
+                },
+                {
+                    "number": 3,
+                    "title": "Guard MCP bounty search oversized numeric query",
+                    "url": "https://github.com/ramimbo/mergework/pull/3",
+                    "body": "Bounty #292",
+                    "merge_state": "dirty",
+                    "labels": ["mrwk:needs-info"],
+                },
+                {
+                    "number": 4,
+                    "title": "Guard MCP bounty search oversized numeric query",
+                    "url": "https://github.com/ramimbo/mergework/pull/4",
+                    "body": "Refs #292",
+                    "merge_state": "unknown",
+                    "labels": [],
+                },
+            ],
+        }
+    )
+
+    markdown = format_markdown_report(report)
+
+    assert markdown.startswith("## PR Queue Health Summary")
+    assert "- **pull requests**: 4" in markdown
+    assert "### Closed or exhausted bounty references" in markdown
+    assert (
+        "- [PR #1](https://github.com/ramimbo/mergework/pull/1): "
+        "Add public bounty summary API (Referenced bounty #293 is not payable)"
+    ) in markdown
+    assert "### Missing bounty references" in markdown
+    assert (
+        "- [PR #2](https://github.com/ramimbo/mergework/pull/2): "
+        "Improve bounty filters (No Bounty #<issue> or Refs #<issue> found)"
+    ) in markdown
+    assert "### Dirty or unstable merge state" in markdown
+    assert "Merge state is dirty" in markdown
+    assert "### Needs info" in markdown
+    assert "PR has mrwk:needs-info label" in markdown
+    assert "### Likely duplicate bounty scope" in markdown
+    assert "- Bounty #292: guard mcp bounty search oversized numeric query (#3, #4)" in markdown
+
+
+def test_pr_queue_health_markdown_no_issues_output_is_pasteable(tmp_path, capsys) -> None:
+    fixture = {
+        "bounties": [{"number": 310, "state": "OPEN", "awards_remaining": 5}],
+        "pull_requests": [
+            {
+                "number": 8,
+                "title": "Review open PRs",
+                "body": "Refs #310",
+                "merge_state": "clean",
+                "labels": [],
+            }
+        ],
+    }
+    input_path = tmp_path / "queue.json"
+    input_path.write_text(json.dumps(fixture), encoding="utf-8")
+
+    exit_code = main(["--input", str(input_path), "--format", "markdown"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert output.startswith("## PR Queue Health Summary")
+    assert "- **pull requests**: 1" in output
+    assert "No queue-health issues found." in output
 
 
 def test_pr_queue_health_wraps_gh_failures(monkeypatch) -> None:
