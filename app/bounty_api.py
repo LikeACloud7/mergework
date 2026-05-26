@@ -82,7 +82,7 @@ def register_bounty_api_routes(
     """Register bounty listing, CRUD, payment, close, and reconciliation routes."""
 
     def _list_bounties_by_status(
-        status: str | None = None, query_text: str | None = None
+        status: str | None = None, query_text: str | None = None, limit: int | None = None
     ) -> list[dict[str, Any]]:
         with session_scope(db_url) as session:
             query = select(Bounty)
@@ -112,20 +112,27 @@ def register_bounty_api_routes(
                     if issue_number is not None:
                         text_filter = or_(text_filter, Bounty.issue_number == issue_number)
                     query = query.where(text_filter)
-            bounties = session.scalars(query.order_by(Bounty.id.desc())).all()
+            query = query.order_by(Bounty.id.desc())
+            if limit is not None:
+                query = query.limit(limit)
+            bounties = session.scalars(query).all()
             return [bounty_to_dict(bounty) for bounty in bounties]
 
     @app.get("/api/v1/bounties")
     def api_bounties(
-        status: str | None = Query(None), q: str | None = Query(None)
+        status: str | None = Query(None),
+        q: str | None = Query(None),
+        limit: Annotated[int | None, Query(ge=1, le=200)] = None,
     ) -> list[dict[str, Any]]:
-        return _list_bounties_by_status(status, q)
+        return _list_bounties_by_status(status, q, limit)
 
     @app.get("/api/v1/bounties/summary")
     def api_bounties_summary(
-        status: str | None = Query(None), q: str | None = Query(None)
+        status: str | None = Query(None),
+        q: str | None = Query(None),
+        limit: Annotated[int | None, Query(ge=1, le=200)] = None,
     ) -> dict[str, Any]:
-        return bounty_list_summary(_list_bounties_by_status(status, q))
+        return bounty_list_summary(_list_bounties_by_status(status, q, limit))
 
     @app.get("/api/v1/admin/webhook-events")
     def api_admin_webhook_events(
