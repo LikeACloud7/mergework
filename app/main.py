@@ -15,16 +15,14 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
 
 from app.accounts import normalized_account, normalized_wallet_address, register_account_routes
 from app.activity import register_activity_routes
 from app.admin import (
     admin_page_context,
     create_admin_bounty_from_form,
-    list_webhook_events,
-    webhook_events_to_dict,
 )
+from app.bounty_api import register_bounty_api_routes
 from app.bounty_attempts import (
     list_bounty_attempts,
     register_bounty_attempt_routes,
@@ -32,22 +30,16 @@ from app.bounty_attempts import (
 from app.config import Settings, get_settings
 from app.db import create_schema, session_scope
 from app.hub import is_ltc_lab_host, ltc_lab_context, mergework_hub_context
-from app.ledger.reconciliation import payout_reconciliation_summary, reconcile_accepted_payouts
 from app.ledger.service import (
     LedgerError,
-    close_bounty,
-    create_bounty,
     ensure_genesis,
     format_mrwk,
     get_balance,
     link_wallet_to_github,
-    pay_bounty,
     public_url_or_none,
     register_wallet,
-    resolve_payout_account,
     submit_github_claim,
     submit_wallet_transfer,
-    validate_public_url,
 )
 from app.ledger_views import (
     account_ledger_transactions,
@@ -64,7 +56,6 @@ from app.me import me_page_context
 from app.models import (
     Bounty,
     Proof,
-    Submission,
     Wallet,
 )
 from app.path_params import (
@@ -79,7 +70,6 @@ from app.serializers import (
     bounty_list_summary,
     bounty_to_dict,
     ledger_to_dict,
-    payout_reconciliation_to_dict,
     wallet_to_dict,
     wallet_transfer_to_dict,
 )
@@ -141,40 +131,6 @@ def _preserve_forwarded_https_redirect(request: Request, response: Response) -> 
         return
     response.headers["location"] = urlunsplit(
         ("https", parsed.netloc, parsed.path, parsed.query, parsed.fragment)
-    )
-
-
-def _payout_response_from_proof(proof: Proof, *, status: str) -> dict[str, Any]:
-    data = json.loads(proof.public_json)
-    if not isinstance(data, dict) or data.get("kind") != "bounty_payment":
-        raise HTTPException(status_code=500, detail="invalid proof payload")
-    return {
-        "status": status,
-        "bounty_id": proof.bounty_id,
-        "to_account": data.get("to_account"),
-        "submission_id": proof.submission_id,
-        "submission_url": data.get("submission_url"),
-        "ledger_sequence": proof.ledger_sequence,
-        "ledger_url": f"/ledger/{proof.ledger_sequence}",
-        "proof_hash": proof.hash,
-        "proof_url": f"/proofs/{proof.hash}",
-    }
-
-
-def _existing_payout_proof_for_submission(
-    session: Session, bounty_id: int, submission_url: str
-) -> Proof | None:
-    submission = session.scalar(
-        select(Submission)
-        .where(Submission.bounty_id == bounty_id, Submission.url == submission_url)
-        .limit(1)
-    )
-    if submission is None:
-        return None
-    return session.scalar(
-        select(Proof)
-        .where(Proof.submission_id == submission.id, Proof.kind == "bounty_payment")
-        .limit(1)
     )
 
 
@@ -391,97 +347,19 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         with session_scope(db_url) as session:
             return system_status(session)
 
-    def list_bounties_by_status(
-        status: str | None = None, query_text: str | None = None
-    ) -> list[dict[str, Any]]:
-        with session_scope(db_url) as session:
-            query = select(Bounty)
-            if status is not None:
-                normalized_status = status.strip().lower()
-                if normalized_status not in {"open", "paid", "closed"}:
-                    raise HTTPException(
-                        status_code=400, detail="status must be one of: open, paid, closed"
-                    )
-                query = query.where(Bounty.status == normalized_status)
-            if query_text is not None:
-                normalized_query = query_text.strip()
-                if normalized_query:
-                    escaped_query = (
-                        normalized_query.lower()
-                        .replace("\\", "\\\\")
-                        .replace("%", "\\%")
-                        .replace("_", "\\_")
-                    )
-                    like_query = f"%{escaped_query}%"
-                    issue_number = issue_number_search_value(normalized_query)
-                    text_filter = or_(
-                        func.lower(Bounty.repo).like(like_query, escape="\\"),
-                        func.lower(Bounty.title).like(like_query, escape="\\"),
-                        func.lower(Bounty.acceptance).like(like_query, escape="\\"),
-                    )
-                    if issue_number is not None:
-                        text_filter = or_(text_filter, Bounty.issue_number == issue_number)
-                    query = query.where(text_filter)
-            bounties = session.scalars(query.order_by(Bounty.id.desc())).all()
-            return [bounty_to_dict(bounty) for bounty in bounties]
-
-    @app.get("/api/v1/bounties")
-    def api_bounties(
-        status: str | None = Query(None), q: str | None = Query(None)
-    ) -> list[dict[str, Any]]:
-        return list_bounties_by_status(status, q)
-
-    @app.get("/api/v1/bounties/summary")
-    def api_bounties_summary(
-        status: str | None = Query(None), q: str | None = Query(None)
-    ) -> dict[str, Any]:
-        return bounty_list_summary(list_bounties_by_status(status, q))
-
-    @app.get("/api/v1/admin/webhook-events")
-    def api_admin_webhook_events(
-        status: str | None = Query(None),
-        limit: Annotated[int, Query(ge=1, le=200)] = 50,
-        admin_login: str = Depends(require_admin_token),
-    ) -> list[dict[str, Any]]:
-        del admin_login
-        with session_scope(db_url) as session:
-            return webhook_events_to_dict(list_webhook_events(session, status, limit))
-
-    @app.post("/api/v1/bounties")
-    async def api_create_bounty(
-        request: Request, admin_login: str = Depends(require_admin_token)
-    ) -> dict[str, Any]:
-        data = await _json_object(request)
-        with session_scope(db_url) as session:
-            try:
-                bounty = create_bounty(
-                    session,
-                    repo=_required_str(data, "repo"),
-                    issue_number=_required_int(data, "issue_number"),
-                    issue_url=_required_str(data, "issue_url"),
-                    title=_required_str(data, "title"),
-                    reward_mrwk=str(data["reward_mrwk"]),
-                    max_awards=_optional_int(data, "max_awards", 1),
-                    acceptance=_required_str(data, "acceptance"),
-                )
-            except KeyError as exc:
-                raise HTTPException(status_code=400, detail=f"{exc.args[0]} is required") from exc
-            except LedgerError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
-            result = bounty_to_dict(bounty)
-            result["created_by"] = admin_login
-            return result
-
-    @app.get("/api/v1/bounties/{bounty_id}")
-    def api_bounty(bounty_id: int) -> dict[str, Any]:
-        bounty_id = positive_bounty_id(bounty_id)
-        with session_scope(db_url) as session:
-            bounty = session.get(Bounty, bounty_id)
-            if bounty is None:
-                raise HTTPException(status_code=404, detail="bounty not found")
-            result = bounty_to_dict(bounty)
-            result["accepted_awards"] = bounty_awards_to_dict(session, bounty.id)
-            return result
+    _bounty_api = register_bounty_api_routes(
+        app,
+        db_url=db_url,
+        require_admin_token=require_admin_token,
+        json_object=_json_object,
+        required_str=_required_str,
+        optional_str=_optional_str,
+        optional_int=_optional_int,
+        required_int=_required_int,
+        settings=settings,
+    )
+    list_bounties_by_status = _bounty_api["list_bounties_by_status"]
+    api_bounty = _bounty_api["get_bounty_detail"]
 
     register_bounty_attempt_routes(
         app,
@@ -496,115 +374,6 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     )
 
     register_account_routes(app, db_url=db_url, templates=templates)
-
-    @app.get("/api/v1/reconciliation/payouts")
-    def api_payout_reconciliation(
-        admin_login: str = Depends(require_admin_token),
-    ) -> dict[str, Any]:
-        with session_scope(db_url) as session:
-            checks = reconcile_accepted_payouts(session)
-            return {
-                "generated_by": admin_login,
-                "summary": payout_reconciliation_summary(checks),
-                "checks": [payout_reconciliation_to_dict(check) for check in checks],
-            }
-
-    @app.post("/api/v1/bounties/{bounty_id}/pay")
-    async def api_pay_bounty(
-        bounty_id: int,
-        request: Request,
-        admin_login: str = Depends(require_admin_token),
-    ) -> Any:
-        bounty_id = positive_bounty_id(bounty_id)
-        data = await _json_object(request)
-        try:
-            requested_account = _required_str(data, "to_account")
-            submission_url = _required_str(data, "submission_url")
-            clean_submission_url = validate_public_url(submission_url)
-        except HTTPException as exc:
-            if str(exc.detail).endswith(" is required"):
-                field = str(exc.detail).removesuffix(" is required")
-                raise HTTPException(
-                    status_code=400, detail=f"missing required field: {field}"
-                ) from exc
-            raise
-        except LedgerError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        accepted_by = _optional_str(data, "accepted_by", admin_login) or admin_login
-        verifier_result = {
-            "source": "admin_api",
-            "accepted_by": accepted_by,
-        }
-        if data.get("note") is not None:
-            note = _optional_str(data, "note").strip()
-            if note:
-                verifier_result["note"] = note[:240]
-        with session_scope(db_url) as session:
-            try:
-                to_account = resolve_payout_account(session, requested_account)
-                proof = pay_bounty(
-                    session,
-                    bounty_id=bounty_id,
-                    to_account=to_account,
-                    submission_url=clean_submission_url,
-                    accepted_by=accepted_by,
-                    verifier_result=verifier_result,
-                )
-                bounty = session.get(Bounty, bounty_id)
-                if bounty is None:
-                    raise LedgerError("bounty not found")
-                bounty_state = bounty_to_dict(bounty)
-                proof_payload = json.loads(proof.public_json)
-            except LedgerError as exc:
-                if str(exc) == "submission already paid":
-                    existing_proof = _existing_payout_proof_for_submission(
-                        session, bounty_id, clean_submission_url
-                    )
-                    if existing_proof is not None:
-                        return JSONResponse(
-                            status_code=409,
-                            content=_payout_response_from_proof(
-                                existing_proof, status="already_paid"
-                            ),
-                        )
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
-            payout_response = _payout_response_from_proof(proof, status="paid")
-            payout_response.update(
-                {
-                    "bounty_status": bounty_state["status"],
-                    "awards_paid": bounty_state["awards_paid"],
-                    "awards_remaining": bounty_state["awards_remaining"],
-                    "submission_url": proof_payload["submission_url"],
-                }
-            )
-            return payout_response
-
-    @app.post("/api/v1/bounties/{bounty_id}/close")
-    async def api_close_bounty(
-        bounty_id: int,
-        request: Request,
-        admin_login: str = Depends(require_admin_token),
-    ) -> dict[str, Any]:
-        bounty_id = positive_bounty_id(bounty_id)
-        data = await _json_object(request)
-        reference = _optional_str(data, "reference") if data.get("reference") is not None else None
-        closed_by = _optional_str(data, "closed_by", admin_login)
-        with session_scope(db_url) as session:
-            try:
-                release = close_bounty(
-                    session,
-                    bounty_id=bounty_id,
-                    closed_by=closed_by,
-                    reference=reference,
-                )
-            except LedgerError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
-            return {
-                "status": "closed",
-                "bounty_id": bounty_id,
-                "released_mrwk": format_mrwk(release.amount_microunits) if release else "0",
-                "ledger_sequence": release.sequence if release else None,
-            }
 
     @app.get("/api/v1/auth/me")
     def api_auth_me(request: Request) -> dict[str, Any]:
