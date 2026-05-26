@@ -38,7 +38,10 @@ MCP_TOOLS: list[dict[str, Any]] = [
     {"name": "get_proof", "description": "Get a public proof by hash"},
     {
         "name": "submit_work_proof",
-        "description": "Return submission instructions, optionally for a bounty_id or issue_number",
+        "description": (
+            "Return submission instructions for bounty_id or issue_number, optionally "
+            "scoping issue_number by repo, with text or json format"
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -54,6 +57,11 @@ MCP_TOOLS: list[dict[str, Any]] = [
                         "GitHub issue number for an MRWK bounty. "
                         "Use either issue_number or bounty_id."
                     ),
+                },
+                "repo": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "Optional owner/name repository scope for issue_number lookups.",
                 },
                 "format": {
                     "type": "string",
