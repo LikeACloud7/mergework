@@ -105,6 +105,13 @@ Use the queue-health script before accepting busy bounty rounds:
 python scripts/pr_queue_health.py --repo ramimbo/mergework --format text
 ```
 
+For a report that can be pasted directly into a GitHub issue, PR comment, or
+payment-batch note, use Markdown output:
+
+```bash
+python scripts/pr_queue_health.py --repo ramimbo/mergework --format markdown
+```
+
 Live mode requires an authenticated GitHub CLI with access to the repository.
 The command only reads PRs and issues; it does not close PRs, label issues, or
 post comments. It reports missing bounty references, closed or exhausted bounty
