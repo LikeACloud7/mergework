@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import re
 import secrets
 import time
 from pathlib import Path
@@ -18,6 +17,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.accounts import normalized_account, normalized_wallet_address, register_account_routes
 from app.activity import register_activity_routes
 from app.admin import (
     admin_page_context,
@@ -34,7 +34,6 @@ from app.db import create_schema, session_scope
 from app.hub import is_ltc_lab_host, ltc_lab_context, mergework_hub_context
 from app.ledger.reconciliation import payout_reconciliation_summary, reconcile_accepted_payouts
 from app.ledger.service import (
-    TREASURY_ACCOUNT,
     LedgerError,
     close_bounty,
     create_bounty,
@@ -58,9 +57,7 @@ from app.ledger_views import (
 from app.mcp import handle_mcp_request
 from app.me import me_page_context
 from app.models import (
-    Account,
     Bounty,
-    LedgerEntry,
     Proof,
     Submission,
     Wallet,
@@ -73,20 +70,15 @@ from app.path_params import (
     proof_hash_from_path,
 )
 from app.serializers import (
-    accepted_work_for_account,
-    account_accepted_summary,
     bounty_awards_to_dict,
     bounty_list_summary,
     bounty_to_dict,
     ledger_to_dict,
     payout_reconciliation_to_dict,
-    safe_accepted_work_for_account,
-    safe_account_accepted_summary,
     wallet_to_dict,
     wallet_transfer_to_dict,
 )
 from app.status import health_status, system_status
-from app.wallets import WalletError, normalize_wallet_address
 from app.webhooks.github import handle_github_webhook
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -110,7 +102,6 @@ SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
 }
-GITHUB_LOGIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$")
 API_DOCS_CSP = (
     "default-src 'self'; "
     "base-uri 'self'; "
@@ -206,59 +197,6 @@ def _safe_next_path(next_path: str | None) -> str:
     ):
         return "/me"
     return next_path
-
-
-def _normalized_account(account: str) -> str:
-    if not account or not account.strip():
-        raise HTTPException(status_code=400, detail="account must not be empty")
-    if re.search(r"[\x00-\x1f\x7f]", account):
-        raise HTTPException(status_code=400, detail="account must not contain control characters")
-    clean = account.strip()
-    lower = clean.lower()
-    if lower == TREASURY_ACCOUNT:
-        return TREASURY_ACCOUNT
-    if lower.startswith("treasury:"):
-        raise HTTPException(status_code=400, detail="treasury account must be treasury:mrwk")
-    if lower.startswith("reserve:"):
-        reserve_prefix = "reserve:bounty:"
-        if not lower.startswith(reserve_prefix):
-            raise HTTPException(
-                status_code=400, detail="reserve account must use reserve:bounty:<id>"
-            )
-        bounty_id = lower.removeprefix(reserve_prefix)
-        try:
-            normalized_bounty_id = int(bounty_id) if bounty_id.isdigit() else 0
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail="reserve bounty id is too large") from exc
-        if normalized_bounty_id <= 0:
-            raise HTTPException(status_code=400, detail="reserve bounty id must be positive")
-        if normalized_bounty_id > SQLITE_INTEGER_MAX:
-            raise HTTPException(status_code=400, detail="reserve bounty id is too large")
-        return f"{reserve_prefix}{normalized_bounty_id}"
-    if lower.startswith("mrwk1"):
-        return _normalized_wallet_address(clean)
-    if lower.startswith("github:"):
-        login = clean.split(":", 1)[1].lower()
-        if not GITHUB_LOGIN_RE.fullmatch(login):
-            raise HTTPException(status_code=400, detail="github login must be valid")
-        return f"github:{login}"
-    return clean
-
-
-def _github_login_from_account(account: str) -> str | None:
-    if not account.startswith("github:"):
-        return None
-    login = account.removeprefix("github:")
-    if not GITHUB_LOGIN_RE.fullmatch(login):
-        return None
-    return login
-
-
-def _normalized_wallet_address(address: str) -> str:
-    try:
-        return normalize_wallet_address(address)
-    except WalletError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _signed_value(value: str, secret: str) -> str:
@@ -547,10 +485,12 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         json_object=_json_object,
         required_str=_required_str,
         optional_int=_optional_int,
-        normalized_account=_normalized_account,
+        normalized_account=normalized_account,
         positive_bounty_id=positive_bounty_id,
         sqlite_integer_max=SQLITE_INTEGER_MAX,
     )
+
+    register_account_routes(app, db_url=db_url, templates=templates)
 
     @app.get("/api/v1/reconciliation/payouts")
     def api_payout_reconciliation(
@@ -661,44 +601,6 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 "ledger_sequence": release.sequence if release else None,
             }
 
-    @app.get("/api/v1/accounts/{account}")
-    def api_account(account: str) -> dict[str, Any]:
-        account = _normalized_account(account)
-        github_login = _github_login_from_account(account)
-        if account.startswith("github:"):
-            transfer_status = (
-                "Claim GitHub balances from /me after linking a registered mrwk1 wallet."
-            )
-        elif account.startswith(("treasury:", "reserve:")):
-            transfer_status = (
-                "Internal ledger account. MRWK wallet transfers are only available "
-                "for registered mrwk1 addresses."
-            )
-        else:
-            transfer_status = "MRWK wallet transfers are enabled for registered mrwk1 addresses."
-        with session_scope(db_url) as session:
-            account_row = session.get(Account, account)
-            accepted_work = safe_account_accepted_summary(session, account)
-            return {
-                "account": account,
-                "ledger_address": account,
-                "github_login": github_login,
-                "exists": account_row is not None,
-                "balance_mrwk": format_mrwk(get_balance(session, account)),
-                "transfer_status": transfer_status,
-                "accepted_work": accepted_work,
-            }
-
-    @app.get("/api/v1/accounts/{account}/accepted-work")
-    def api_account_accepted_work(account: str) -> dict[str, Any]:
-        account = _normalized_account(account)
-        with session_scope(db_url) as session:
-            return {
-                "account": account,
-                "summary": account_accepted_summary(session, account),
-                "accepted_work": accepted_work_for_account(session, account),
-            }
-
     @app.get("/api/v1/auth/me")
     def api_auth_me(request: Request) -> dict[str, Any]:
         login = github_login_from_request(request)
@@ -728,7 +630,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.get("/api/v1/wallets/{address}")
     def api_wallet(address: str) -> dict[str, Any]:
-        address = _normalized_wallet_address(address)
+        address = normalized_wallet_address(address)
         with session_scope(db_url) as session:
             wallet = session.get(Wallet, address)
             if wallet is None:
@@ -885,25 +787,6 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             request, "ledger_entry.html", {"entry": api_ledger_entry(sequence)}
         )
 
-    @app.get("/accounts/{account}", response_class=HTMLResponse)
-    def account_page(request: Request, account: str) -> HTMLResponse:
-        account = _normalized_account(account)
-        with session_scope(db_url) as session:
-            account_data = api_account(account)
-            accepted_summary = safe_account_accepted_summary(session, account)
-            transactions = account_ledger_transactions(session, account)
-            accepted_work = safe_accepted_work_for_account(session, account)
-        return templates.TemplateResponse(
-            request,
-            "account.html",
-            {
-                "account": account_data,
-                "accepted_summary": accepted_summary,
-                "accepted_work": accepted_work,
-                "transactions": transactions,
-            },
-        )
-
     @app.get("/wallets", response_class=HTMLResponse)
     def wallets_page(request: Request) -> HTMLResponse:
         with session_scope(db_url) as session:
@@ -915,7 +798,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.get("/wallets/{address}", response_class=HTMLResponse)
     def wallet_page(request: Request, address: str) -> HTMLResponse:
-        address = _normalized_wallet_address(address)
+        address = normalized_wallet_address(address)
         with session_scope(db_url) as session:
             wallet = session.get(Wallet, address)
             if wallet is None:
@@ -1450,7 +1333,7 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | 
                 "attempts": attempt_listing["attempts"],
             }
         if name == "get_balance":
-            account = _normalized_account(str_arg("account"))
+            account = normalized_account(str_arg("account"))
             return f"{account}: {format_mrwk(get_balance(session, account))} MRWK"
         if name == "register_wallet":
             wallet = register_wallet(
@@ -1460,7 +1343,7 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | 
             )
             return json.dumps(wallet_to_dict(session, wallet))
         if name == "get_wallet":
-            wallet_row = session.get(Wallet, _normalized_wallet_address(str_arg("address")))
+            wallet_row = session.get(Wallet, normalized_wallet_address(str_arg("address")))
             if wallet_row is None:
                 return "wallet not found"
             return json.dumps(wallet_to_dict(session, wallet_row))
