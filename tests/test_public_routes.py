@@ -24,4 +24,11 @@ def test_public_bounties_context_normalizes_filter_state() -> None:
         },
         "selected_status": "open",
         "query_text": "proof",
+        "selected_sort": "newest",
+        "sort_options": {
+            "newest": "Newest first",
+            "reward": "Highest per-award reward",
+            "available": "Most MRWK available",
+            "awards": "Most award slots",
+        },
     }
