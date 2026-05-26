@@ -178,6 +178,33 @@ def test_submission_quality_gate_warns_for_stale_maintainer_activity() -> None:
     } in result["checks"]
 
 
+def test_submission_quality_gate_warns_when_activity_exceeds_threshold_by_seconds() -> None:
+    result = evaluate_submission(
+        {
+            "submission_text": "Summary: add validation\n\nRefs #319\n\nValidation: pytest passed",
+            "now": "2026-05-16T12:00:01Z",
+            "bounties": [
+                {
+                    "number": 319,
+                    "state": "OPEN",
+                    "awards_remaining": 1,
+                    "last_maintainer_activity_at": "2026-05-02T12:00:00Z",
+                    "maintainer_activity_verified": True,
+                    "max_maintainer_age_days": 14,
+                }
+            ],
+            "pull_requests": [],
+        }
+    )
+
+    assert result["status"] == "warn"
+    assert {
+        "name": "maintainer_activity",
+        "status": "warn",
+        "message": "last maintainer activity for bounty #319 was 14 days ago",
+    } in result["checks"]
+
+
 def test_submission_quality_gate_cli_returns_failure_exit(capsys, tmp_path) -> None:
     fixture = {
         "submission_text": "Summary: missing reference\n\nValidation: pytest passed",
@@ -322,6 +349,66 @@ def test_submission_quality_gate_live_context_adds_maintainer_activity(monkeypat
     } in result["checks"]
 
 
+def test_submission_quality_gate_live_context_accepts_member_comments(
+    monkeypatch,
+) -> None:
+    def fake_run(args, **kwargs):
+        if args[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="[]", stderr="")
+        if args[:3] == ["gh", "issue", "list"]:
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout=json.dumps([{"number": 319, "title": "MRWK bounty: gate", "state": "OPEN"}]),
+                stderr="",
+            )
+        if args[:3] == ["gh", "issue", "view"]:
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "author": {"login": "someone_else"},
+                        "createdAt": "2026-05-20T00:00:00Z",
+                        "comments": [
+                            {
+                                "authorAssociation": "MEMBER",
+                                "createdAt": "2026-05-25T12:00:00Z",
+                            }
+                        ],
+                    }
+                ),
+                stderr="",
+            )
+        raise AssertionError(args)
+
+    monkeypatch.setattr(submission_quality_gate.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        submission_quality_gate,
+        "_load_api_bounties",
+        lambda repo, api_host: {319: {"number": 319, "state": "OPEN", "awards_remaining": 1}},
+    )
+
+    data = submission_quality_gate._load_live_context(
+        "ramimbo/mergework",
+        "Summary: work\n\nRefs #319\n\nValidation: pytest passed",
+        "https://api.example.test",
+        14,
+    )
+    data["now"] = "2026-05-26T12:00:00Z"
+
+    assert data["bounties"][0]["maintainer_activity_verified"] is True
+    assert data["bounties"][0]["last_maintainer_activity_at"] == "2026-05-25T12:00:00Z"
+
+    result = evaluate_submission(data)
+    assert result["status"] == "pass"
+    assert {
+        "name": "maintainer_activity",
+        "status": "pass",
+        "message": "maintainer activity for bounty #319 was seen 1 days ago",
+    } in result["checks"]
+
+
 def test_submission_quality_gate_warns_when_live_payability_is_unverified(
     monkeypatch, capsys, tmp_path
 ) -> None:
@@ -364,6 +451,11 @@ def test_submission_quality_gate_warns_when_live_payability_is_unverified(
         "name": "bounty_payable",
         "status": "warn",
         "message": "referenced bounty #319 payability could not be verified",
+    } in output["checks"]
+    assert {
+        "name": "maintainer_activity",
+        "status": "warn",
+        "message": "recent maintainer activity for bounty #319 could not be verified",
     } in output["checks"]
 
     assert main(["--text-file", str(text_path), "--format", "text"]) == 0

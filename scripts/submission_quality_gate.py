@@ -5,7 +5,7 @@ import json
 import re
 import subprocess
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from difflib import SequenceMatcher
 from typing import Any
 from urllib.error import URLError
@@ -86,8 +86,9 @@ def _maintainer_activity_check(
             f"recent maintainer activity for bounty #{bounty_ref} could not be verified",
         )
     max_age_days = int(bounty.get("max_maintainer_age_days", DEFAULT_MAX_MAINTAINER_AGE_DAYS))
-    age_days = max(0, (now - last_activity).days)
-    if age_days > max_age_days:
+    delta = now - last_activity
+    age_days = max(0, int(delta.total_seconds() // 86400))
+    if delta > timedelta(days=max_age_days):
         return _check(
             "maintainer_activity",
             "warn",
@@ -209,6 +210,7 @@ def evaluate_submission(data: dict[str, Any]) -> dict[str, Any]:
             checks.append(
                 _check("bounty_payable", "pass", f"referenced bounty #{bounty_ref} is open")
             )
+        if bounty is not None:
             activity_check = _maintainer_activity_check(bounty_ref, bounty, now)
             if activity_check is not None:
                 checks.append(activity_check)
