@@ -182,9 +182,9 @@ curl -s "$API_HOST/api/v1/activity?q=p3xill"
 ```
 
 The optional `q` parameter filters activity rows by account, amount, submission
-URL, proof hash, internal bounty id, or GitHub issue number. The response groups
-matching proof-backed bounty payments into `totals`, contributor rollups, and
-the most recent payment rows:
+URL, proof hash, bounty repo, bounty issue URL, internal bounty id, or GitHub
+issue number. The response groups matching proof-backed bounty payments into
+`totals`, contributor rollups, and the most recent payment rows:
 
 ```json
 {
@@ -200,6 +200,9 @@ the most recent payment rows:
       "accepted_awards": 2,
       "accepted_mrwk": "115",
       "latest_submission_url": "https://github.com/ramimbo/mergework/pull/226#pullrequestreview-4354910919",
+      "latest_bounty_repo": "ramimbo/mergework",
+      "latest_bounty_issue_number": 219,
+      "latest_bounty_issue_url": "https://github.com/ramimbo/mergework/issues/219",
       "latest_proof_hash": "99f78d41b9a493ba2e6136cba0b0762f013a913c9d90c562976282e93d00b81f",
       "latest_proof_url": "/proofs/99f78d41b9a493ba2e6136cba0b0762f013a913c9d90c562976282e93d00b81f"
     }
@@ -212,8 +215,11 @@ the most recent payment rows:
       "submission_url": "https://github.com/ramimbo/mergework/pull/226#pullrequestreview-4354910919",
       "proof_hash": "99f78d41b9a493ba2e6136cba0b0762f013a913c9d90c562976282e93d00b81f",
       "proof_url": "/proofs/99f78d41b9a493ba2e6136cba0b0762f013a913c9d90c562976282e93d00b81f",
+      "bounty_repo": "ramimbo/mergework",
       "bounty_id": 37,
       "bounty_issue_number": 219,
+      "bounty_issue_url": "https://github.com/ramimbo/mergework/issues/219",
+      "bounty_url": "/bounties/37",
       "created_at": "2026-05-25T08:25:28.316705"
     }
   ]
