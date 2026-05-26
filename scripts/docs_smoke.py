@@ -41,6 +41,13 @@ REQUIRED_PUBLIC_PHRASES = {
         ),
         "require separate maintainer/contributor discussion before implementation",
     ],
+    "docs/bounty-rules.md": [
+        "## Submission Evidence Templates",
+        "PR or fix claim:",
+        "Review claim:",
+        "Smoke-check or bug-report claim:",
+        "Discussion or decision-support claim:",
+    ],
 }
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 DOCS_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/docs.yml"

@@ -56,6 +56,54 @@ After accepted work is paid, MergeWork records a public ledger proof. Public
 payment updates should point to those proofs and keep any private security or
 operational details out of public metadata.
 
+## Submission Evidence Templates
+
+Use the smallest template that makes the claim reviewable. Delete fields that do
+not apply, but keep the evidence specific enough that a maintainer can reproduce
+the work without reading unrelated context.
+
+PR or fix claim:
+
+```text
+Summary:
+Linked bounty:
+Changed files:
+Evidence:
+Tests:
+Out of scope:
+```
+
+Review claim:
+
+```text
+Reviewed PR:
+Head commit:
+Files inspected:
+Verdict:
+Validation:
+```
+
+Smoke-check or bug-report claim:
+
+```text
+Checked URL or command:
+Expected:
+Observed:
+Concise note:
+```
+
+Discussion or decision-support claim:
+
+```text
+Discussion URL:
+Category:
+Maintainer decision this supports:
+Non-goals:
+```
+
+Do not describe work as accepted, merged, or paid until the public GitHub label,
+maintainer comment, or MRWK proof exists.
+
 ## Payout Flow
 
 1. A maintainer posts a bounty and MRWK is reserved from treasury.
