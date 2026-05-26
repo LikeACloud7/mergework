@@ -21,6 +21,7 @@ GH_TIMEOUT_SECONDS = 30
 DEFAULT_API_HOST = "https://api.mrwk.ltclab.site"
 DEFAULT_MAX_MAINTAINER_AGE_DAYS = 14
 MAINTAINER_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
+MAX_BOUNTY_REF = 2**63 - 1
 
 
 def _check(name: str, status: str, message: str) -> dict[str, str]:
@@ -31,7 +32,12 @@ def _bounty_refs(text: str) -> list[int]:
     refs: list[int] = []
     seen: set[int] = set()
     for match in BOUNTY_REF_RE.findall(text):
-        ref = int(match)
+        try:
+            ref = int(match)
+        except ValueError:
+            continue
+        if ref > MAX_BOUNTY_REF:
+            continue
         if ref in seen:
             continue
         seen.add(ref)

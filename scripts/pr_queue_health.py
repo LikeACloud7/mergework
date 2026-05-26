@@ -14,6 +14,7 @@ UNSTABLE_MERGE_STATES = {"blocked", "conflicting", "dirty", "unknown", "unstable
 GH_TIMEOUT_SECONDS = 30
 GH_PR_SAFETY_CAP = 201
 GH_ISSUE_SAFETY_CAP = 201
+MAX_BOUNTY_REF = 2**63 - 1
 
 
 def _labels(raw: dict[str, Any]) -> list[str]:
@@ -55,7 +56,15 @@ def _bounty_refs(raw: dict[str, Any]) -> list[int]:
         for key in ("title", "body", "description")
         if raw.get(key) is not None
     )
-    return sorted({int(match) for match in BOUNTY_REF_RE.findall(text)})
+    found_refs: set[int] = set()
+    for match in BOUNTY_REF_RE.findall(text):
+        try:
+            ref = int(match)
+        except ValueError:
+            continue
+        if ref <= MAX_BOUNTY_REF:
+            found_refs.add(ref)
+    return sorted(found_refs)
 
 
 def _is_open_bounty(raw: dict[str, Any]) -> bool:
