@@ -17,6 +17,16 @@ def test_readme_lists_live_ltclab_urls() -> None:
     assert "docs/api-examples.md" in readme
 
 
+def test_paid_bounties_lists_api_mcp_round3_payments() -> None:
+    paid = Path("docs/paid-bounties.md").read_text(encoding="utf-8")
+
+    assert "[#411 public API and MCP examples accuracy, round 3]" in paid
+    assert "[PR #412](https://github.com/ramimbo/mergework/pull/412)" in paid
+    assert "[PR #424](https://github.com/ramimbo/mergework/pull/424)" in paid
+    assert "fe00016678d3a0dd408ba165b0e04516f16e09cc5c4b512df3c28e60f6f72015" in paid
+    assert "be12d8e13f6ff0b5c77a643cbe304a083418956d7cdc3c08ab5aded96c892fa4" in paid
+
+
 def test_api_examples_document_internal_bounty_ids() -> None:
     examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
 
