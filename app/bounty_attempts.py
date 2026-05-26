@@ -83,8 +83,9 @@ def bounty_attempt_warnings(session: Session, bounty: Bounty, now: datetime) -> 
         .select_from(BountyAttempt)
         .where(*_active_attempt_conditions(bounty.id, now))
     )
-    if active_count and active_count > 1:
-        warnings.append(f"bounty has {active_count} active attempts")
+    if active_count and active_count >= awards_remaining:
+        attempt_label = "attempt" if active_count == 1 else "attempts"
+        warnings.append(f"bounty has {active_count} active {attempt_label}")
     return warnings
 
 

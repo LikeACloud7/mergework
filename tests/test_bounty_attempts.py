@@ -172,6 +172,40 @@ def test_bounty_attempts_accept_empty_body_defaults_to_login(sqlite_url: str, mo
     assert released.json()["attempt"]["status"] == "released"
 
 
+def test_single_award_bounty_warns_when_active_attempt_uses_available_slot(
+    sqlite_url: str, monkeypatch
+) -> None:
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", COOKIE_SECRET)
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=326,
+            issue_url="https://github.com/ramimbo/mergework/issues/326",
+            title="Single award attempt warning",
+            reward_mrwk="50",
+            max_awards=1,
+            acceptance="Warn when the only award slot already has an active attempt.",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    _set_login(client, "alice")
+
+    created = client.post(
+        f"/api/v1/bounties/{bounty.id}/attempts",
+        json={"submitter_account": "github:alice", "ttl_seconds": 3600},
+    )
+
+    assert created.status_code == 201
+    assert created.json()["warnings"] == ["bounty has 1 active attempt"]
+
+    visible = client.get(f"/api/v1/bounties/{bounty.id}/attempts")
+    assert visible.status_code == 200
+    assert visible.json()["warnings"] == ["bounty has 1 active attempt"]
+
+
 def test_expired_bounty_attempt_is_visible_but_no_longer_blocks_submitter(
     sqlite_url: str,
     monkeypatch,
