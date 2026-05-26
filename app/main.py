@@ -58,6 +58,13 @@ from app.models import (
     Submission,
     Wallet,
 )
+from app.path_params import (
+    SQLITE_INTEGER_MAX,
+    issue_number_search_value,
+    positive_bounty_id,
+    positive_ledger_sequence,
+    proof_hash_from_path,
+)
 from app.serializers import (
     accepted_work_for_account,
     account_accepted_summary,
@@ -98,7 +105,6 @@ SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
 }
 GITHUB_LOGIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$")
-HEX_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 API_DOCS_CSP = (
     "default-src 'self'; "
     "base-uri 'self'; "
@@ -113,7 +119,6 @@ API_DOCS_CSP = (
     "worker-src 'self' blob:"
 )
 API_DOCS_PATHS = {"/api/docs", "/api/redoc"}
-SQLITE_INTEGER_MAX = 2**63 - 1
 
 
 def _request_was_forwarded_https(request: Request) -> bool:
@@ -135,16 +140,6 @@ def _preserve_forwarded_https_redirect(request: Request, response: Response) -> 
     response.headers["location"] = urlunsplit(
         ("https", parsed.netloc, parsed.path, parsed.query, parsed.fragment)
     )
-
-
-def _issue_number_search_value(query: str) -> int | None:
-    if not query.isdigit():
-        return None
-    try:
-        issue_number = int(query)
-    except ValueError:
-        return None
-    return issue_number if issue_number <= SQLITE_INTEGER_MAX else None
 
 
 def _payout_response_from_proof(proof: Proof, *, status: str) -> dict[str, Any]:
@@ -265,36 +260,11 @@ def _github_login_from_account(account: str) -> str | None:
     return login
 
 
-def _positive_bounty_id(bounty_id: int) -> int:
-    if bounty_id <= 0:
-        raise HTTPException(status_code=400, detail="bounty id must be positive")
-    if bounty_id > SQLITE_INTEGER_MAX:
-        raise HTTPException(status_code=400, detail="bounty id is too large")
-    return bounty_id
-
-
-def _positive_ledger_sequence(sequence: int) -> int:
-    if sequence <= 0:
-        raise HTTPException(status_code=400, detail="ledger sequence must be positive")
-    if sequence > SQLITE_INTEGER_MAX:
-        raise HTTPException(status_code=400, detail="ledger sequence is too large")
-    return sequence
-
-
 def _normalized_wallet_address(address: str) -> str:
     try:
         return normalize_wallet_address(address)
     except WalletError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-def _proof_hash_from_path(proof_hash: str) -> str:
-    if proof_hash != proof_hash.strip():
-        raise HTTPException(status_code=400, detail="proof hash must be 64 hex characters")
-    clean = proof_hash.lower()
-    if not HEX_HASH_RE.fullmatch(clean):
-        raise HTTPException(status_code=400, detail="proof hash must be 64 hex characters")
-    return clean
 
 
 def _signed_value(value: str, secret: str) -> str:
@@ -506,7 +476,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                         .replace("_", "\\_")
                     )
                     like_query = f"%{escaped_query}%"
-                    issue_number = _issue_number_search_value(normalized_query)
+                    issue_number = issue_number_search_value(normalized_query)
                     text_filter = or_(
                         func.lower(Bounty.repo).like(like_query, escape="\\"),
                         func.lower(Bounty.title).like(like_query, escape="\\"),
@@ -567,7 +537,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.get("/api/v1/bounties/{bounty_id}")
     def api_bounty(bounty_id: int) -> dict[str, Any]:
-        bounty_id = _positive_bounty_id(bounty_id)
+        bounty_id = positive_bounty_id(bounty_id)
         with session_scope(db_url) as session:
             bounty = session.get(Bounty, bounty_id)
             if bounty is None:
@@ -584,7 +554,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         required_str=_required_str,
         optional_int=_optional_int,
         normalized_account=_normalized_account,
-        positive_bounty_id=_positive_bounty_id,
+        positive_bounty_id=positive_bounty_id,
         sqlite_integer_max=SQLITE_INTEGER_MAX,
     )
 
@@ -606,7 +576,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         request: Request,
         admin_login: str = Depends(require_admin_token),
     ) -> Any:
-        bounty_id = _positive_bounty_id(bounty_id)
+        bounty_id = positive_bounty_id(bounty_id)
         data = await _json_object(request)
         try:
             requested_account = _required_str(data, "to_account")
@@ -676,7 +646,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         request: Request,
         admin_login: str = Depends(require_admin_token),
     ) -> dict[str, Any]:
-        bounty_id = _positive_bounty_id(bounty_id)
+        bounty_id = positive_bounty_id(bounty_id)
         data = await _json_object(request)
         reference = _optional_str(data, "reference") if data.get("reference") is not None else None
         closed_by = _optional_str(data, "closed_by", admin_login)
@@ -836,7 +806,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.get("/api/v1/ledger/{sequence}")
     def api_ledger_entry(sequence: int) -> dict[str, Any]:
-        sequence = _positive_ledger_sequence(sequence)
+        sequence = positive_ledger_sequence(sequence)
         with session_scope(db_url) as session:
             entry = session.get(LedgerEntry, sequence)
             if entry is None:
@@ -846,7 +816,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.get("/api/v1/proofs/{proof_hash}")
     def api_proof(proof_hash: str) -> dict[str, Any]:
-        proof_hash = _proof_hash_from_path(proof_hash)
+        proof_hash = proof_hash_from_path(proof_hash)
         with session_scope(db_url) as session:
             proof = session.get(Proof, proof_hash)
             if proof is None:
@@ -1305,15 +1275,6 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | 
             raise ValueError("repo is too long")
         return repo.lower()
 
-    def mcp_issue_number_search_value(query_text: str) -> int | None:
-        if not query_text.isdigit():
-            return None
-        try:
-            issue_number = int(query_text)
-        except ValueError:
-            return None
-        return issue_number if issue_number <= SQLITE_INTEGER_MAX else None
-
     def list_limit_arg(default: int = 25) -> int:
         if "limit" not in args or args.get("limit") is None:
             return default
@@ -1526,7 +1487,7 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | 
                     query_text.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
                 )
                 like_query = f"%{escaped_query}%"
-                issue_number = mcp_issue_number_search_value(query_text)
+                issue_number = issue_number_search_value(query_text)
                 text_filter = or_(
                     func.lower(Bounty.repo).like(like_query, escape="\\"),
                     func.lower(Bounty.title).like(like_query, escape="\\"),
@@ -1600,7 +1561,7 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | 
             )
             return json.dumps(ledger_to_dict(entry, proof.hash if proof else None))
         if name == "get_proof":
-            proof = session.get(Proof, _proof_hash_from_path(str_arg("hash")))
+            proof = session.get(Proof, proof_hash_from_path(str_arg("hash")))
             if proof is None:
                 return "proof not found"
             public_payload = json.loads(proof.public_json)
