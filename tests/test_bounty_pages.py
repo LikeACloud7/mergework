@@ -182,7 +182,13 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
 
     oversized_issue_page = client.get("/bounties", params={"q": "9" * 40})
     assert oversized_issue_page.status_code == 200
-    assert "No bounties yet." in oversized_issue_page.text
+    assert "No bounties match these filters." in oversized_issue_page.text
+    assert 'href="/bounties">Clear filters</a>' in oversized_issue_page.text
+
+    empty_status_page = client.get("/bounties?status=paid&q=proof")
+    assert empty_status_page.status_code == 200
+    assert "No bounties match these filters." in empty_status_page.text
+    assert 'href="/bounties">Clear filters</a>' in empty_status_page.text
 
     percent_search = client.get("/api/v1/bounties?q=%25")
     assert percent_search.status_code == 200

@@ -49,7 +49,12 @@
     <p>{{ bounty.acceptance }}</p>
   </article>
   {% else %}
+  {% if query_text or selected_status %}
+  <p>No bounties match these filters.</p>
+  <p><a href="/bounties">Clear filters</a></p>
+  {% else %}
   <p>No bounties yet.</p>
+  {% endif %}
   {% endfor %}
 </div>
 {% endblock %}
