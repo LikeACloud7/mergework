@@ -1394,6 +1394,21 @@ def test_mcp_submit_work_proof_returns_structured_bounty_guidance(sqlite_url: st
     assert structured["title"] == "Structured MCP work-proof guidance"
     assert structured["acceptance"] == "Return machine-readable work-proof guidance."
     assert "/claim" in structured["submission_format"]
+    requirements = structured["submission_requirements"]
+    assert requirements["reference_formats"] == ["Bounty #315", "Refs #315"]
+    assert requirements["claim_command"] == "/claim"
+    assert requirements["attempt_endpoint"] == f"/api/v1/bounties/{bounty_id}/attempts"
+    assert requirements["acceptance_trigger"] == ("maintainer_mrwk_accepted_label_or_admin_payout")
+    assert "focused PR, issue, report, or evidence URL" in requirements["evidence_required"]
+    assert "price claims" in requirements["public_metadata_must_avoid"]
+    assert [action["id"] for action in requirements["next_actions"]] == [
+        "confirm_award_slot",
+        "check_duplicate_scope",
+        "keep_scope_focused",
+        "include_bounty_reference",
+        "include_review_evidence",
+        "wait_for_maintainer_acceptance",
+    ]
     assert "private keys" in structured["safety_rules"][0]
 
 
@@ -1432,6 +1447,64 @@ def test_mcp_submit_work_proof_returns_structured_generic_guidance(sqlite_url: s
             "Open a focused PR or issue, reference the MRWK bounty, include test "
             "evidence, and wait for a maintainer to apply mrwk:accepted."
         ),
+        "submission_requirements": {
+            "reference_formats": ["Bounty #<issue_number>", "Refs #<issue_number>"],
+            "claim_command": "/claim",
+            "attempt_endpoint": "/api/v1/bounties/<bounty_id>/attempts",
+            "evidence_required": [
+                "focused PR, issue, report, or evidence URL",
+                "short verification summary",
+                "tests, command output, screenshots, or reproduction steps when relevant",
+            ],
+            "acceptance_trigger": "maintainer_mrwk_accepted_label_or_admin_payout",
+            "public_metadata_must_avoid": [
+                "private keys",
+                "seed material",
+                "secrets",
+                "deployment credentials",
+                "private vulnerability details",
+                "price claims",
+            ],
+            "next_actions": [
+                {
+                    "id": "select_bounty",
+                    "required": True,
+                    "text": "Select a concrete open bounty before submitting work proof.",
+                },
+                {
+                    "id": "check_duplicate_scope",
+                    "required": True,
+                    "text": (
+                        "Confirm no active claim or duplicate PR already covers the same scope."
+                    ),
+                },
+                {
+                    "id": "keep_scope_focused",
+                    "required": True,
+                    "text": "Keep changes directly tied to one bounty issue.",
+                },
+                {
+                    "id": "include_bounty_reference",
+                    "required": True,
+                    "text": (
+                        "Include Bounty #<issue_number> or Refs #<issue_number> in the submission."
+                    ),
+                },
+                {
+                    "id": "include_review_evidence",
+                    "required": True,
+                    "text": "Include reviewable validation evidence before claiming.",
+                },
+                {
+                    "id": "wait_for_maintainer_acceptance",
+                    "required": True,
+                    "text": (
+                        "Payment requires mrwk:accepted or an admin payout; merge or CI "
+                        "alone is not acceptance."
+                    ),
+                },
+            ],
+        },
         "safety_rules": [
             "Do not include private keys, seed material, secrets, deployment "
             "credentials, private vulnerability details, or price claims."
@@ -1510,6 +1583,7 @@ def test_mcp_submit_work_proof_structures_terminal_bounty_availability(
         "bounty is paid",
         "bounty has no award slots remaining",
     ]
+    assert paid["submission_requirements"]["next_actions"][0]["id"] == "choose_open_bounty"
     assert closed["status"] == "closed"
     assert closed["availability"] == "not_currently_open"
     assert closed["can_submit"] is False
@@ -1517,6 +1591,7 @@ def test_mcp_submit_work_proof_structures_terminal_bounty_availability(
         "bounty is closed",
         "bounty has no award slots remaining",
     ]
+    assert closed["submission_requirements"]["next_actions"][0]["id"] == "choose_open_bounty"
 
 
 def test_mcp_submit_work_proof_reports_unknown_bounty(sqlite_url: str) -> None:
