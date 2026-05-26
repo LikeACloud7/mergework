@@ -53,12 +53,17 @@ def test_public_urls_reject_malformed_hosts_and_ports() -> None:
         "https://example.com:bad/path",
         "https://example.com:/path",
         "https://:443/path",
+        "https://api..example/path",
+        "https://bad_host.example/path",
+        "https://-bad.example/path",
+        "https://bad-.example/path",
     ):
         with pytest.raises(LedgerError, match="URL must include a valid host"):
             validate_public_url(url)
 
     assert public_url_or_none("https://[bad") is None
     assert public_url_or_none("https://:443/path") is None
+    assert public_url_or_none("https://bad_host.example/path") is None
 
 
 def test_bounty_urls_reject_embedded_credentials(sqlite_url: str) -> None:
