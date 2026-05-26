@@ -27,6 +27,15 @@ def test_paid_bounties_lists_api_mcp_round3_payments() -> None:
     assert "be12d8e13f6ff0b5c77a643cbe304a083418956d7cdc3c08ab5aded96c892fa4" in paid
 
 
+def test_paid_bounties_lists_recent_docs_payments() -> None:
+    paid = Path("docs/paid-bounties.md").read_text(encoding="utf-8")
+
+    assert "[PR #445](https://github.com/ramimbo/mergework/pull/445)" in paid
+    assert "[PR #446](https://github.com/ramimbo/mergework/pull/446)" in paid
+    assert "f5b9b286c4cfefe6de73198dd7be5b8d5e1013264623573b7e49488dd6efaecb" in paid
+    assert "bba272164648c1bca33710226173a350d002a22f23aa1bf24c46ec594cf2cc9c" in paid
+
+
 def test_api_examples_document_internal_bounty_ids() -> None:
     examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
 
