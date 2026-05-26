@@ -9,10 +9,12 @@ Submit small, reviewable work and include evidence.
 - `GET /api/v1/status`
 - `GET /api/v1/bounties`
 - `GET /api/v1/bounties/{id}`
+- `GET /api/v1/bounties/summary`
 - `GET /api/v1/bounties/{id}/attempts`
 - `GET /api/v1/accounts/{account}`
 - `GET /api/v1/wallets/{address}`
 - `GET /api/v1/ledger`
+- `GET /api/v1/ledger/{sequence}`
 - `GET /api/v1/activity`
 - `GET /api/v1/proofs/{hash}`
 - `POST /api/v1/wallets/register`
@@ -37,6 +39,15 @@ curl -s "$API_HOST/api/v1/status"
 curl -s "$API_HOST/api/v1/bounties"
 ```
 
+Get a lightweight counts-only bounty summary with optional status and search
+filters:
+
+```bash
+curl -s "$API_HOST/api/v1/bounties/summary"
+curl -s "$API_HOST/api/v1/bounties/summary?status=open"
+curl -s "$API_HOST/api/v1/bounties/summary?q=docs"
+```
+
 Inspect one bounty, accepted-work activity, a ledger page, and a proof:
 
 ```bash
@@ -45,6 +56,12 @@ curl -s "$API_HOST/api/v1/bounties/<bounty_id>/attempts"
 curl -s "$API_HOST/api/v1/activity"
 curl -s "$API_HOST/api/v1/ledger?limit=10"
 curl -s "$API_HOST/api/v1/proofs/<proof_hash>"
+```
+
+Look up a single ledger entry by sequence number:
+
+```bash
+curl -s "$API_HOST/api/v1/ledger/1"
 ```
 
 The `<bounty_id>` value is the internal MergeWork bounty id returned by
