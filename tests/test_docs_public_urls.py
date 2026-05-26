@@ -217,6 +217,24 @@ def test_api_examples_document_mcp_lookup_response_shapes() -> None:
     assert '\\"next_nonce\\":1' in examples
 
 
+def test_api_examples_document_mcp_submit_work_proof_structured_response() -> None:
+    examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
+
+    assert '"name":"submit_work_proof"' in examples
+    assert '"issue_number":404' in examples
+    assert '"repo":"ramimbo/mergework"' in examples
+    assert '"format":"json"' in examples
+    assert "result.structuredContent" in examples
+    assert "result.content[0].text" in examples
+    assert '"structuredContent": {' in examples
+    assert '"availability": "open_for_submissions"' in examples
+    assert '"can_submit": true' in examples
+    assert '"availability_warnings": []' in examples
+    assert '"reference_formats": ["Bounty #404", "Refs #404"]' in examples
+    assert '"attempt_endpoint": "/api/v1/bounties/64/attempts"' in examples
+    assert '"id": "confirm_award_slot"' in examples
+
+
 def test_agent_guide_explains_internal_bounty_ids() -> None:
     guide = Path("docs/agent-guide.md").read_text(encoding="utf-8")
 
