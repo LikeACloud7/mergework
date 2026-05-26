@@ -8,7 +8,7 @@ import sys
 from datetime import UTC, datetime, timedelta
 from difflib import SequenceMatcher
 from typing import Any
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 BOUNTY_REF_RE = re.compile(r"(?:bounty|refs?|fixes|closes)\s+#(\d+)", re.IGNORECASE)
@@ -53,6 +53,42 @@ def _bounty_is_payable(raw: dict[str, Any]) -> bool:
 
 def _bounty_payability_verified(raw: dict[str, Any]) -> bool:
     return raw.get("payability_verified", True) is not False
+
+
+def _active_attempts_verified(raw: dict[str, Any]) -> bool:
+    return raw.get("active_attempts_verified", True) is not False
+
+
+def _safe_attempts(raw: dict[str, Any]) -> list[dict[str, Any]]:
+    attempts = raw.get("active_attempts", [])
+    if not isinstance(attempts, list):
+        return []
+    return [attempt for attempt in attempts if isinstance(attempt, dict)]
+
+
+def _attempt_field(attempt: dict[str, Any], *names: str) -> Any:
+    for name in names:
+        value = attempt.get(name)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _format_attempt_summary(attempt: dict[str, Any]) -> str:
+    parts: list[str] = []
+    submitter = _attempt_field(attempt, "submitter", "submitter_account", "account", "github_login")
+    if submitter:
+        parts.append(f"submitter={submitter}")
+    source_url = _attempt_field(attempt, "source_url", "public_source_url", "url")
+    if source_url:
+        parts.append(f"source={source_url}")
+    status = _attempt_field(attempt, "status")
+    if status:
+        parts.append(f"status={status}")
+    expires_at = _attempt_field(attempt, "expires_at", "expiresAt", "expiry_time")
+    if expires_at:
+        parts.append(f"expires={expires_at}")
+    return ", ".join(parts) or "active attempt"
 
 
 def _parse_datetime(value: Any) -> datetime | None:
@@ -232,6 +268,33 @@ def evaluate_submission(data: dict[str, Any]) -> dict[str, Any]:
             activity_check = _maintainer_activity_check(bounty_ref, bounty, now)
             if activity_check is not None:
                 checks.append(activity_check)
+            if "active_attempts" in bounty or "active_attempts_verified" in bounty:
+                active_attempts = _safe_attempts(bounty)
+                if active_attempts:
+                    checks.append(
+                        _check(
+                            "active_attempts",
+                            "warn",
+                            f"{len(active_attempts)} active attempt(s) already exist "
+                            f"for bounty #{bounty_ref}",
+                        )
+                    )
+                elif not _active_attempts_verified(bounty):
+                    checks.append(
+                        _check(
+                            "active_attempts",
+                            "warn",
+                            f"active attempts for bounty #{bounty_ref} could not be verified",
+                        )
+                    )
+                else:
+                    checks.append(
+                        _check(
+                            "active_attempts",
+                            "pass",
+                            f"no active attempts found for bounty #{bounty_ref}",
+                        )
+                    )
 
     if SUMMARY_RE.search(text):
         checks.append(_check("summary_present", "pass", "summary text found"))
@@ -272,6 +335,7 @@ def evaluate_submission(data: dict[str, Any]) -> dict[str, Any]:
         "bounty_reference": bounty_ref,
         "checks": checks,
         "similar_open_prs": similar,
+        "active_attempts": _safe_attempts(bounties.get(bounty_ref, {})) if bounty_ref else [],
     }
 
 
@@ -349,11 +413,38 @@ def _load_api_bounties(repo: str, api_host: str) -> dict[int, dict[str, Any]]:
         if not isinstance(issue_number, int):
             continue
         bounties[issue_number] = {
+            "id": item.get("id"),
             "number": issue_number,
             "state": item.get("status", "open"),
             "awards_remaining": item.get("awards_remaining"),
         }
     return bounties
+
+
+def _normalize_attempt(raw: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "submitter": _attempt_field(
+            raw, "submitter", "submitter_account", "account", "github_login"
+        ),
+        "source_url": _attempt_field(raw, "source_url", "public_source_url", "url"),
+        "status": _attempt_field(raw, "status"),
+        "expires_at": _attempt_field(raw, "expires_at", "expiresAt", "expiry_time"),
+    }
+
+
+def _load_api_attempts(api_host: str, bounty_id: Any) -> list[dict[str, Any]]:
+    if not isinstance(bounty_id, int):
+        raise RuntimeError("MergeWork API bounty id unavailable for attempts lookup")
+    url = f"{api_host.rstrip('/')}/api/v1/bounties/{bounty_id}/attempts"
+    try:
+        with urlopen(url, timeout=GH_TIMEOUT_SECONDS) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, OSError, URLError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"MergeWork API attempts data unavailable: {exc}") from exc
+    attempts = payload.get("attempts") if isinstance(payload, dict) else payload
+    if not isinstance(attempts, list):
+        raise RuntimeError("MergeWork API attempts data must be a list")
+    return [_normalize_attempt(attempt) for attempt in attempts if isinstance(attempt, dict)]
 
 
 def _load_live_context(
@@ -415,6 +506,7 @@ def _load_live_context(
         awards_remaining = api_bounty.get("awards_remaining")
         bounties.append(
             {
+                "id": api_bounty.get("id"),
                 "number": issue["number"],
                 "title": issue.get("title"),
                 "state": issue.get("state"),
@@ -432,6 +524,17 @@ def _load_live_context(
                 load_warnings.append(
                     f"maintainer activity unavailable for bounty #{issue['number']}: {exc}"
                 )
+            bounty_id = api_bounty.get("id")
+            if isinstance(bounty_id, int):
+                try:
+                    bounties[-1]["active_attempts"] = _load_api_attempts(api_host, bounty_id)
+                    bounties[-1]["active_attempts_verified"] = True
+                except RuntimeError as exc:
+                    bounties[-1]["active_attempts"] = []
+                    bounties[-1]["active_attempts_verified"] = False
+                    load_warnings.append(
+                        f"active attempts unavailable for bounty #{issue['number']}: {exc}"
+                    )
     data = {"submission_text": submission_text, "bounties": bounties, "pull_requests": prs}
     if load_warnings:
         data["load_warning"] = "; ".join(load_warnings)
@@ -458,6 +561,10 @@ def format_text(result: dict[str, Any]) -> str:
         lines.append("Similar open PRs:")
         for pr in result["similar_open_prs"]:
             lines.append(f"- #{pr['number']}: {pr['title']} {pr.get('url') or ''}".rstrip())
+    if result.get("active_attempts"):
+        lines.append("Active attempts:")
+        for attempt in result["active_attempts"]:
+            lines.append(f"- {_format_attempt_summary(attempt)}")
     return "\n".join(lines)
 
 

@@ -225,12 +225,14 @@ python scripts/submission_quality_gate.py --text-file pr-body.md --repo ramimbo/
 The gate is advisory. It does not reserve work, claim acceptance, make payments,
 or block maintainer decisions. It checks for a `Bounty #<issue>` or
 `Refs #<issue>` reference, whether the referenced bounty appears open, whether
-the bounty has recent maintainer activity, whether the draft includes a concise
+the bounty has recent maintainer activity, whether active attempt reservations
+already exist for the referenced bounty, whether the draft includes a concise
 summary and validation evidence, whether multiple bounty references are mixed
 into one draft, and whether a similar open PR already references the same
-bounty. When live GitHub or
-MergeWork API data is unavailable, the gate degrades to advisory warnings
-instead of blocking submission.
+bounty. The active-attempt lookup is read-only and uses the internal bounty id
+from `/api/v1/bounties`; if the attempts API is unavailable, the gate keeps
+other checks and reports an advisory warning instead of crashing or hiding
+payability results.
 
 Results:
 

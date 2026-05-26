@@ -76,6 +76,125 @@ def test_submission_quality_gate_fails_closed_or_exhausted_bounty() -> None:
     } in result["checks"]
 
 
+def test_submission_quality_gate_passes_when_no_active_attempts() -> None:
+    result = evaluate_submission(
+        {
+            "submission_text": "Summary: add validation\n\nRefs #319\n\nValidation: pytest passed",
+            "bounties": [
+                {
+                    "number": 319,
+                    "state": "OPEN",
+                    "awards_remaining": 1,
+                    "active_attempts": [],
+                    "active_attempts_verified": True,
+                }
+            ],
+            "pull_requests": [],
+        }
+    )
+
+    assert result["status"] == "pass"
+    assert result["active_attempts"] == []
+    assert {
+        "name": "active_attempts",
+        "status": "pass",
+        "message": "no active attempts found for bounty #319",
+    } in result["checks"]
+
+
+def test_submission_quality_gate_warns_for_one_active_attempt() -> None:
+    result = evaluate_submission(
+        {
+            "submission_text": "Summary: add validation\n\nRefs #319\n\nValidation: pytest passed",
+            "bounties": [
+                {
+                    "number": 319,
+                    "state": "OPEN",
+                    "awards_remaining": 1,
+                    "active_attempts": [
+                        {
+                            "submitter": "github:agent-one",
+                            "source_url": "https://github.com/ramimbo/mergework/pull/12",
+                            "status": "active",
+                            "expires_at": "2026-05-27T00:00:00Z",
+                        }
+                    ],
+                    "active_attempts_verified": True,
+                }
+            ],
+            "pull_requests": [],
+        }
+    )
+
+    assert result["status"] == "warn"
+    assert result["active_attempts"] == [
+        {
+            "submitter": "github:agent-one",
+            "source_url": "https://github.com/ramimbo/mergework/pull/12",
+            "status": "active",
+            "expires_at": "2026-05-27T00:00:00Z",
+        }
+    ]
+    assert {
+        "name": "active_attempts",
+        "status": "warn",
+        "message": "1 active attempt(s) already exist for bounty #319",
+    } in result["checks"]
+
+
+def test_submission_quality_gate_warns_for_multiple_active_attempts() -> None:
+    result = evaluate_submission(
+        {
+            "submission_text": "Summary: add validation\n\nRefs #319\n\nValidation: pytest passed",
+            "bounties": [
+                {
+                    "number": 319,
+                    "state": "OPEN",
+                    "awards_remaining": 1,
+                    "active_attempts": [
+                        {"submitter": "github:agent-one", "status": "active"},
+                        {"submitter": "github:agent-two", "status": "active"},
+                    ],
+                    "active_attempts_verified": True,
+                }
+            ],
+            "pull_requests": [],
+        }
+    )
+
+    assert result["status"] == "warn"
+    assert {
+        "name": "active_attempts",
+        "status": "warn",
+        "message": "2 active attempt(s) already exist for bounty #319",
+    } in result["checks"]
+
+
+def test_submission_quality_gate_warns_when_active_attempts_unavailable() -> None:
+    result = evaluate_submission(
+        {
+            "submission_text": "Summary: add validation\n\nRefs #319\n\nValidation: pytest passed",
+            "bounties": [
+                {
+                    "number": 319,
+                    "state": "OPEN",
+                    "awards_remaining": 1,
+                    "active_attempts": [],
+                    "active_attempts_verified": False,
+                }
+            ],
+            "pull_requests": [],
+        }
+    )
+
+    assert result["status"] == "warn"
+    assert {
+        "name": "active_attempts",
+        "status": "warn",
+        "message": "active attempts for bounty #319 could not be verified",
+    } in result["checks"]
+
+
 def test_submission_quality_gate_warns_for_missing_evidence() -> None:
     result = evaluate_submission(
         {
@@ -369,7 +488,12 @@ def test_submission_quality_gate_live_context_adds_maintainer_activity(monkeypat
     monkeypatch.setattr(
         submission_quality_gate,
         "_load_api_bounties",
-        lambda repo, api_host: {319: {"number": 319, "state": "OPEN", "awards_remaining": 1}},
+        lambda repo, api_host: {
+            319: {"id": 11, "number": 319, "state": "OPEN", "awards_remaining": 1}
+        },
+    )
+    monkeypatch.setattr(
+        submission_quality_gate, "_load_api_attempts", lambda api_host, bounty_id: []
     )
 
     data = submission_quality_gate._load_live_context(
@@ -429,7 +553,12 @@ def test_submission_quality_gate_live_context_accepts_member_comments(
     monkeypatch.setattr(
         submission_quality_gate,
         "_load_api_bounties",
-        lambda repo, api_host: {319: {"number": 319, "state": "OPEN", "awards_remaining": 1}},
+        lambda repo, api_host: {
+            319: {"id": 11, "number": 319, "state": "OPEN", "awards_remaining": 1}
+        },
+    )
+    monkeypatch.setattr(
+        submission_quality_gate, "_load_api_attempts", lambda api_host, bounty_id: []
     )
 
     data = submission_quality_gate._load_live_context(
