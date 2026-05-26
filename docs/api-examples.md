@@ -586,9 +586,9 @@ curl -s "$API_HOST/api/v1/bounties/<bounty_id>/attempts?include_expired=true"
 Cross-reference open GitHub PRs against the bounty issue number. Opening multiple PRs for the same bounty issue from different contributors is normal for multi-award bounties, but you should avoid overlapping scope:
 
 ```bash
-# Check open PRs referencing the same bounty issue via the GitHub API
+# Check open PRs referencing the same bounty issue via the GitHub API (use pulls endpoint, not issues)
 curl -s -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/ramimbo/mergework/issues?state=open&per_page=50"
+  "https://api.github.com/repos/ramimbo/mergework/pulls?state=open&per_page=50"
 ```
 
 Filter by PR body references (`Bounty #N` or `Refs #N`) to find scope-alike PRs before opening new work.
