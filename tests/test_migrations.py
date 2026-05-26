@@ -45,3 +45,9 @@ def test_alembic_upgrade_head_builds_deploy_schema(tmp_path, monkeypatch) -> Non
         and fk["referred_columns"] == ["sequence"]
         for fk in proposal_fks
     )
+    challenge_fks = inspector.get_foreign_keys("treasury_challenges")
+    assert any(
+        fk["constrained_columns"] == ["proposal_id"]
+        and fk["referred_table"] == "treasury_proposals"
+        for fk in challenge_fks
+    )
