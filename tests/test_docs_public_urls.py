@@ -96,8 +96,15 @@ def test_api_examples_document_bounty_list_response_shape() -> None:
     examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
 
     assert "/api/v1/bounties?status=open" in examples
+    assert "/api/v1/bounties?status=open&sort=available&limit=5" in examples
     assert "/api/v1/bounties/summary?status=open&q=proof" in examples
+    assert "/api/v1/bounties/summary?status=open&sort=awards&limit=5" in examples
     assert "status` can be omitted or set to" in examples
+    assert "`newest` is the default" in examples
+    assert "by per-award reward" in examples
+    assert "`available` sorts by the remaining MRWK pool" in examples
+    assert "remaining award slots" in examples
+    assert "Use `limit` from `1` to `200`" in examples
     assert '"id": 36' in examples
     assert '"repo": "ramimbo/mergework"' in examples
     assert '"issue_number": 164' in examples
@@ -110,7 +117,9 @@ def test_api_examples_document_bounty_list_response_shape() -> None:
     assert '"open_awards": 2' in examples
     assert '"open_pool_mrwk": "50"' in examples
     assert "Award counters can change" in examples
-    assert "capacity totals instead of full bounty rows" in examples
+    assert "capacity totals" in examples
+    assert "full bounty" in examples
+    assert "same optional `status`, `q`, `sort`, and" in examples
     assert "Use `id` for the single-bounty API path" in examples
 
 
