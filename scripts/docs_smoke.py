@@ -47,6 +47,7 @@ REQUIRED_PUBLIC_PHRASES = {
         "Review claim:",
         "Smoke-check or bug-report claim:",
         "Discussion or decision-support claim:",
+        "Do not describe work as accepted, merged, or paid until the public GitHub label",
     ],
 }
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
