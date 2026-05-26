@@ -5,6 +5,10 @@
 ## Evidence
 
 - Confusion, missing step, stale example, or bug this addresses:
+- Bounty capacity and active attempts/open PRs checked:
+- Intended files or surfaces:
+- Expected PR size:
+- Out of scope:
 
 ## Test Evidence
 
