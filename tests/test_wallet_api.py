@@ -18,6 +18,7 @@ from app.ledger.service import (
     submit_wallet_transfer,
     wallet_claim_payload,
     wallet_link_payload,
+    wallet_transfer_payload,
 )
 from app.main import _safe_next_path, _signed_value, _verified_value, create_app
 from app.wallets import address_from_public_key_hex, canonical_wallet_json
@@ -98,6 +99,38 @@ def test_wallet_api_register_lookup_and_transfer(sqlite_url: str) -> None:
     assert transfer["type"] == "wallet_transfer"
     assert transfer["amount_mrwk"] == "3"
     assert client.get(f"/api/v1/wallets/{receiver_address}").json()["balance_mrwk"] == "3"
+
+
+def test_wallet_transfer_api_rejects_replayed_signed_body(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    sender_key, sender_public, sender_address = _keypair()
+    _, receiver_public, receiver_address = _keypair()
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    _register_wallet(client, sender_public)
+    _register_wallet(client, receiver_public)
+    _fund_wallet(sqlite_url, sender_address)
+    payload = wallet_transfer_payload(
+        from_address=sender_address,
+        to_address=receiver_address,
+        amount_microunits=1_000_000,
+        nonce=1,
+        memo="api replay",
+    )
+    body = {
+        "from_address": sender_address,
+        "to_address": receiver_address,
+        "amount_mrwk": "1",
+        "nonce": 1,
+        "memo": "api replay",
+        "signature_hex": _sign(sender_key, payload),
+    }
+
+    first = client.post("/api/v1/transfers", json=body)
+    second = client.post("/api/v1/transfers", json=body)
+
+    assert first.status_code == 200
+    assert second.status_code == 400
+    assert second.json()["detail"] == "invalid nonce"
 
 
 @pytest.mark.parametrize(
@@ -269,10 +302,11 @@ def test_wallet_method_boundary_routes_are_hidden_from_openapi(sqlite_url: str) 
 
     paths = client.get("/openapi.json").json()["paths"]
 
-    assert "post" in paths["/api/v1/wallets/register"]
-    assert "get" not in paths["/api/v1/wallets/register"]
-    assert "post" in paths["/api/v1/wallets/link-github"]
-    assert "get" not in paths["/api/v1/wallets/link-github"]
+    assert set(paths["/api/v1/wallets/register"]) == {"post"}
+    assert set(paths["/api/v1/wallets/link-github"]) == {"post"}
+    assert set(paths["/api/v1/wallets/{address}"]) == {"get"}
+    assert set(paths["/api/v1/github/claim"]) == {"post"}
+    assert set(paths["/api/v1/transfers"]) == {"post"}
 
 
 def test_wallet_api_malformed_transfer_requests_return_4xx(sqlite_url: str) -> None:
