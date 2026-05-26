@@ -13,7 +13,7 @@ def test_public_bounties_context_normalizes_filter_state() -> None:
         }
     ]
 
-    context = public_bounties_context(bounties, status=" OPEN ", q=" proof ")
+    context = public_bounties_context(bounties, status=" OPEN ", q=" proof ", sort=" Reward ")
 
     assert context == {
         "bounties": bounties,
@@ -24,7 +24,7 @@ def test_public_bounties_context_normalizes_filter_state() -> None:
         },
         "selected_status": "open",
         "query_text": "proof",
-        "selected_sort": "newest",
+        "selected_sort": "reward",
         "sort_options": {
             "newest": "Newest first",
             "reward": "Highest per-award reward",

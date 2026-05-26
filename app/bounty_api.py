@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from decimal import Decimal
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -12,6 +11,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.admin import list_webhook_events, webhook_events_to_dict
+from app.bounty_sorting import BOUNTY_SORT_ERROR, normalize_bounty_sort, sort_bounties
 from app.config import Settings
 from app.db import session_scope
 from app.ledger.reconciliation import payout_reconciliation_summary, reconcile_accepted_payouts
@@ -32,9 +32,6 @@ from app.serializers import (
     bounty_to_dict,
     payout_reconciliation_to_dict,
 )
-
-BOUNTY_SORT_OPTIONS = ("newest", "reward", "available", "awards")
-BOUNTY_SORT_ERROR = "sort must be one of: newest, reward, available, awards"
 
 
 def _payout_response_from_proof(proof: Proof, *, status: str) -> dict[str, Any]:
@@ -85,37 +82,13 @@ def register_bounty_api_routes(
 ) -> dict[str, Any]:
     """Register bounty listing, CRUD, payment, close, and reconciliation routes."""
 
-    def _normalize_bounty_sort(sort: str | None) -> str:
-        normalized_sort = (sort or "newest").strip().lower()
-        if normalized_sort not in BOUNTY_SORT_OPTIONS:
-            raise HTTPException(status_code=400, detail=BOUNTY_SORT_ERROR)
-        return normalized_sort
-
-    def _sort_bounties(bounties: list[dict[str, Any]], sort: str) -> list[dict[str, Any]]:
-        if sort == "newest":
-            return sorted(bounties, key=lambda bounty: int(bounty["id"]), reverse=True)
-        if sort == "reward":
-            return sorted(
-                bounties,
-                key=lambda bounty: (Decimal(str(bounty["reward_mrwk"])), int(bounty["id"])),
-                reverse=True,
-            )
-        if sort == "available":
-            return sorted(
-                bounties,
-                key=lambda bounty: (Decimal(str(bounty["available_mrwk"])), int(bounty["id"])),
-                reverse=True,
-            )
-        return sorted(
-            bounties,
-            key=lambda bounty: (int(bounty["awards_remaining"]), int(bounty["id"])),
-            reverse=True,
-        )
-
     def _list_bounties_by_status(
         status: str | None = None, query_text: str | None = None, sort: str | None = None
     ) -> list[dict[str, Any]]:
-        normalized_sort = _normalize_bounty_sort(sort)
+        try:
+            normalized_sort = normalize_bounty_sort(sort)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=BOUNTY_SORT_ERROR) from exc
         with session_scope(db_url) as session:
             query = select(Bounty)
             if status is not None:
@@ -145,7 +118,7 @@ def register_bounty_api_routes(
                         text_filter = or_(text_filter, Bounty.issue_number == issue_number)
                     query = query.where(text_filter)
             bounties = session.scalars(query.order_by(Bounty.id.desc())).all()
-            return _sort_bounties([bounty_to_dict(bounty) for bounty in bounties], normalized_sort)
+            return sort_bounties([bounty_to_dict(bounty) for bounty in bounties], normalized_sort)
 
     @app.get("/api/v1/bounties")
     def api_bounties(

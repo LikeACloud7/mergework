@@ -10,17 +10,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.accounts import normalized_wallet_address
+from app.bounty_sorting import BOUNTY_SORT_LABELS, normalize_bounty_sort
 from app.db import session_scope
 from app.ledger_views import account_ledger_transactions
 from app.models import Wallet
 from app.serializers import bounty_list_summary, wallet_to_dict
-
-BOUNTY_SORT_LABELS = {
-    "newest": "Newest first",
-    "reward": "Highest per-award reward",
-    "available": "Most MRWK available",
-    "awards": "Most award slots",
-}
 
 
 def public_bounties_context(
@@ -31,7 +25,7 @@ def public_bounties_context(
 ) -> dict[str, Any]:
     selected_status = status.strip().lower() if status is not None else None
     query_text = q.strip() if q is not None else ""
-    selected_sort = (sort or "newest").strip().lower()
+    selected_sort = normalize_bounty_sort(sort)
     return {
         "bounties": bounties,
         "summary": bounty_list_summary(bounties),
