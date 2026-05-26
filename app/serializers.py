@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -346,7 +346,7 @@ def safe_accepted_work_for_account(session: Session, account: str) -> list[dict[
 
 def _wallet_timestamp(value: datetime) -> str:
     if value.tzinfo is not None:
-        value = value.replace(tzinfo=None)
+        value = value.astimezone(UTC).replace(tzinfo=None)
     return value.isoformat()
 
 
@@ -375,5 +375,5 @@ def wallet_transfer_to_dict(transfer: WalletTransfer) -> dict[str, Any]:
         "amount_mrwk": format_mrwk(transfer.amount_microunits),
         "nonce": transfer.nonce,
         "memo": transfer.memo,
-        "created_at": transfer.created_at.isoformat(),
+        "created_at": _wallet_timestamp(transfer.created_at),
     }
