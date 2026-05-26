@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.accounts import normalized_wallet_address
+from app.bounty_sorting import BOUNTY_SORT_LABELS, normalize_bounty_sort
 from app.db import session_scope
 from app.ledger_views import account_ledger_transactions
 from app.models import Wallet
@@ -17,15 +18,21 @@ from app.serializers import bounty_list_summary, wallet_to_dict
 
 
 def public_bounties_context(
-    bounties: list[dict[str, Any]], status: str | None, q: str | None
+    bounties: list[dict[str, Any]],
+    status: str | None,
+    q: str | None,
+    sort: str | None = None,
 ) -> dict[str, Any]:
     selected_status = status.strip().lower() if status is not None else None
     query_text = q.strip() if q is not None else ""
+    selected_sort = normalize_bounty_sort(sort)
     return {
         "bounties": bounties,
         "summary": bounty_list_summary(bounties),
         "selected_status": selected_status,
         "query_text": query_text,
+        "selected_sort": selected_sort,
+        "sort_options": BOUNTY_SORT_LABELS,
     }
 
 
@@ -50,7 +57,7 @@ def register_public_routes(
     *,
     db_url: str,
     templates: Jinja2Templates,
-    list_bounties_by_status: Callable[[str | None, str | None], list[dict[str, Any]]],
+    list_bounties_by_status: Callable[[str | None, str | None, str | None], list[dict[str, Any]]],
     api_bounty: Callable[[int], dict[str, Any]],
     api_ledger: Callable[[], list[dict[str, Any]]],
     api_ledger_entry: Callable[[int], dict[str, Any]],
@@ -58,13 +65,16 @@ def register_public_routes(
 ) -> None:
     @app.get("/bounties", response_class=HTMLResponse)
     def bounties_page(
-        request: Request, status: str | None = Query(None), q: str | None = Query(None)
+        request: Request,
+        status: str | None = Query(None),
+        q: str | None = Query(None),
+        sort: str | None = Query(None),
     ) -> HTMLResponse:
-        bounties = list_bounties_by_status(status, q)
+        bounties = list_bounties_by_status(status, q, sort)
         return templates.TemplateResponse(
             request,
             "bounties.html",
-            public_bounties_context(bounties, status, q),
+            public_bounties_context(bounties, status, q, sort),
         )
 
     @app.get("/bounties/{bounty_id}", response_class=HTMLResponse)

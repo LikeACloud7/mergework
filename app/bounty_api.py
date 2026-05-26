@@ -11,6 +11,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.admin import list_webhook_events, webhook_events_to_dict
+from app.bounty_sorting import BOUNTY_SORT_ERROR, normalize_bounty_sort, sort_bounties
 from app.config import Settings
 from app.db import session_scope
 from app.ledger.reconciliation import payout_reconciliation_summary, reconcile_accepted_payouts
@@ -82,8 +83,15 @@ def register_bounty_api_routes(
     """Register bounty listing, CRUD, payment, close, and reconciliation routes."""
 
     def _list_bounties_by_status(
-        status: str | None = None, query_text: str | None = None, limit: int | None = None
+        status: str | None = None,
+        query_text: str | None = None,
+        sort: str | None = None,
+        limit: int | None = None,
     ) -> list[dict[str, Any]]:
+        try:
+            normalized_sort = normalize_bounty_sort(sort)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=BOUNTY_SORT_ERROR) from exc
         with session_scope(db_url) as session:
             query = select(Bounty)
             if status is not None:
@@ -112,27 +120,31 @@ def register_bounty_api_routes(
                     if issue_number is not None:
                         text_filter = or_(text_filter, Bounty.issue_number == issue_number)
                     query = query.where(text_filter)
-            query = query.order_by(Bounty.id.desc())
+            bounties = session.scalars(query.order_by(Bounty.id.desc())).all()
+            sorted_bounties = sort_bounties(
+                [bounty_to_dict(bounty) for bounty in bounties], normalized_sort
+            )
             if limit is not None:
-                query = query.limit(limit)
-            bounties = session.scalars(query).all()
-            return [bounty_to_dict(bounty) for bounty in bounties]
+                return sorted_bounties[:limit]
+            return sorted_bounties
 
     @app.get("/api/v1/bounties")
     def api_bounties(
         status: str | None = Query(None),
         q: str | None = Query(None),
         limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+        sort: str | None = Query(None),
     ) -> list[dict[str, Any]]:
-        return _list_bounties_by_status(status, q, limit)
+        return _list_bounties_by_status(status, q, sort=sort, limit=limit)
 
     @app.get("/api/v1/bounties/summary")
     def api_bounties_summary(
         status: str | None = Query(None),
         q: str | None = Query(None),
         limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+        sort: str | None = Query(None),
     ) -> dict[str, Any]:
-        return bounty_list_summary(_list_bounties_by_status(status, q, limit))
+        return bounty_list_summary(_list_bounties_by_status(status, q, sort=sort, limit=limit))
 
     @app.get("/api/v1/admin/webhook-events")
     def api_admin_webhook_events(
