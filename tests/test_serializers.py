@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta, timezone
+
 from app.db import create_schema, session_scope
 from app.ledger.service import create_bounty, ensure_genesis, pay_bounty, register_wallet
-from app.models import Bounty, Proof
+from app.models import Bounty, Proof, WalletTransfer
 from app.serializers import (
     accepted_work_for_account,
     account_accepted_summary,
@@ -13,6 +15,7 @@ from app.serializers import (
     safe_accepted_work_for_account,
     safe_account_accepted_summary,
     wallet_to_dict,
+    wallet_transfer_to_dict,
 )
 
 
@@ -133,3 +136,21 @@ def test_activity_serializers_skip_malformed_public_proofs(sqlite_url: str) -> N
     }
     assert summary == empty_accepted_summary()
     assert accepted_work == []
+
+
+def test_wallet_transfer_serializer_normalizes_aware_timestamp() -> None:
+    transfer = WalletTransfer(
+        hash="abc123",
+        ledger_sequence=42,
+        from_address="mrwk1from",
+        to_address="mrwk1to",
+        amount_microunits=1_500_000,
+        nonce=7,
+        memo="test transfer",
+        created_at=datetime(2026, 5, 25, 12, 30, tzinfo=timezone(timedelta(hours=3))),
+    )
+
+    assert (
+        wallet_transfer_to_dict(transfer)["created_at"]
+        == datetime(2026, 5, 25, 9, 30, tzinfo=UTC).replace(tzinfo=None).isoformat()
+    )

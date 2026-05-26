@@ -20,6 +20,12 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.admin import (
+    list_webhook_events,
+    normalize_webhook_status_filter,
+    webhook_events_to_dict,
+    webhook_status_summary,
+)
 from app.config import Settings, get_settings
 from app.db import create_schema, session_scope
 from app.ledger.reconciliation import payout_reconciliation_summary, reconcile_accepted_payouts
@@ -51,7 +57,6 @@ from app.models import (
     Proof,
     Submission,
     Wallet,
-    WebhookEvent,
 )
 from app.serializers import (
     accepted_work_for_account,
@@ -313,7 +318,7 @@ def _normalized_account(account: str) -> str:
             raise HTTPException(status_code=400, detail="reserve bounty id is too large")
         return f"{reserve_prefix}{normalized_bounty_id}"
     if lower.startswith("mrwk1"):
-        return clean.lower()
+        return _normalized_wallet_address(clean)
     if lower.startswith("github:"):
         login = clean.split(":", 1)[1].lower()
         if not GITHUB_LOGIN_RE.fullmatch(login):
@@ -626,28 +631,8 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         admin_login: str = Depends(require_admin_token),
     ) -> list[dict[str, Any]]:
         del admin_login
-        normalized_status = status.strip().lower() if status is not None else None
-        if normalized_status == "":
-            normalized_status = None
         with session_scope(db_url) as session:
-            query = select(WebhookEvent)
-            if normalized_status is not None:
-                query = query.where(func.lower(WebhookEvent.processed_status) == normalized_status)
-            events = session.scalars(
-                query.order_by(
-                    WebhookEvent.created_at.desc(), WebhookEvent.delivery_id.desc()
-                ).limit(limit)
-            ).all()
-            return [
-                {
-                    "delivery_id": event.delivery_id,
-                    "event_type": event.event_type,
-                    "processed_status": event.processed_status,
-                    "payload_hash": event.payload_hash,
-                    "created_at": event.created_at.isoformat(),
-                }
-                for event in events
-            ]
+            return webhook_events_to_dict(list_webhook_events(session, status, limit))
 
     @app.post("/api/v1/bounties")
     async def api_create_bounty(
@@ -1422,16 +1407,10 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             if _oauth_configured(settings):
                 return RedirectResponse("/auth/github/login?next=/admin", status_code=302)
             raise HTTPException(status_code=503, detail="GitHub OAuth is not configured")
-        normalized_status = webhook_status.strip().lower() if webhook_status is not None else ""
+        normalized_status = normalize_webhook_status_filter(webhook_status) or ""
         with session_scope(db_url) as session:
-            query = select(WebhookEvent)
-            if normalized_status:
-                query = query.where(func.lower(WebhookEvent.processed_status) == normalized_status)
-            webhook_events = session.scalars(
-                query.order_by(
-                    WebhookEvent.created_at.desc(), WebhookEvent.delivery_id.desc()
-                ).limit(webhook_limit)
-            ).all()
+            webhook_events = list_webhook_events(session, normalized_status, webhook_limit)
+            webhook_summary = webhook_status_summary(session)
         return templates.TemplateResponse(
             request,
             "admin.html",
@@ -1439,6 +1418,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 "login": login,
                 "csrf_token": _csrf_token("admin-bounty", login, settings.cookie_secret),
                 "webhook_events": webhook_events,
+                "webhook_status_summary": webhook_summary,
                 "webhook_limit": webhook_limit,
                 "webhook_limit_options": [10, 25, 50, 100],
                 "webhook_status": normalized_status,
@@ -1601,10 +1581,19 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | 
 
     def work_proof_guidance_json(bounty: Bounty) -> dict[str, Any]:
         bounty_data = bounty_to_dict(bounty)
+        can_submit = bounty_data["status"] == "open" and bounty_data["awards_remaining"] > 0
+        availability_warnings = []
+        if bounty_data["status"] != "open":
+            availability_warnings.append(f"bounty is {bounty_data['status']}")
+        if bounty_data["awards_remaining"] <= 0:
+            availability_warnings.append("bounty has no award slots remaining")
         return {
             "bounty_id": bounty_data["id"],
             "issue_number": bounty_data["issue_number"],
             "status": bounty_data["status"],
+            "availability": "open_for_submissions" if can_submit else "not_currently_open",
+            "can_submit": can_submit,
+            "availability_warnings": availability_warnings,
             "awards_remaining": bounty_data["awards_remaining"],
             "max_awards": bounty_data["max_awards"],
             "awards_paid": bounty_data["awards_paid"],
@@ -1630,6 +1619,9 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | 
             "bounty_id": None,
             "issue_number": None,
             "status": "generic_guidance",
+            "availability": "unknown_without_bounty",
+            "can_submit": None,
+            "availability_warnings": [],
             "awards_remaining": None,
             "reward_mrwk": None,
             "repository": None,
@@ -1687,6 +1679,27 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | 
             if optional_bool_arg("include_awards"):
                 bounty_data["awards"] = bounty_awards_to_dict(session, bounty.id)
             return json.dumps(bounty_data)
+        if name == "list_bounty_attempts":
+            bounty_id = positive_int_arg("bounty_id")
+            bounty = session.get(Bounty, bounty_id)
+            if bounty is None:
+                return "bounty not found"
+            now = _utc_now()
+            attempt_query = select(BountyAttempt).where(BountyAttempt.bounty_id == bounty_id)
+            if not optional_bool_arg("include_expired"):
+                attempt_query = attempt_query.where(*_active_attempt_conditions(bounty_id, now))
+            attempts = session.scalars(
+                attempt_query.order_by(
+                    BountyAttempt.created_at.desc(), BountyAttempt.id.desc()
+                ).limit(list_limit_arg())
+            ).all()
+            return {
+                "bounty_id": bounty_id,
+                "issue_number": bounty.issue_number,
+                "status": bounty.status,
+                "warnings": bounty_attempt_warnings(session, bounty, now),
+                "attempts": [bounty_attempt_to_dict(attempt, now) for attempt in attempts],
+            }
         if name == "get_balance":
             account = _normalized_account(str_arg("account"))
             return f"{account}: {format_mrwk(get_balance(session, account))} MRWK"

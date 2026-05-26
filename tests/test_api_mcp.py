@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,7 +9,7 @@ from fastapi.testclient import TestClient
 from app.db import create_schema, session_scope
 from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
-from app.models import Proof
+from app.models import BountyAttempt, Proof
 
 
 def test_health_status_and_bounty_api(sqlite_url: str) -> None:
@@ -431,6 +432,10 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     assert "bounty_id or issue_number" in submit_tool["description"]
     bounty_tool = next(tool for tool in tools["result"]["tools"] if tool["name"] == "get_bounty")
     assert "accepted awards" in bounty_tool["description"]
+    attempt_tool = next(
+        tool for tool in tools["result"]["tools"] if tool["name"] == "list_bounty_attempts"
+    )
+    assert "active-attempt reservations" in attempt_tool["description"]
 
     balance = client.post(
         "/mcp",
@@ -443,6 +448,136 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     ).json()
     assert balance["result"]["content"][0]["type"] == "text"
     assert "100000000" in balance["result"]["content"][0]["text"]
+
+
+def test_mcp_list_bounty_attempts_reports_active_and_expired(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    now = datetime.now(UTC)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=321,
+            issue_url="https://github.com/ramimbo/mergework/issues/321",
+            title="Attempt reservations",
+            reward_mrwk="250",
+            max_awards=2,
+            acceptance="Agents should inspect active attempts before opening work.",
+        )
+        session.add_all(
+            [
+                BountyAttempt(
+                    bounty_id=bounty.id,
+                    submitter_account="github:alice",
+                    source_url="https://github.com/ramimbo/mergework/pull/501",
+                    status="active",
+                    expires_at=now + timedelta(hours=1),
+                    created_at=now - timedelta(minutes=2),
+                    updated_at=now - timedelta(minutes=2),
+                ),
+                BountyAttempt(
+                    bounty_id=bounty.id,
+                    submitter_account="github:bob",
+                    source_url="https://github.com/ramimbo/mergework/pull/502",
+                    status="active",
+                    expires_at=now + timedelta(hours=2),
+                    created_at=now - timedelta(minutes=1),
+                    updated_at=now - timedelta(minutes=1),
+                ),
+                BountyAttempt(
+                    bounty_id=bounty.id,
+                    submitter_account="github:carol",
+                    source_url="https://github.com/ramimbo/mergework/pull/503",
+                    status="active",
+                    expires_at=now - timedelta(minutes=1),
+                    created_at=now - timedelta(minutes=3),
+                    updated_at=now - timedelta(minutes=3),
+                ),
+            ]
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    active_result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 21,
+            "method": "tools/call",
+            "params": {
+                "name": "list_bounty_attempts",
+                "arguments": {"bounty_id": bounty.id},
+            },
+        },
+    ).json()["result"]
+
+    active_payload = active_result["structuredContent"]
+    assert active_payload["bounty_id"] == bounty.id
+    assert active_payload["issue_number"] == 321
+    assert active_payload["warnings"] == ["bounty has 2 active attempts"]
+    assert [attempt["submitter_account"] for attempt in active_payload["attempts"]] == [
+        "github:bob",
+        "github:alice",
+    ]
+
+    all_result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 22,
+            "method": "tools/call",
+            "params": {
+                "name": "list_bounty_attempts",
+                "arguments": {"bounty_id": bounty.id, "include_expired": True, "limit": 3},
+            },
+        },
+    ).json()["result"]
+
+    all_payload = all_result["structuredContent"]
+    assert [attempt["status"] for attempt in all_payload["attempts"]] == [
+        "active",
+        "active",
+        "expired",
+    ]
+
+
+def test_mcp_list_bounty_attempts_rejects_invalid_arguments(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=321,
+            issue_url="https://github.com/ramimbo/mergework/issues/321",
+            title="Attempt reservations",
+            reward_mrwk="250",
+            acceptance="Agents should inspect attempts before opening work.",
+        )
+        bounty_id = bounty.id
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 23,
+            "method": "tools/call",
+            "params": {
+                "name": "list_bounty_attempts",
+                "arguments": {"bounty_id": bounty_id, "include_expired": "yes"},
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "jsonrpc": "2.0",
+        "id": 23,
+        "error": {"code": -32602, "message": "invalid tool arguments"},
+    }
 
 
 def test_mcp_list_bounties_filters_status_query_and_limit(sqlite_url: str) -> None:
@@ -1246,6 +1381,9 @@ def test_mcp_submit_work_proof_returns_structured_bounty_guidance(sqlite_url: st
     assert structured["bounty_id"] == bounty_id
     assert structured["issue_number"] == 315
     assert structured["status"] == "open"
+    assert structured["availability"] == "open_for_submissions"
+    assert structured["can_submit"] is True
+    assert structured["availability_warnings"] == []
     assert structured["awards_remaining"] == 3
     assert structured["max_awards"] == 3
     assert structured["awards_paid"] == 0
@@ -1282,6 +1420,9 @@ def test_mcp_submit_work_proof_returns_structured_generic_guidance(sqlite_url: s
         "bounty_id": None,
         "issue_number": None,
         "status": "generic_guidance",
+        "availability": "unknown_without_bounty",
+        "can_submit": None,
+        "availability_warnings": [],
         "awards_remaining": None,
         "reward_mrwk": None,
         "repository": None,
@@ -1297,6 +1438,85 @@ def test_mcp_submit_work_proof_returns_structured_generic_guidance(sqlite_url: s
         ],
     }
     assert json.loads(response_result["content"][0]["text"]) == result
+
+
+def test_mcp_submit_work_proof_structures_terminal_bounty_availability(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        paid_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=316,
+            issue_url="https://github.com/ramimbo/mergework/issues/316",
+            title="Paid structured guidance",
+            reward_mrwk="100",
+            acceptance="Expose paid guidance state.",
+        )
+        closed_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=317,
+            issue_url="https://github.com/ramimbo/mergework/issues/317",
+            title="Closed structured guidance",
+            reward_mrwk="100",
+            max_awards=2,
+            acceptance="Expose closed guidance state.",
+        )
+        paid_bounty_id = paid_bounty.id
+        closed_bounty_id = closed_bounty.id
+        pay_bounty(
+            session,
+            bounty_id=paid_bounty_id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/316",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        close_bounty(
+            session,
+            bounty_id=closed_bounty_id,
+            closed_by="maintainer",
+            reference="https://github.com/ramimbo/mergework/issues/317#close",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    def structured_guidance(bounty_id: int, request_id: int) -> dict[str, object]:
+        response = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": "tools/call",
+                "params": {
+                    "name": "submit_work_proof",
+                    "arguments": {"bounty_id": bounty_id, "format": "json"},
+                },
+            },
+        ).json()["result"]
+        assert json.loads(response["content"][0]["text"]) == response["structuredContent"]
+        return response["structuredContent"]
+
+    paid = structured_guidance(paid_bounty_id, 1)
+    closed = structured_guidance(closed_bounty_id, 2)
+
+    assert paid["status"] == "paid"
+    assert paid["availability"] == "not_currently_open"
+    assert paid["can_submit"] is False
+    assert paid["availability_warnings"] == [
+        "bounty is paid",
+        "bounty has no award slots remaining",
+    ]
+    assert closed["status"] == "closed"
+    assert closed["availability"] == "not_currently_open"
+    assert closed["can_submit"] is False
+    assert closed["availability_warnings"] == [
+        "bounty is closed",
+        "bounty has no award slots remaining",
+    ]
 
 
 def test_mcp_submit_work_proof_reports_unknown_bounty(sqlite_url: str) -> None:

@@ -162,6 +162,22 @@ def test_admin_page_renders_safe_webhook_events_for_cookie_admin(
         )
         session.add(
             WebhookEvent(
+                delivery_id="delivery-missing-submitter-uppercase",
+                event_type="pull_request",
+                payload_hash="d" * 64,
+                processed_status="Missing_Submitter",
+            )
+        )
+        session.add(
+            WebhookEvent(
+                delivery_id="delivery-exhausted-bounty",
+                event_type="pull_request",
+                payload_hash="e" * 64,
+                processed_status="exhausted_bounty",
+            )
+        )
+        session.add(
+            WebhookEvent(
                 delivery_id="delivery-paid-secret-payload-body",
                 event_type="pull_request",
                 payload_hash="c" * 64,
@@ -181,11 +197,29 @@ def test_admin_page_renders_safe_webhook_events_for_cookie_admin(
     assert all_events.status_code == 200
     assert "missing_submitter" in all_events.text
     assert "bounty_not_found" in all_events.text
+    assert "exhausted_bounty" in all_events.text
+    assert re.search(
+        r"<code>missing_submitter</code>\s*</span>\s*<strong>2</strong>", all_events.text
+    )
+    summary_match = re.search(
+        r'<div class="bounty-list-summary"[^>]*>.*?</div>', all_events.text, flags=re.S
+    )
+    assert summary_match is not None
+    summary_html = summary_match.group(0)
+    status_summary_positions = [
+        summary_html.index("<code>missing_submitter</code>"),
+        summary_html.index("<code>bounty_not_found</code>"),
+        summary_html.index("<code>exhausted_bounty</code>"),
+        summary_html.index("<code>paid</code>"),
+    ]
+    assert status_summary_positions == sorted(status_summary_positions)
     assert "paid" in all_events.text
     assert filtered.status_code == 200
     assert "delivery-missing-submitter" in filtered.text
+    assert "delivery-missing-submitter-uppercase" in filtered.text
     assert "missing_submitter" in filtered.text
     assert "delivery-bounty-not-found" not in filtered.text
+    assert "bounty_not_found" in filtered.text
     assert "a" * 64 in filtered.text
     assert "secret-payload-body" not in filtered.text
     assert limited.status_code == 200

@@ -21,6 +21,16 @@
 <section class="detail">
   <p class="eyebrow">Webhooks</p>
   <h2>Recent delivery outcomes</h2>
+  {% if webhook_status_summary %}
+  <div class="bounty-list-summary" aria-label="Webhook processed status summary">
+    {% for item in webhook_status_summary %}
+    <article>
+      <span><code>{{ item.processed_status }}</code></span>
+      <strong>{{ item.count }}</strong>
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
   <form method="get" action="/admin" class="inline-form">
     <label>Processed status
       <input name="webhook_status" value="{{ webhook_status }}" placeholder="missing_submitter">
