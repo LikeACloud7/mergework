@@ -25,10 +25,7 @@ from app.admin import (
     webhook_status_summary,
 )
 from app.bounty_attempts import (
-    _active_attempt_conditions,
-    _utc_now,
-    bounty_attempt_to_dict,
-    bounty_attempt_warnings,
+    list_bounty_attempts,
     register_bounty_attempt_routes,
 )
 from app.config import Settings, get_settings
@@ -57,7 +54,6 @@ from app.mcp import handle_mcp_request
 from app.models import (
     Account,
     Bounty,
-    BountyAttempt,
     LedgerEntry,
     Proof,
     Submission,
@@ -1469,21 +1465,18 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | 
             bounty = session.get(Bounty, bounty_id)
             if bounty is None:
                 return "bounty not found"
-            now = _utc_now()
-            attempt_query = select(BountyAttempt).where(BountyAttempt.bounty_id == bounty_id)
-            if not optional_bool_arg("include_expired"):
-                attempt_query = attempt_query.where(*_active_attempt_conditions(bounty_id, now))
-            attempts = session.scalars(
-                attempt_query.order_by(
-                    BountyAttempt.created_at.desc(), BountyAttempt.id.desc()
-                ).limit(list_limit_arg())
-            ).all()
+            attempt_listing = list_bounty_attempts(
+                session,
+                bounty,
+                include_expired=optional_bool_arg("include_expired"),
+                limit=list_limit_arg(),
+            )
             return {
                 "bounty_id": bounty_id,
                 "issue_number": bounty.issue_number,
                 "status": bounty.status,
-                "warnings": bounty_attempt_warnings(session, bounty, now),
-                "attempts": [bounty_attempt_to_dict(attempt, now) for attempt in attempts],
+                "warnings": attempt_listing["warnings"],
+                "attempts": attempt_listing["attempts"],
             }
         if name == "get_balance":
             account = _normalized_account(str_arg("account"))

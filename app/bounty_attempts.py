@@ -88,6 +88,28 @@ def bounty_attempt_warnings(session: Session, bounty: Bounty, now: datetime) -> 
     return warnings
 
 
+def list_bounty_attempts(
+    session: Session,
+    bounty: Bounty,
+    *,
+    include_expired: bool = False,
+    limit: int | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    now = _as_utc(now or _utc_now())
+    query = select(BountyAttempt).where(BountyAttempt.bounty_id == bounty.id)
+    if not include_expired:
+        query = query.where(*_active_attempt_conditions(bounty.id, now))
+    query = query.order_by(BountyAttempt.created_at.desc(), BountyAttempt.id.desc())
+    if limit is not None:
+        query = query.limit(limit)
+    attempts = session.scalars(query).all()
+    return {
+        "warnings": bounty_attempt_warnings(session, bounty, now),
+        "attempts": [bounty_attempt_to_dict(attempt, now) for attempt in attempts],
+    }
+
+
 def expire_stale_bounty_attempts(
     session: Session, bounty_id: int, now: datetime, submitter_account: str | None = None
 ) -> None:
@@ -130,16 +152,13 @@ def register_bounty_attempt_routes(
             bounty = session.get(Bounty, bounty_id)
             if bounty is None:
                 raise HTTPException(status_code=404, detail="bounty not found")
-            query = select(BountyAttempt).where(BountyAttempt.bounty_id == bounty_id)
-            if not include_expired:
-                query = query.where(*_active_attempt_conditions(bounty_id, now))
-            attempts = session.scalars(
-                query.order_by(BountyAttempt.created_at.desc(), BountyAttempt.id.desc())
-            ).all()
+            listing = list_bounty_attempts(
+                session, bounty, include_expired=include_expired, now=now
+            )
             return {
                 "bounty_id": bounty_id,
-                "warnings": bounty_attempt_warnings(session, bounty, now),
-                "attempts": [bounty_attempt_to_dict(attempt, now) for attempt in attempts],
+                "warnings": listing["warnings"],
+                "attempts": listing["attempts"],
             }
 
     @app.post("/api/v1/bounties/{bounty_id}/attempts")
