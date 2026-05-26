@@ -10,7 +10,7 @@ from typing import Annotated, Any
 from urllib.parse import unquote, urlencode, urlsplit, urlunsplit
 
 import httpx
-from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -19,12 +19,8 @@ from sqlalchemy.orm import Session
 
 from app.accounts import normalized_account, normalized_wallet_address, register_account_routes
 from app.activity import register_activity_routes
-from app.admin import (
-    admin_page_context,
-    create_admin_bounty_from_form,
-    list_webhook_events,
-    webhook_events_to_dict,
-)
+from app.admin import list_webhook_events, webhook_events_to_dict
+from app.admin_routes import register_admin_routes
 from app.bounty_attempts import (
     list_bounty_attempts,
     register_bounty_attempt_routes,
@@ -915,15 +911,6 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         response.delete_cookie("mrwk_oauth_state")
         return response
 
-    @app.get("/admin/login")
-    def admin_login() -> RedirectResponse:
-        return RedirectResponse("/auth/github/login?next=/admin", status_code=302)
-
-    @app.get("/admin/callback")
-    async def admin_callback(request: Request) -> RedirectResponse:
-        suffix = f"?{request.url.query}" if request.url.query else ""
-        return RedirectResponse(f"/auth/github/callback{suffix}", status_code=302)
-
     @app.post("/auth/logout")
     def auth_logout() -> RedirectResponse:
         response = RedirectResponse("/", status_code=303)
@@ -942,74 +929,17 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             context,
         )
 
-    @app.post("/admin/logout")
-    def admin_logout() -> RedirectResponse:
-        response = RedirectResponse("/", status_code=303)
-        response.delete_cookie("mrwk_admin")
-        response.delete_cookie("mrwk_user")
-        return response
-
-    @app.get("/admin", response_class=HTMLResponse)
-    def admin_page(
-        request: Request,
-        webhook_status: str | None = Query(None),
-        webhook_limit: Annotated[int, Query(ge=1, le=100)] = 25,
-    ) -> Any:
-        login = admin_login_from_request(request)
-        if login is None:
-            if _oauth_configured(settings):
-                return RedirectResponse("/auth/github/login?next=/admin", status_code=302)
-            raise HTTPException(status_code=503, detail="GitHub OAuth is not configured")
-        with session_scope(db_url) as session:
-            context = admin_page_context(
-                session,
-                login=login,
-                csrf_token=_csrf_token("admin-bounty", login, settings.cookie_secret),
-                webhook_status=webhook_status,
-                webhook_limit=webhook_limit,
-            )
-        return templates.TemplateResponse(
-            request,
-            "admin.html",
-            context,
-        )
-
-    @app.post("/admin/bounties")
-    def admin_create_bounty(
-        request: Request,
-        repo: str = Form(...),
-        issue_number: int = Form(...),
-        issue_url: str = Form(...),
-        title: str = Form(...),
-        reward_mrwk: str = Form(...),
-        max_awards: int = Form(1),
-        acceptance: str = Form(...),
-        csrf_token: str | None = Form(None),
-        admin_login: str = Depends(require_admin),
-    ) -> RedirectResponse:
-        del request
-        if admin_login != "api-token" and not _verify_csrf_token(
-            csrf_token,
-            action="admin-bounty",
-            login=admin_login,
-            secret=settings.cookie_secret,
-        ):
-            raise HTTPException(status_code=403, detail="invalid CSRF token")
-        with session_scope(db_url) as session:
-            try:
-                bounty_id = create_admin_bounty_from_form(
-                    session,
-                    repo=repo,
-                    issue_number=issue_number,
-                    issue_url=issue_url,
-                    title=title,
-                    reward_mrwk=reward_mrwk,
-                    max_awards=max_awards,
-                    acceptance=acceptance,
-                )
-            except LedgerError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return RedirectResponse(f"/bounties/{bounty_id}", status_code=303)
+    register_admin_routes(
+        app,
+        db_url=db_url,
+        settings=settings,
+        templates=templates,
+        admin_login_from_request=admin_login_from_request,
+        require_admin=require_admin,
+        oauth_configured=_oauth_configured,
+        csrf_token=_csrf_token,
+        verify_csrf_token=_verify_csrf_token,
+    )
 
     return app
 
