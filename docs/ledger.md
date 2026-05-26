@@ -30,7 +30,7 @@ Normal admin treasury actions use public proposals before ledger mutation:
 - close bounty and release reserve
 
 Proposal execution is delayed 24 hours. Bounty reserve execution is capped at
-`10,000 MRWK` per 24 hour epoch. GitHub users with accepted MRWK work can submit
+`10,000 MRWK` per 24-hour epoch. GitHub users with accepted MRWK work can submit
 machine-checkable challenges or public notes.
 
 This makes normal app-path treasury movement visible and rule-checkable. It does

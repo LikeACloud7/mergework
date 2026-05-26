@@ -46,7 +46,7 @@ def register_treasury_routes(
     def api_treasury_proposals() -> list[dict[str, Any]]:
         with session_scope(db_url) as session:
             proposals = session.scalars(
-                select(TreasuryProposal).order_by(TreasuryProposal.id.asc()).limit(100)
+                select(TreasuryProposal).order_by(TreasuryProposal.id.desc()).limit(100)
             ).all()
             return [proposal_to_dict(proposal) for proposal in proposals]
 

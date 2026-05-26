@@ -9,7 +9,7 @@
    a single-award bounty.
 5. Use `/admin` or `POST /api/v1/bounties` with an admin token. This creates
    a public treasury proposal.
-6. Execute the proposal after the 24 hour delay. Multi-award bounties reserve
+6. Execute the proposal after the 24-hour delay. Multi-award bounties reserve
    `reward_mrwk * max_awards` when the proposal executes.
 7. Add `mrwk:bounty` to the GitHub issue.
 
@@ -28,14 +28,14 @@ curl -s https://api.mrwk.ltclab.site/api/v1/treasury/proposals
 curl -s https://api.mrwk.ltclab.site/api/v1/treasury/proposals/<proposal_id>
 ```
 
-Execution requires an admin token and only works after the 24 hour delay:
+Execution requires an admin token and only works after the 24-hour delay:
 
 ```bash
 curl -X POST https://api.mrwk.ltclab.site/api/v1/treasury/proposals/<proposal_id>/execute \
   -H "x-mergework-admin-token: $MERGEWORK_ADMIN_TOKEN"
 ```
 
-Bounty reserve execution is capped at `10,000 MRWK` per 24 hour epoch. GitHub
+Bounty reserve execution is capped at `10,000 MRWK` per 24-hour epoch. GitHub
 users with at least one accepted MRWK award can submit proposal challenges.
 Machine-checkable valid challenges block execution. Subjective challenges are
 public notes and do not block by themselves.

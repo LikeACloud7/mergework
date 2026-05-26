@@ -155,7 +155,9 @@ class TreasuryProposal(Base):
     proposed_by: Mapped[str] = mapped_column(String(128))
     executed_by: Mapped[str | None] = mapped_column(String(128))
     result_json: Mapped[str] = mapped_column(Text, default="{}")
-    executed_ledger_sequence: Mapped[int | None] = mapped_column(Integer)
+    executed_ledger_sequence: Mapped[int | None] = mapped_column(
+        ForeignKey("ledger_entries.sequence")
+    )
     proposed_at: Mapped[datetime] = mapped_column(default=utc_now, index=True)
     executes_after: Mapped[datetime] = mapped_column(index=True)
     executed_at: Mapped[datetime | None] = mapped_column(index=True)

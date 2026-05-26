@@ -69,8 +69,8 @@ API path such as `/api/v1/bounties/11`.
 ## Treasury Proposals
 
 Admin bounty creation, manual bounty payout, and bounty close/release create
-public treasury proposals before ledger mutation. Proposals have a 24 hour
-delay, a `10,000 MRWK` per 24 hour bounty reserve execution cap, and public
+public treasury proposals before ledger mutation. Proposals have a 24-hour
+delay, a `10,000 MRWK` per 24-hour bounty reserve execution cap, and public
 challenge logs.
 
 Read proposals:

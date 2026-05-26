@@ -22,7 +22,12 @@ def upgrade() -> None:
         sa.Column("proposed_by", sa.String(length=128), nullable=False),
         sa.Column("executed_by", sa.String(length=128), nullable=True),
         sa.Column("result_json", sa.Text(), nullable=False),
-        sa.Column("executed_ledger_sequence", sa.Integer(), nullable=True),
+        sa.Column(
+            "executed_ledger_sequence",
+            sa.Integer(),
+            sa.ForeignKey("ledger_entries.sequence"),
+            nullable=True,
+        ),
         sa.Column("proposed_at", sa.DateTime(), nullable=False),
         sa.Column("executes_after", sa.DateTime(), nullable=False),
         sa.Column("executed_at", sa.DateTime(), nullable=True),

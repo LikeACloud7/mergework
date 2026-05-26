@@ -106,7 +106,7 @@ maintainer comment, or MRWK proof exists.
 
 ## Payout Flow
 
-1. A maintainer proposes a bounty. After the 24 hour treasury delay, execution
+1. A maintainer proposes a bounty. After the 24-hour treasury delay, execution
    reserves MRWK from treasury. Multi-award bounties reserve
    `reward_mrwk * max_awards`.
 2. A contributor submits an issue, PR, docs change, test, or report.

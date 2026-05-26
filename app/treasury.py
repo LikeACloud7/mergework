@@ -415,7 +415,17 @@ def _machine_challenge_is_valid(
             )
             .limit(1)
         )
-        return existing_submission is not None
+        if existing_submission is None:
+            return False
+        paid_proof = session.scalar(
+            select(Proof.hash)
+            .where(
+                Proof.kind == "bounty_payment",
+                Proof.submission_id == existing_submission.id,
+            )
+            .limit(1)
+        )
+        return paid_proof is not None
     if challenge_type == "insufficient_reserve" and proposal.action == "pay_bounty":
         bounty = session.get(Bounty, int(payload["bounty_id"]))
         if bounty is None:
@@ -451,11 +461,11 @@ def create_treasury_challenge(
     clean_reason = _clean_string(reason, "reason", 1_000)
     status = "noted"
     if clean_type in MACHINE_CHALLENGES:
-        status = (
-            "accepted_blocking"
-            if _machine_challenge_is_valid(session, proposal, clean_type)
-            else "rejected"
-        )
+        status = "rejected"
+        if proposal.status == "pending" and _machine_challenge_is_valid(
+            session, proposal, clean_type
+        ):
+            status = "accepted_blocking"
         if status == "accepted_blocking":
             proposal.status = "blocked"
     challenge = TreasuryChallenge(

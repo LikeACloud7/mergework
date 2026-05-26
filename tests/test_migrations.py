@@ -38,3 +38,10 @@ def test_alembic_upgrade_head_builds_deploy_schema(tmp_path, monkeypatch) -> Non
     assert any(index["name"] == "uq_submission_bounty_url" for index in submission_indexes)
     proposal_indexes = inspector.get_indexes("treasury_proposals")
     assert any(index["name"] == "ix_treasury_proposals_payload_hash" for index in proposal_indexes)
+    proposal_fks = inspector.get_foreign_keys("treasury_proposals")
+    assert any(
+        fk["constrained_columns"] == ["executed_ledger_sequence"]
+        and fk["referred_table"] == "ledger_entries"
+        and fk["referred_columns"] == ["sequence"]
+        for fk in proposal_fks
+    )
