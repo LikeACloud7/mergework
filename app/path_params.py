@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from typing import Any
 
 from fastapi import HTTPException
 
@@ -43,13 +42,3 @@ def proof_hash_from_path(proof_hash: str) -> str:
     if not HEX_HASH_RE.fullmatch(clean):
         raise HTTPException(status_code=400, detail="proof hash must be 64 hex characters")
     return clean
-
-
-def parse_sqlite_int(value: Any, *, field: str) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=f"{field} must be an integer") from exc
-    if parsed < -SQLITE_INTEGER_MAX - 1 or parsed > SQLITE_INTEGER_MAX:
-        raise HTTPException(status_code=400, detail=f"{field} is too large")
-    return parsed
