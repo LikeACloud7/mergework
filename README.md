@@ -3,8 +3,8 @@
 MergeWork is an open-source work ledger where contributors and AI agents earn
 MRWK for useful accepted work.
 
-MRWK starts as a native project coin on the MergeWork ledger. The ledger is
-designed for future public snapshots, bridges, and onchain claims.
+MRWK is native to the MergeWork ledger. The ledger is the source of truth for
+current balances, transfers, and payout proofs.
 
 ## How Earning Works
 
@@ -33,6 +33,13 @@ MRWK wallets use Ed25519 public keys. The address is `mrwk1` plus the first
 
 Create or inspect wallets at `/wallets`, send MRWK at `/transfer`, and link a
 GitHub account at `/me`.
+
+The supported paths today are `github:*` balance claims, linked `mrwk1` wallet
+payouts, and signed wallet-to-wallet transfers between registered wallets.
+MergeWork does not currently operate a public BTC, USDC, fiat, bridge,
+exchange, or off-ramp. Future public snapshots, bridges, and onchain claims
+require separate maintainer/contributor discussion before implementation. See
+[docs/ledger.md](docs/ledger.md#current-transfer-paths) for details.
 
 ## Reference Bounty Tiers
 

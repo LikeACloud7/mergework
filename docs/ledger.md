@@ -1,7 +1,7 @@
 # MRWK Ledger
 
-MRWK starts as a native project coin on the MergeWork ledger. The ledger is
-designed for future public snapshots, bridges, and onchain claims.
+MRWK is native to the MergeWork ledger. The ledger is the source of truth for
+current balances, transfers, and payout proofs.
 
 ## Units
 
@@ -37,10 +37,27 @@ Each ledger entry hashes canonical JSON containing:
 Entries must be sequential, each `previous_hash` must match the prior entry, and
 the stored `entry_hash` must recompute from the entry payload.
 
+## Current Transfer Paths
+
+The supported MRWK transfer paths today are:
+
+- `github:*` balance claims into a linked wallet.
+- Payouts to linked `mrwk1` wallets.
+- Signed wallet-to-wallet transfers between registered wallets.
+
+A `github:*` account is a native ledger account for contributors who were paid
+before linking a wallet. A linked wallet can sign a claim payload to move that
+GitHub balance into the wallet.
+
+MergeWork does not currently operate a public BTC, USDC, fiat, bridge,
+exchange, or off-ramp. Future public snapshots, bridges, and onchain claims
+require separate maintainer/contributor discussion before implementation.
+
 ## Future Snapshot Path
 
-Public ledger state can be snapshotted for bridge or onchain-claim experiments.
-The public ledger and proof hashes are designed to make that process auditable.
+Public ledger state and proof hashes make future snapshot, bridge, or
+onchain-claim experiments auditable if maintainers and contributors decide to
+explore them.
 
 ## Wallets and Sending
 
@@ -57,10 +74,6 @@ Transfer payloads use this shape:
 ```json
 {"type":"mrwk_transfer_v1","from_address":"mrwk1...","to_address":"mrwk1...","amount_microunits":1000000,"nonce":1,"memo":"optional"}
 ```
-
-GitHub payout accounts still exist for contributors who were paid before linking
-a wallet. A linked wallet can sign a claim payload to move the full positive
-`github:{login}` balance into the wallet.
 
 Balances and proofs are inspectable in the explorer. The ledger remains the
 source of truth for spendable MRWK balances.

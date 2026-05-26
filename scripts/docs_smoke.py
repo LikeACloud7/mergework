@@ -22,6 +22,26 @@ BANNED_PUBLIC_PHRASES = [
     "promised convertibility",
     "1 MRWK = $",
 ]
+REQUIRED_PUBLIC_PHRASES = {
+    "README.md": [
+        "supported paths today are `github:*` balance claims",
+        (
+            "MergeWork does not currently operate a public BTC, USDC, fiat, "
+            "bridge, exchange, or off-ramp."
+        ),
+        "require separate maintainer/contributor discussion before implementation",
+    ],
+    "docs/ledger.md": [
+        "## Current Transfer Paths",
+        "`github:*` balance claims into a linked wallet.",
+        "Signed wallet-to-wallet transfers between registered wallets.",
+        (
+            "MergeWork does not currently operate a public BTC, USDC, fiat, "
+            "bridge, exchange, or off-ramp."
+        ),
+        "require separate maintainer/contributor discussion before implementation",
+    ],
+}
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 DOCS_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/docs.yml"
 
@@ -31,6 +51,10 @@ def _local_target_exists(source: Path, target: str) -> bool:
     if not clean or clean.startswith(("http://", "https://", "mailto:")):
         return True
     return (source.parent / clean).resolve().exists()
+
+
+def _squash(text: str) -> str:
+    return " ".join(text.split())
 
 
 def main() -> int:
@@ -46,6 +70,11 @@ def main() -> int:
         for phrase in BANNED_PUBLIC_PHRASES:
             if phrase.lower() in lowered:
                 print(f"banned public phrase in {relative}: {phrase}")
+                ok = False
+        squashed = _squash(text)
+        for phrase in REQUIRED_PUBLIC_PHRASES.get(relative, []):
+            if _squash(phrase) not in squashed:
+                print(f"missing required public phrase in {relative}: {phrase}")
                 ok = False
         for link in LINK_RE.findall(text):
             if not _local_target_exists(path, link):
