@@ -3,13 +3,16 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from app.admin import (
+    ADMIN_WEBHOOK_LIMIT_OPTIONS,
+    admin_page_context,
+    create_admin_bounty_from_form,
     list_webhook_events,
     normalize_webhook_status_filter,
     webhook_events_to_dict,
     webhook_status_summary,
 )
 from app.db import create_schema, session_scope
-from app.models import WebhookEvent
+from app.models import Bounty, WebhookEvent
 
 
 def _event(
@@ -93,3 +96,53 @@ def test_webhook_status_summary_uses_admin_scan_order(sqlite_url: str) -> None:
         {"processed_status": "paid", "count": 2},
         {"processed_status": "custom_status", "count": 3},
     ]
+
+
+def test_admin_page_context_builds_webhook_dashboard_context(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    base_time = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    with session_scope(sqlite_url) as session:
+        session.add(_event("delivery-paid", "paid", base_time))
+        session.add(_event("delivery-missing", "Missing_Submitter", base_time + timedelta(hours=1)))
+
+    with session_scope(sqlite_url) as session:
+        context = admin_page_context(
+            session,
+            login="maintainer",
+            csrf_token="csrf-token",
+            webhook_status=" Missing_Submitter ",
+            webhook_limit=10,
+        )
+
+    assert context["login"] == "maintainer"
+    assert context["csrf_token"] == "csrf-token"
+    assert context["webhook_status"] == "missing_submitter"
+    assert context["webhook_limit"] == 10
+    assert context["webhook_limit_options"] == ADMIN_WEBHOOK_LIMIT_OPTIONS
+    assert [event.delivery_id for event in context["webhook_events"]] == ["delivery-missing"]
+    assert context["webhook_status_summary"] == [
+        {"processed_status": "missing_submitter", "count": 1},
+        {"processed_status": "paid", "count": 1},
+    ]
+
+
+def test_create_admin_bounty_from_form_returns_created_bounty_id(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+
+    with session_scope(sqlite_url) as session:
+        bounty_id = create_admin_bounty_from_form(
+            session,
+            repo="RAmimbo/MergeWork",
+            issue_number=321,
+            issue_url="https://github.com/ramimbo/mergework/issues/321",
+            title="Admin helper bounty",
+            reward_mrwk="25",
+            max_awards=2,
+            acceptance="Admin page form creates this bounty.",
+        )
+        bounty = session.get(Bounty, bounty_id)
+
+    assert bounty is not None
+    assert bounty.repo == "ramimbo/mergework"
+    assert bounty.issue_number == 321
+    assert bounty.max_awards == 2
