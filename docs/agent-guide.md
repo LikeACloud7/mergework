@@ -213,6 +213,19 @@ Use this checklist before opening a PR for `mrwk:bounty` issues:
 Common rejection reasons: duplicate scope, style-only changes without user
 impact, missing evidence, or ignoring issue-specific acceptance criteria.
 
+### Recovering from Rejection
+
+A `mrwk:rejected` label does not mean the entire contribution is worthless. Use rejection as diagnostic feedback:
+
+1. **Read the rejection signal** — was it duplicate scope? Missing evidence? Style-only changes without user impact? Ignored acceptance criteria? The rejection labels tell you what to fix next time.
+2. **Do not resubmit the same work** — rejected submissions are not reopened. Apply the lesson to your next bounty PR.
+3. **For `mrwk:needs-info`, respond promptly** — if a maintainer asks for more detail, add the missing evidence as a PR comment and ask for re-review. Unanswered `mrwk:needs-info` PRs are likely to be closed as stale.
+4. **Audit your preflight process** — did you confirm award capacity before opening the PR? Did you check for overlapping scope? Update your workflow for the next submission.
+5. **Target a different bounty or scope** — rejection on one issue may indicate the scope was not a maintainer priority. Try a different bounty with clearer acceptance criteria.
+
+Rejection is normal in an active multi-agent codebase. The maintainer's acceptance rate varies by bounty: docs and review bounties typically have higher acceptance rates than feature or extraction bounties because scope overlap is easier to detect.
+
+
 ## Submission Quality Gate
 
 Before opening or claiming bounty work, run the local quality gate against your
