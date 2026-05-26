@@ -1,7 +1,17 @@
 from __future__ import annotations
 
+from sqlalchemy import func, select
+
 from app.db import create_schema, session_scope
-from app.ledger.service import create_bounty, ensure_genesis, pay_bounty
+from app.ledger.service import (
+    TREASURY_ACCOUNT,
+    create_bounty,
+    ensure_genesis,
+    format_mrwk,
+    get_balance,
+    pay_bounty,
+)
+from app.models import LedgerEntry
 from app.status import health_status, system_status
 
 
@@ -17,7 +27,8 @@ def test_health_status_reports_current_ledger_height(sqlite_url: str) -> None:
 
         ensure_genesis(session)
 
-        assert health_status(session)["ledger_height"] == 1
+        expected_height = session.scalar(select(func.max(LedgerEntry.sequence)))
+        assert health_status(session)["ledger_height"] == expected_height
 
 
 def test_system_status_counts_only_open_bounties(sqlite_url: str) -> None:
@@ -51,12 +62,14 @@ def test_system_status_counts_only_open_bounties(sqlite_url: str) -> None:
             verifier_result={"label": "mrwk:accepted"},
         )
 
+        expected_height = session.scalar(select(func.max(LedgerEntry.sequence)))
+        expected_treasury_balance = format_mrwk(get_balance(session, TREASURY_ACCOUNT))
         status = system_status(session)
 
     assert status["name"] == "MergeWork"
     assert status["ticker"] == "MRWK"
     assert status["genesis_supply_mrwk"] == "100000000"
-    assert status["ledger_height"] == 4
+    assert status["ledger_height"] == expected_height
     assert status["active_bounties"] == 1
-    assert status["treasury_balance_mrwk"] == "99999950"
+    assert status["treasury_balance_mrwk"] == expected_treasury_balance
     assert status["future_path"] == "public snapshots, bridges, and onchain claims"
