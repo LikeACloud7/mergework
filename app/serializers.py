@@ -127,9 +127,19 @@ def _bounty_detail_url(bounty_id: int | None) -> str | None:
     return f"/bounties/{bounty_id}" if bounty_id is not None else None
 
 
-def _activity_row(entry: LedgerEntry, proof: Proof) -> dict[str, Any] | None:
-    data = json.loads(proof.public_json)
+def _proof_payload(proof: Proof) -> dict[str, Any] | None:
+    try:
+        data = json.loads(proof.public_json)
+    except (TypeError, json.JSONDecodeError):
+        return None
     if not isinstance(data, dict) or data.get("kind") != "bounty_payment":
+        return None
+    return data
+
+
+def _activity_row(entry: LedgerEntry, proof: Proof) -> dict[str, Any] | None:
+    data = _proof_payload(proof)
+    if data is None:
         return None
     submission_url = str(data.get("submission_url") or entry.reference)
     repo = data.get("repo")
@@ -288,8 +298,8 @@ def accepted_work_for_account(session: Session, account: str) -> list[dict[str, 
     ).all()
     accepted_work: list[dict[str, Any]] = []
     for proof, entry in rows:
-        data = json.loads(proof.public_json)
-        if not isinstance(data, dict) or data.get("kind") != "bounty_payment":
+        data = _proof_payload(proof)
+        if data is None:
             continue
         repo = data.get("repo")
         issue_number = data.get("issue_number")

@@ -4,15 +4,24 @@ from datetime import UTC, datetime, timedelta, timezone
 
 from app.db import create_schema, session_scope
 from app.ledger.service import create_bounty, ensure_genesis, pay_bounty, register_wallet
-from app.models import Bounty, WalletTransfer
+from app.models import Bounty, Proof, WalletTransfer
 from app.serializers import (
     accepted_work_for_account,
     account_accepted_summary,
+    activity_to_dict,
     bounty_list_summary,
     bounty_to_dict,
+    empty_accepted_summary,
+    safe_accepted_work_for_account,
+    safe_account_accepted_summary,
     wallet_to_dict,
     wallet_transfer_to_dict,
 )
+
+
+class BrokenSession:
+    def execute(self, *args, **kwargs):
+        raise RuntimeError("database unavailable")
 
 
 def test_bounty_serializers_preserve_public_capacity_fields(sqlite_url: str) -> None:
@@ -81,6 +90,52 @@ def test_account_and_wallet_serializers_preserve_public_shapes(sqlite_url: str) 
     assert wallet_data["label"] == "Serializer wallet"
     assert wallet_data["balance_mrwk"] == "0"
     assert wallet_data["next_nonce"] == 1
+
+
+def test_activity_serializer_fallbacks_keep_account_schema() -> None:
+    assert (
+        safe_account_accepted_summary(BrokenSession(), "github:alice") == empty_accepted_summary()
+    )
+    assert safe_accepted_work_for_account(BrokenSession(), "github:alice") == []
+
+
+def test_activity_serializers_skip_malformed_public_proofs(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=320,
+            issue_url="https://github.com/ramimbo/mergework/issues/320",
+            title="Extract public serializers",
+            reward_mrwk="40",
+            acceptance="Malformed proof payloads should not break activity serializers.",
+        )
+        proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:tatelyman",
+            submission_url="https://github.com/ramimbo/mergework/pull/330",
+            accepted_by="ramimbo",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        proof_row = session.get(Proof, proof.hash)
+        assert proof_row is not None
+        proof_row.public_json = "{"
+
+        activity = activity_to_dict(session)
+        summary = account_accepted_summary(session, "github:tatelyman")
+        accepted_work = accepted_work_for_account(session, "github:tatelyman")
+
+    assert activity == {
+        "totals": {"accepted_awards": 0, "accepted_mrwk": "0", "contributors": 0},
+        "query": "",
+        "contributors": [],
+        "recent": [],
+    }
+    assert summary == empty_accepted_summary()
+    assert accepted_work == []
 
 
 def test_wallet_transfer_serializer_normalizes_aware_timestamp() -> None:
