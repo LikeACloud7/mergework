@@ -32,7 +32,6 @@ from app.config import Settings, get_settings
 from app.db import create_schema, session_scope
 from app.ledger.reconciliation import payout_reconciliation_summary, reconcile_accepted_payouts
 from app.ledger.service import (
-    GENESIS_SUPPLY_MICRO,
     TREASURY_ACCOUNT,
     LedgerError,
     close_bounty,
@@ -73,6 +72,7 @@ from app.serializers import (
     wallet_to_dict,
     wallet_transfer_to_dict,
 )
+from app.status import health_status, system_status
 from app.wallets import WalletError, normalize_wallet_address
 from app.webhooks.github import handle_github_webhook
 
@@ -477,26 +477,12 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     @app.get("/health")
     def health() -> dict[str, Any]:
         with session_scope(db_url) as session:
-            height = session.scalar(select(func.max(LedgerEntry.sequence))) or 0
-        return {"ok": True, "service": "mergework", "ticker": "MRWK", "ledger_height": height}
+            return health_status(session)
 
     @app.get("/api/v1/status")
     def api_status() -> dict[str, Any]:
         with session_scope(db_url) as session:
-            height = session.scalar(select(func.max(LedgerEntry.sequence))) or 0
-            active = session.scalar(
-                select(func.count()).select_from(Bounty).where(Bounty.status == "open")
-            )
-            treasury = get_balance(session, TREASURY_ACCOUNT)
-        return {
-            "name": "MergeWork",
-            "ticker": "MRWK",
-            "genesis_supply_mrwk": format_mrwk(GENESIS_SUPPLY_MICRO),
-            "ledger_height": height,
-            "active_bounties": active or 0,
-            "treasury_balance_mrwk": format_mrwk(treasury),
-            "future_path": "public snapshots, bridges, and onchain claims",
-        }
+            return system_status(session)
 
     def list_bounties_by_status(
         status: str | None = None, query_text: str | None = None
