@@ -272,6 +272,9 @@ def test_bounties_page_and_api_sort_public_rows(sqlite_url: str) -> None:
     assert whitespace_sort_page.text.index(high_capacity.title) < whitespace_sort_page.text.index(
         high_reward.title
     )
+    assert whitespace_sort_page.text.index(high_reward.title) < whitespace_sort_page.text.index(
+        most_awards.title
+    )
     assert '<option value="newest" selected>Newest first</option>' in whitespace_sort_page.text
 
     invalid_sort = client.get("/api/v1/bounties?sort=bogus")
