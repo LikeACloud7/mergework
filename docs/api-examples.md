@@ -522,6 +522,58 @@ In that MCP payload, `bounty_id` is the internal MergeWork bounty id. The
 `proof.issue_number` value is the source GitHub issue number when the proof was
 created from a GitHub bounty claim.
 
+Call `get_ledger_entry` with the immutable ledger sequence returned by
+`/api/v1/ledger`, `/api/v1/activity`, `get_bounty` award rows, or `get_proof`.
+The MCP response wraps the same ledger-entry shape as
+`/api/v1/ledger/<sequence>` in `result.content[0].text`:
+
+```bash
+curl -s -X POST "$MCP_HOST/mcp" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"get_ledger_entry","arguments":{"sequence":42}}}'
+```
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 8,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"sequence\":42,\"type\":\"bounty_payment\",\"from\":\"reserve:bounty:11\",\"to\":\"github:tatelyman\",\"amount_mrwk\":\"75\",\"reference\":\"https://github.com/ramimbo/mergework/pull/183\",\"previous_hash\":\"248e1e38f90ac42897486a2b52a938ad51f31849250c4a979358e9721ec7c64e\",\"entry_hash\":\"d0c0e8f63ad11f2cc6e5f10dc1f61c45f943f3ab126c45761283c0ccf04cb276\",\"proof_hash\":\"a29b9cf54f2ea4734d58e9371b20234f85936e95bd8c45687f0644ad6a9e6871\",\"created_at\":\"2026-05-24T20:05:00\"}"
+      }
+    ]
+  }
+}
+```
+
+Call `get_wallet` with a registered `mrwk1` address when an agent needs wallet
+metadata through MCP. The response wraps the same public wallet shape as
+`/api/v1/wallets/<wallet_address>`; unknown but well-formed wallet addresses
+return `wallet not found`:
+
+```bash
+curl -s -X POST "$MCP_HOST/mcp" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"get_wallet","arguments":{"address":"<wallet_address>"}}}'
+```
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 9,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"address\":\"<wallet_address>\",\"public_key_hex\":\"<64 lowercase hex chars>\",\"label\":\"MCP wallet\",\"github_login\":null,\"balance_mrwk\":\"0\",\"nonce\":0,\"next_nonce\":1,\"created_at\":\"2026-05-24T20:00:00\"}"
+      }
+    ]
+  }
+}
+```
+
 ## Pre-Bounty Preflight Checks
 
 Before opening a PR or claiming a bounty, check the live API for award capacity and active attempts. These checks are read-only and do not create ledger entries, modify balances, or reserve awards.
