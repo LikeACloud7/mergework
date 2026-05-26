@@ -1719,6 +1719,27 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | 
             if optional_bool_arg("include_awards"):
                 bounty_data["awards"] = bounty_awards_to_dict(session, bounty.id)
             return json.dumps(bounty_data)
+        if name == "list_bounty_attempts":
+            bounty_id = positive_int_arg("bounty_id")
+            bounty = session.get(Bounty, bounty_id)
+            if bounty is None:
+                return "bounty not found"
+            now = _utc_now()
+            attempt_query = select(BountyAttempt).where(BountyAttempt.bounty_id == bounty_id)
+            if not optional_bool_arg("include_expired"):
+                attempt_query = attempt_query.where(*_active_attempt_conditions(bounty_id, now))
+            attempts = session.scalars(
+                attempt_query.order_by(
+                    BountyAttempt.created_at.desc(), BountyAttempt.id.desc()
+                ).limit(list_limit_arg())
+            ).all()
+            return {
+                "bounty_id": bounty_id,
+                "issue_number": bounty.issue_number,
+                "status": bounty.status,
+                "warnings": bounty_attempt_warnings(session, bounty, now),
+                "attempts": [bounty_attempt_to_dict(attempt, now) for attempt in attempts],
+            }
         if name == "get_balance":
             account = _normalized_account(str_arg("account"))
             return f"{account}: {format_mrwk(get_balance(session, account))} MRWK"
