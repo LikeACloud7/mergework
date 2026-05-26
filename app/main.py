@@ -30,6 +30,7 @@ from app.bounty_attempts import (
 )
 from app.config import Settings, get_settings
 from app.db import create_schema, session_scope
+from app.hub import is_ltc_lab_host, ltc_lab_context, mergework_hub_context
 from app.ledger.reconciliation import payout_reconciliation_summary, reconcile_accepted_payouts
 from app.ledger.service import (
     TREASURY_ACCOUNT,
@@ -174,14 +175,6 @@ def _existing_payout_proof_for_submission(
         .where(Proof.submission_id == submission.id, Proof.kind == "bounty_payment")
         .limit(1)
     )
-
-
-def _host_without_port(request: Request) -> str:
-    return request.headers.get("host", "").split(":", 1)[0].lower()
-
-
-def _is_ltc_lab_host(request: Request) -> bool:
-    return _host_without_port(request) in {"ltclab.site", "www.ltclab.site"}
 
 
 def _proof_hashes_by_sequence(session: Session, sequences: list[int]) -> dict[int, str]:
@@ -852,42 +845,17 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
 
     @app.get("/", response_class=HTMLResponse)
     def hub(request: Request) -> HTMLResponse:
-        if _is_ltc_lab_host(request):
+        if is_ltc_lab_host(request.headers.get("host", "")):
             return templates.TemplateResponse(
                 request,
                 "ltc_lab.html",
-                {
-                    "site_context": "ltc_lab",
-                    "projects": [
-                        {
-                            "name": "MergeWork",
-                            "tagline": "MRWK from LTC Lab",
-                            "href": "https://mrwk.ltclab.site",
-                            "status": "live",
-                        },
-                        {
-                            "name": "MergeWork API",
-                            "tagline": "Public MRWK status, bounty, ledger, and proof endpoints",
-                            "href": "https://api.mrwk.ltclab.site",
-                            "status": "live",
-                        },
-                        {
-                            "name": "MergeWork MCP",
-                            "tagline": "Tool endpoint for bounty and ledger queries",
-                            "href": "https://mcp.mrwk.ltclab.site",
-                            "status": "live",
-                        },
-                    ],
-                },
+                ltc_lab_context(),
             )
         status_data = api_status()
         return templates.TemplateResponse(
             request,
             "hub.html",
-            {
-                "status": status_data,
-                "public_base_url": settings.public_base_url,
-            },
+            mergework_hub_context(status_data, settings.public_base_url),
         )
 
     @app.get("/bounties", response_class=HTMLResponse)
