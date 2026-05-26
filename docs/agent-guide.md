@@ -112,6 +112,9 @@ Submit the transfer with:
 GitHub link and claim actions require GitHub OAuth login plus a wallet signature.
 The public app flow is `/auth/github/login?next=/me`.
 
+Before describing payout or transfer behavior, check the current transfer paths
+in [docs/ledger.md](ledger.md#current-transfer-paths).
+
 ## MCP Endpoint
 
 The MCP JSON-RPC endpoint is `POST /mcp`.
