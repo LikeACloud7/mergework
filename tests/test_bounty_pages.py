@@ -228,7 +228,7 @@ def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     assert "Contributor next steps" in response.text
     assert "Before you start" in response.text
     assert "Confirm the source issue is still open" in response.text
-    assert "Bounty #4" in response.text
+    assert f"Bounty #{bounty.id}" in response.text
     assert "1 award still open for distinct accepted work." in response.text
     assert (
         'href="https://github.com/ramimbo/mergework/issues/4" rel="nofollow noopener"'
