@@ -64,14 +64,13 @@ def main() -> int:
         if "link the page, docs file, heading, command, or ui path" not in template:
             print("docs issue template location prompt must request actionable evidence")
             ok = False
-    if ok:
-        pr_template = ROOT / PR_TEMPLATE
-        if not pr_template.exists():
-            print(f"missing pull request template: {PR_TEMPLATE}")
-            ok = False
-        elif "expected pr size:" not in pr_template.read_text(encoding="utf-8").lower():
-            print("pull request template must ask for expected PR size")
-            ok = False
+    pr_template = ROOT / PR_TEMPLATE
+    if not pr_template.exists():
+        print(f"missing pull request template: {PR_TEMPLATE}")
+        ok = False
+    elif "expected pr size:" not in pr_template.read_text(encoding="utf-8").lower():
+        print("pull request template must ask for expected PR size")
+        ok = False
     if ok:
         print("docs smoke ok")
         return 0
