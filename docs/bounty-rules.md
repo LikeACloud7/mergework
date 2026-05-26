@@ -80,6 +80,11 @@ PR bounty submissions should link the bounty issue with `Bounty #<issue>` or
 `Refs #<issue>`. Use a closing reference only when the issue should close after
 that PR.
 
+For bounty PRs, include the claim-window packet in the PR body: exact bounty
+reference, intended files or surfaces, expected PR size, test plan, evidence,
+and out-of-scope notes. If the diff grows beyond the expected size, split it or
+explain why the larger review remains focused.
+
 Paid bounty links are tracked in
 [docs/paid-bounties.md](paid-bounties.md) and the public
 [GitHub discussion](https://github.com/ramimbo/mergework/discussions/16).

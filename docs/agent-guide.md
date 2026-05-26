@@ -202,13 +202,15 @@ Use this checklist before opening a PR for `mrwk:bounty` issues:
 1. Confirm no active claim or duplicate PR already covers the same scope.
 2. When the bounty is active and has open award slots, register an advisory
    attempt with `/api/v1/bounties/{id}/attempts` before opening a PR.
-3. Keep changes small and directly tied to one bounty issue.
-4. Include `Bounty #<issue>` or `Refs #<issue>` in PR body.
-5. Explain the exact user or maintainer pain point you fixed.
-6. Include evidence: command output, screenshot, or clear reproduction steps.
-7. Run the required checks from the issue text (for docs work, run
+3. Write the claim-window scope before coding: exact bounty, intended files or
+   surfaces, expected PR size, test plan, and what is out of scope.
+4. Keep changes small and directly tied to one bounty issue.
+5. Include `Bounty #<issue>` or `Refs #<issue>` in PR body.
+6. Explain the exact user or maintainer pain point you fixed.
+7. Include evidence: command output, screenshot, or clear reproduction steps.
+8. Run the required checks from the issue text (for docs work, run
    `./.venv/bin/python scripts/docs_smoke.py`).
-8. Avoid private data, secret material, and speculative price claims.
+9. Avoid private data, secret material, and speculative price claims.
 
 Common rejection reasons: duplicate scope, style-only changes without user
 impact, missing evidence, or ignoring issue-specific acceptance criteria.
