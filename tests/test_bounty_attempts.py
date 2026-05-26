@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from app.bounty_attempts import bounty_attempt_to_dict
 from app.db import create_schema, session_scope
 from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
 from app.main import _signed_value, create_app
@@ -15,6 +16,25 @@ COOKIE_SECRET = "test-cookie-secret"
 
 def _set_login(client: TestClient, login: str) -> None:
     client.cookies.set("mrwk_user", _signed_value(login, COOKIE_SECRET))
+
+
+def test_bounty_attempt_serializer_reports_expired_effective_status() -> None:
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    attempt = BountyAttempt(
+        id=7,
+        bounty_id=321,
+        submitter_account="github:alice",
+        source_url="https://github.com/ramimbo/mergework/pull/500",
+        status="active",
+        expires_at=now - timedelta(minutes=1),
+        created_at=now - timedelta(hours=2),
+        updated_at=now - timedelta(hours=2),
+    )
+
+    payload = bounty_attempt_to_dict(attempt, now)
+
+    assert payload["status"] == "expired"
+    assert payload["expires_at"] == "2026-05-25T11:59:00+00:00"
 
 
 def test_bounty_attempts_register_list_duplicate_and_release(sqlite_url: str, monkeypatch) -> None:
