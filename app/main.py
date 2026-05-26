@@ -20,6 +20,12 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.admin import (
+    list_webhook_events,
+    normalize_webhook_status_filter,
+    webhook_events_to_dict,
+    webhook_status_summary,
+)
 from app.config import Settings, get_settings
 from app.db import create_schema, session_scope
 from app.ledger.reconciliation import payout_reconciliation_summary, reconcile_accepted_payouts
@@ -51,7 +57,6 @@ from app.models import (
     Proof,
     Submission,
     Wallet,
-    WebhookEvent,
 )
 from app.serializers import (
     accepted_work_for_account,
@@ -111,15 +116,6 @@ SQLITE_INTEGER_MAX = 2**63 - 1
 DEFAULT_ATTEMPT_TTL_SECONDS = 24 * 60 * 60
 MIN_ATTEMPT_TTL_SECONDS = 60
 MAX_ATTEMPT_TTL_SECONDS = 7 * 24 * 60 * 60
-WEBHOOK_OUTCOME_SCAN_ORDER = {
-    "missing_submitter": 0,
-    "bounty_not_found": 1,
-    "exhausted_bounty": 2,
-    "duplicate_delivery": 3,
-    "delivery_payload_mismatch": 4,
-    "already_paid": 5,
-    "paid": 6,
-}
 
 
 def _request_was_forwarded_https(request: Request) -> bool:
@@ -253,27 +249,6 @@ def _existing_payout_proof_for_submission(
         select(Proof)
         .where(Proof.submission_id == submission.id, Proof.kind == "bounty_payment")
         .limit(1)
-    )
-
-
-def webhook_status_summary(session: Session) -> list[dict[str, Any]]:
-    status_expr = func.lower(WebhookEvent.processed_status)
-    count_expr = func.count(WebhookEvent.delivery_id)
-    rows = session.execute(
-        select(status_expr, count_expr)
-        .group_by(status_expr)
-        .order_by(count_expr.desc(), status_expr.asc())
-    ).all()
-    summary = [
-        {"processed_status": str(status), "count": int(count)} for status, count in rows if status
-    ]
-    return sorted(
-        summary,
-        key=lambda item: (
-            WEBHOOK_OUTCOME_SCAN_ORDER.get(str(item["processed_status"]), 100),
-            -int(item["count"]),
-            str(item["processed_status"]),
-        ),
     )
 
 
@@ -656,28 +631,8 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         admin_login: str = Depends(require_admin_token),
     ) -> list[dict[str, Any]]:
         del admin_login
-        normalized_status = status.strip().lower() if status is not None else None
-        if normalized_status == "":
-            normalized_status = None
         with session_scope(db_url) as session:
-            query = select(WebhookEvent)
-            if normalized_status is not None:
-                query = query.where(func.lower(WebhookEvent.processed_status) == normalized_status)
-            events = session.scalars(
-                query.order_by(
-                    WebhookEvent.created_at.desc(), WebhookEvent.delivery_id.desc()
-                ).limit(limit)
-            ).all()
-            return [
-                {
-                    "delivery_id": event.delivery_id,
-                    "event_type": event.event_type,
-                    "processed_status": event.processed_status,
-                    "payload_hash": event.payload_hash,
-                    "created_at": event.created_at.isoformat(),
-                }
-                for event in events
-            ]
+            return webhook_events_to_dict(list_webhook_events(session, status, limit))
 
     @app.post("/api/v1/bounties")
     async def api_create_bounty(
@@ -1452,16 +1407,9 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             if _oauth_configured(settings):
                 return RedirectResponse("/auth/github/login?next=/admin", status_code=302)
             raise HTTPException(status_code=503, detail="GitHub OAuth is not configured")
-        normalized_status = webhook_status.strip().lower() if webhook_status is not None else ""
+        normalized_status = normalize_webhook_status_filter(webhook_status) or ""
         with session_scope(db_url) as session:
-            query = select(WebhookEvent)
-            if normalized_status:
-                query = query.where(func.lower(WebhookEvent.processed_status) == normalized_status)
-            webhook_events = session.scalars(
-                query.order_by(
-                    WebhookEvent.created_at.desc(), WebhookEvent.delivery_id.desc()
-                ).limit(webhook_limit)
-            ).all()
+            webhook_events = list_webhook_events(session, normalized_status, webhook_limit)
             webhook_summary = webhook_status_summary(session)
         return templates.TemplateResponse(
             request,
