@@ -104,6 +104,16 @@ def test_api_examples_document_bounty_list_response_shape() -> None:
     assert "Use `id` for the single-bounty API path" in examples
 
 
+def test_api_examples_document_attempt_list_response_shape() -> None:
+    examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
+
+    assert "/api/v1/bounties/<bounty_id>/attempts" in examples
+    assert "returns the bounty id, advisory warnings, and active attempt reservations" in examples
+    assert '"bounty_id": 65' in examples
+    assert '"warnings": []' in examples
+    assert '"attempts": [' in examples
+
+
 def test_api_examples_document_wallet_response_shape() -> None:
     examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
 

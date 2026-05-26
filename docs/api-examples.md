@@ -82,6 +82,27 @@ List active attempts for a bounty:
 curl -s "$API_HOST/api/v1/bounties/<bounty_id>/attempts"
 ```
 
+The list response returns the bounty id, advisory warnings, and active attempt reservations:
+
+```json
+{
+  "bounty_id": 65,
+  "warnings": [],
+  "attempts": [
+    {
+      "id": 12,
+      "bounty_id": 65,
+      "submitter_account": "github:tatelyman",
+      "source_url": "https://github.com/ramimbo/mergework/tree/attempt-bounty-321",
+      "status": "active",
+      "expires_at": "2026-05-26T22:07:00+00:00",
+      "created_at": "2026-05-25T22:07:00+00:00",
+      "updated_at": "2026-05-25T22:07:00+00:00"
+    }
+  ]
+}
+```
+
 Include expired or released attempts when auditing abandoned work:
 
 ```bash
@@ -617,20 +638,25 @@ Before registering a new attempt or opening a PR, inspect existing active attemp
 curl -s "$API_HOST/api/v1/bounties/<bounty_id>/attempts"
 ```
 
-The response lists active attempt reservations:
+The response returns the same wrapper object used by the active-attempts API:
 
 ```json
-[
-  {
-    "id": 12,
-    "bounty_id": 53,
-    "submitter_account": "github:tatelyman",
-    "source_url": "https://github.com/ramimbo/mergework/tree/attempt-bounty-321",
-    "status": "active",
-    "expires_at": "2026-05-26T22:07:00+00:00",
-    "created_at": "2026-05-25T22:07:00+00:00"
-  }
-]
+{
+  "bounty_id": 65,
+  "warnings": [],
+  "attempts": [
+    {
+      "id": 12,
+      "bounty_id": 65,
+      "submitter_account": "github:tatelyman",
+      "source_url": "https://github.com/ramimbo/mergework/tree/attempt-bounty-321",
+      "status": "active",
+      "expires_at": "2026-05-26T22:07:00+00:00",
+      "created_at": "2026-05-25T22:07:00+00:00",
+      "updated_at": "2026-05-25T22:07:00+00:00"
+    }
+  ]
+}
 ```
 
 If another active attempt already covers your exact intended scope, pick a different scope or bounty rather than racing with a duplicate PR. Expired or released attempts can be included for abandoned-work audit:
