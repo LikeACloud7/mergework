@@ -14,6 +14,7 @@ from app.bounty_sorting import BOUNTY_SORT_LABELS, normalize_bounty_sort
 from app.db import session_scope
 from app.ledger_views import account_ledger_transactions
 from app.models import Wallet
+from app.path_params import proof_hash_from_path
 from app.serializers import bounty_list_summary, wallet_to_dict
 
 
@@ -111,8 +112,11 @@ def register_public_routes(
 
     @app.get("/proofs/{proof_hash}", response_class=HTMLResponse)
     def proof_page(request: Request, proof_hash: str) -> HTMLResponse:
+        normalized_proof_hash = proof_hash_from_path(proof_hash)
         return templates.TemplateResponse(
-            request, "proof.html", {"proof": api_proof(proof_hash), "proof_hash": proof_hash}
+            request,
+            "proof.html",
+            {"proof": api_proof(normalized_proof_hash), "proof_hash": normalized_proof_hash},
         )
 
     @app.get("/docs", response_class=HTMLResponse)
