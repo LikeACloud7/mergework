@@ -18,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.activity import register_activity_routes
 from app.admin import (
     admin_page_context,
     create_admin_bounty_from_form,
@@ -74,7 +75,6 @@ from app.path_params import (
 from app.serializers import (
     accepted_work_for_account,
     account_accepted_summary,
-    activity_to_dict,
     bounty_awards_to_dict,
     bounty_list_summary,
     bounty_to_dict,
@@ -815,10 +815,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 raise HTTPException(status_code=500, detail="invalid proof payload")
             return data
 
-    @app.get("/api/v1/activity")
-    def api_activity(q: str | None = Query(None)) -> dict[str, Any]:
-        with session_scope(db_url) as session:
-            return activity_to_dict(session, q)
+    register_activity_routes(app, db_url=db_url, templates=templates)
 
     @app.post("/webhooks/github")
     async def github_webhook(request: Request) -> JSONResponse:
@@ -887,10 +884,6 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         return templates.TemplateResponse(
             request, "ledger_entry.html", {"entry": api_ledger_entry(sequence)}
         )
-
-    @app.get("/activity", response_class=HTMLResponse)
-    def activity_page(request: Request, q: str | None = Query(None)) -> HTMLResponse:
-        return templates.TemplateResponse(request, "activity.html", api_activity(q))
 
     @app.get("/accounts/{account}", response_class=HTMLResponse)
     def account_page(request: Request, account: str) -> HTMLResponse:
