@@ -68,7 +68,6 @@ def register_admin_routes(
 
     @app.post("/admin/bounties")
     def admin_create_bounty(
-        request: Request,
         repo: str = Form(...),
         issue_number: int = Form(...),
         issue_url: str = Form(...),
@@ -79,7 +78,6 @@ def register_admin_routes(
         csrf_token_value: str | None = Form(None, alias="csrf_token"),
         admin_login: str = Depends(require_admin),
     ) -> RedirectResponse:
-        del request
         if admin_login != "api-token" and not verify_csrf_token(
             csrf_token_value,
             action="admin-bounty",
