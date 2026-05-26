@@ -583,7 +583,7 @@ curl -s "$API_HOST/api/v1/bounties/<bounty_id>/attempts?include_expired=true"
 
 ### Verify Open PRs for the Same Bounty Issue
 
-Cross-reference open GitHub PRs against the bounty issue number. Open multiple PRs for the same bounty issue from different contributors is normal for multi-award bounties, but you should avoid overlapping scope:
+Cross-reference open GitHub PRs against the bounty issue number. Opening multiple PRs for the same bounty issue from different contributors is normal for multi-award bounties, but you should avoid overlapping scope:
 
 ```bash
 # Check open PRs referencing the same bounty issue via the GitHub API
