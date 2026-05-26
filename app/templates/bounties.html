@@ -38,19 +38,21 @@
 </section>
 <div class="list">
   {% for bounty in bounties %}
-  <article>
-    <h2><a href="/bounties/{{ bounty.id }}">{{ bounty.title }}</a></h2>
-    <p>
+  <article class="bounty-card bounty-card--{{ bounty.status }}">
+    <div class="bounty-card-head">
+      <h2><a href="/bounties/{{ bounty.id }}">{{ bounty.title }}</a></h2>
+      <span class="status-pill status-{{ bounty.status }}">{{ bounty.status }}</span>
+    </div>
+    <p class="bounty-card-meta">
       {% set issue_url = safe_public_url(bounty.issue_url) %}
       {% if issue_url %}
       <a href="{{ issue_url }}" rel="nofollow noopener">{{ bounty.repo }} #{{ bounty.issue_number }}</a> ·
       {% else %}
       {{ bounty.repo }} #{{ bounty.issue_number }} ·
       {% endif %}
-      {{ bounty.reward_mrwk }} MRWK per award ·
+      <strong>{{ bounty.reward_mrwk }} MRWK</strong> per award ·
       {{ bounty.available_mrwk }} MRWK still available ·
-      {{ bounty.awards_remaining }}/{{ bounty.max_awards }} awards open ·
-      {{ bounty.status }}
+      {{ bounty.awards_remaining }}/{{ bounty.max_awards }} awards open
     </p>
     <p>{{ bounty.acceptance }}</p>
   </article>
