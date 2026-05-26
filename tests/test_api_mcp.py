@@ -1447,9 +1447,13 @@ def test_mcp_submit_work_proof_returns_structured_generic_guidance(sqlite_url: s
         "can_submit": None,
         "availability_warnings": [],
         "awards_remaining": None,
+        "max_awards": None,
+        "awards_paid": None,
         "reward_mrwk": None,
+        "available_mrwk": None,
         "repository": None,
         "issue_url": None,
+        "title": None,
         "acceptance": None,
         "submission_format": (
             "Open a focused PR or issue, reference the MRWK bounty, include test "
