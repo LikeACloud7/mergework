@@ -40,6 +40,32 @@ def test_submission_quality_gate_passes_open_bounty_with_evidence(capsys, tmp_pa
     assert json.loads(capsys.readouterr().out)["status"] == "pass"
 
 
+def test_submission_quality_gate_accepts_claim_command_reference() -> None:
+    result = evaluate_submission(
+        {
+            "submission_text": """
+            Summary:
+            Harden the bounty submission checks.
+
+            /claim #319
+
+            Validation:
+            - pytest passed.
+            """,
+            "bounties": [{"number": 319, "state": "OPEN", "awards_remaining": 1}],
+            "pull_requests": [],
+        }
+    )
+
+    assert result["status"] == "pass"
+    assert result["bounty_reference"] == 319
+    assert {
+        "name": "bounty_reference",
+        "status": "pass",
+        "message": "found bounty reference #319",
+    } in result["checks"]
+
+
 def test_submission_quality_gate_fails_missing_reference() -> None:
     result = evaluate_submission(
         {
@@ -53,7 +79,9 @@ def test_submission_quality_gate_fails_missing_reference() -> None:
     assert result["checks"][0] == {
         "name": "bounty_reference",
         "status": "fail",
-        "message": "submission text must include Bounty #<issue> or Refs #<issue>",
+        "message": (
+            "submission text must include Bounty #<issue>, Refs #<issue>, or /claim #<issue>"
+        ),
     }
 
 

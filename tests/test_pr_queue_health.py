@@ -107,6 +107,26 @@ def test_pr_queue_health_text_report_is_pasteable() -> None:
     assert "No queue-health issues found." in text
 
 
+def test_pr_queue_health_accepts_claim_command_reference() -> None:
+    report = analyze_queue(
+        {
+            "bounties": [{"number": 310, "state": "OPEN", "awards_remaining": 1}],
+            "pull_requests": [
+                {
+                    "number": 8,
+                    "title": "Harden bounty submission checks",
+                    "body": "/claim #310",
+                    "merge_state": "clean",
+                    "labels": [],
+                }
+            ],
+        }
+    )
+
+    assert report["summary"]["missing_bounty_references"] == 0
+    assert report["missing_bounty_references"] == []
+
+
 def test_pr_queue_health_markdown_report_includes_required_sections() -> None:
     report = analyze_queue(
         {
@@ -163,7 +183,7 @@ def test_pr_queue_health_markdown_report_includes_required_sections() -> None:
     assert "### Missing bounty references" in markdown
     assert (
         "- [PR #2](https://github.com/ramimbo/mergework/pull/2): "
-        "Improve bounty filters (No Bounty #<issue> or Refs #<issue> found)"
+        "Improve bounty filters (No Bounty #<issue>, Refs #<issue>, or /claim #<issue> found)"
     ) in markdown
     assert "### Dirty or unstable merge state" in markdown
     assert "Merge state is dirty" in markdown

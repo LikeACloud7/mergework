@@ -8,7 +8,7 @@ import sys
 from collections import defaultdict
 from typing import Any
 
-BOUNTY_REF_RE = re.compile(r"(?:bounty|refs?|fixes|closes)\s+#(\d+)", re.IGNORECASE)
+BOUNTY_REF_RE = re.compile(r"\b(?:bounty|refs?|fixes|closes|claims?)\s+#(\d+)", re.IGNORECASE)
 NOISY_TITLE_PREFIX_RE = re.compile(r"^\s*(?:\[[^\]]+\]\s*)+")
 UNSTABLE_MERGE_STATES = {"blocked", "conflicting", "dirty", "unknown", "unstable"}
 GH_TIMEOUT_SECONDS = 30
@@ -113,7 +113,11 @@ def analyze_queue(data: dict[str, Any]) -> dict[str, Any]:
     for pr in normalized_prs:
         if not pr["refs"]:
             missing_bounty_references.append(
-                _issue(pr, "missing_bounty_reference", "No Bounty #<issue> or Refs #<issue> found")
+                _issue(
+                    pr,
+                    "missing_bounty_reference",
+                    "No Bounty #<issue>, Refs #<issue>, or /claim #<issue> found",
+                )
             )
         for ref in pr["refs"]:
             bounty = bounties.get(ref)
