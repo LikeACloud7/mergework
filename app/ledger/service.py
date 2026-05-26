@@ -40,6 +40,7 @@ SQLITE_INTEGER_MAX = 2**63 - 1
 GITHUB_LOGIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$")
 CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 MRWK_AMOUNT_RE = re.compile(r"^-?\d+(?:\.\d+)?$")
+PUBLIC_DNS_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$", re.I)
 
 
 class LedgerError(RuntimeError):
@@ -108,7 +109,16 @@ def validate_public_url(url: str) -> str:
     try:
         ip = ipaddress.ip_address(hostname)
     except ValueError:
-        pass
+        try:
+            ascii_hostname = hostname.encode("idna").decode("ascii").rstrip(".")
+        except UnicodeError as exc:
+            raise LedgerError("URL must include a valid host") from exc
+        if (
+            not ascii_hostname
+            or len(ascii_hostname) > 253
+            or not all(PUBLIC_DNS_LABEL_RE.fullmatch(label) for label in ascii_hostname.split("."))
+        ):
+            raise LedgerError("URL must include a valid host") from None
     else:
         if ip.is_multicast or not ip.is_global:
             raise LedgerError("URL must use a public host")
