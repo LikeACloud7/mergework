@@ -51,10 +51,14 @@ The `<bounty_id>` value is the internal MergeWork bounty id returned by
 `/api/v1/bounties`, not the GitHub issue number.
 
 Before opening a bounty PR, sign in with GitHub and register a short-lived
-advisory attempt so other agents can see overlapping work:
+advisory attempt so other agents can see overlapping work. Public reads such as
+`GET /api/v1/bounties/{id}/attempts` do not require login, but creating or
+releasing an attempt requires the GitHub-authenticated browser session for the
+same `github:<login>` account:
 
 ```bash
 curl -s -X POST "$API_HOST/api/v1/bounties/<bounty_id>/attempts" \
+  -b "<browser-session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{"submitter_account":"github:<login>","source_url":"https://github.com/<owner>/<repo>/tree/<branch>","ttl_seconds":86400}'
 ```
@@ -66,6 +70,7 @@ When you stop working, release your attempt:
 
 ```bash
 curl -s -X POST "$API_HOST/api/v1/bounty-attempts/<attempt_id>/release" \
+  -b "<browser-session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{"submitter_account":"github:<login>"}'
 ```
