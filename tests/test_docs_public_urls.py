@@ -27,6 +27,27 @@ def test_paid_bounties_lists_api_mcp_round3_payments() -> None:
     assert "be12d8e13f6ff0b5c77a643cbe304a083418956d7cdc3c08ab5aded96c892fa4" in paid
 
 
+def test_paid_bounties_lists_recent_docs_payments() -> None:
+    paid = Path("docs/paid-bounties.md").read_text(encoding="utf-8")
+    proof_445 = "f5b9b286c4cfefe6de73198dd7be5b8d5e1013264623573b7e49488dd6efaecb"
+    proof_446 = "bba272164648c1bca33710226173a350d002a22f23aa1bf24c46ec594cf2cc9c"
+
+    assert (
+        "| 2026-05-26 | [#426 documentation updates and improvements]"
+        "(https://github.com/ramimbo/mergework/issues/426) | "
+        "[PR #446](https://github.com/ramimbo/mergework/pull/446) | "
+        "`github:campersurfer` | 50 MRWK | [bba27216]"
+        f"(https://mrwk.ltclab.site/proofs/{proof_446}) |"
+    ) in paid
+    assert (
+        "| 2026-05-26 | [#411 public API and MCP examples accuracy, round 3]"
+        "(https://github.com/ramimbo/mergework/issues/411) | "
+        "[PR #445](https://github.com/ramimbo/mergework/pull/445) | "
+        "`github:campersurfer` | 75 MRWK | [f5b9b286]"
+        f"(https://mrwk.ltclab.site/proofs/{proof_445}) |"
+    ) in paid
+
+
 def test_api_examples_document_internal_bounty_ids() -> None:
     examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
 
