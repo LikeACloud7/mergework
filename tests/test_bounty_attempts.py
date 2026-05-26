@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.bounty_attempts import bounty_attempt_to_dict
+from app.bounty_attempts import bounty_attempt_to_dict, bounty_attempt_warnings
 from app.db import create_schema, session_scope
 from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
 from app.main import _signed_value, create_app
@@ -204,6 +204,37 @@ def test_single_award_bounty_warns_when_active_attempt_uses_available_slot(
     visible = client.get(f"/api/v1/bounties/{bounty.id}/attempts")
     assert visible.status_code == 200
     assert visible.json()["warnings"] == ["bounty has 1 active attempt"]
+
+
+def test_multi_award_bounty_still_warns_for_multiple_active_attempts(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    now = datetime.now(UTC)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=327,
+            issue_url="https://github.com/ramimbo/mergework/issues/327",
+            title="Multi award attempt warning",
+            reward_mrwk="50",
+            max_awards=3,
+            acceptance="Warn when multiple contributors have active attempts.",
+        )
+        for submitter in ("github:alice", "github:bob"):
+            session.add(
+                BountyAttempt(
+                    bounty_id=bounty.id,
+                    submitter_account=submitter,
+                    status="active",
+                    expires_at=now + timedelta(hours=1),
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        session.flush()
+
+        assert bounty_attempt_warnings(session, bounty, now) == ["bounty has 2 active attempts"]
 
 
 def test_expired_bounty_attempt_is_visible_but_no_longer_blocks_submitter(
