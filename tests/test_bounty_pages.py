@@ -225,6 +225,16 @@ def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     assert "100 MRWK" in response.text
     assert "What has to be true" in response.text
     assert "Focused PR improves status, reward, issue link, and acceptance text." in response.text
+    assert "Contributor next steps" in response.text
+    assert "Before you start" in response.text
+    assert "Confirm the source issue is still open" in response.text
+    assert "Bounty #4" in response.text
+    assert "1 award still open for distinct accepted work." in response.text
+    assert (
+        'href="https://github.com/ramimbo/mergework/issues/4" rel="nofollow noopener"'
+        in response.text
+    )
+    assert f'href="/api/v1/bounties/{bounty.id}"' in response.text
 
     missing_response = client.get("/api/v1/bounties/999")
     assert missing_response.status_code == 404
@@ -237,6 +247,40 @@ def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     assert oversized_api_response.json()["detail"] == "bounty id is too large"
     oversized_page_response = client.get(f"/bounties/{oversized_bounty_id}")
     assert oversized_page_response.status_code == 400
+
+
+def test_bounty_detail_warns_when_no_awards_remain(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=5,
+            issue_url="https://github.com/ramimbo/mergework/issues/5",
+            title="One-shot bounty",
+            reward_mrwk="25",
+            max_awards=1,
+            acceptance="Only one accepted award should be paid.",
+        )
+        pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:contributor",
+            submission_url="https://github.com/ramimbo/mergework/pull/5",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get(f"/bounties/{bounty.id}")
+
+    assert response.status_code == 200
+    assert (
+        "No awards remain; treat new work as unpaid unless maintainers reopen the bounty."
+        in response.text
+    )
 
 
 def test_bounty_detail_shows_accepted_award_history(sqlite_url: str) -> None:
