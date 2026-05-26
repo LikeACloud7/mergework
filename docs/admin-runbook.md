@@ -7,9 +7,42 @@
 3. Add acceptance text that explains what counts as useful accepted work.
 4. Set `max_awards` to the number of separate payouts allowed. Use `1` for
    a single-award bounty.
-5. Use `/admin` or `POST /api/v1/bounties` with an admin token.
-   Multi-award bounties reserve `reward_mrwk * max_awards`.
-6. Add `mrwk:bounty` to the GitHub issue.
+5. Use `/admin` or `POST /api/v1/bounties` with an admin token. This creates
+   a public treasury proposal.
+6. Execute the proposal after the 24 hour delay. Multi-award bounties reserve
+   `reward_mrwk * max_awards` when the proposal executes.
+7. Add `mrwk:bounty` to the GitHub issue.
+
+## Treasury Proposals
+
+Normal admin treasury actions are proposed before they execute:
+
+- bounty creation
+- manual bounty payout
+- bounty close and reserve release
+
+Public reads:
+
+```bash
+curl -s https://api.mrwk.ltclab.site/api/v1/treasury/proposals
+curl -s https://api.mrwk.ltclab.site/api/v1/treasury/proposals/<proposal_id>
+```
+
+Execution requires an admin token and only works after the 24 hour delay:
+
+```bash
+curl -X POST https://api.mrwk.ltclab.site/api/v1/treasury/proposals/<proposal_id>/execute \
+  -H "x-mergework-admin-token: $MERGEWORK_ADMIN_TOKEN"
+```
+
+Bounty reserve execution is capped at `10,000 MRWK` per 24 hour epoch. GitHub
+users with at least one accepted MRWK award can submit proposal challenges.
+Machine-checkable valid challenges block execution. Subjective challenges are
+public notes and do not block by themselves.
+
+This governance surface makes normal app-path treasury movement public,
+delayed, capped, and challengeable. It does not prevent direct server or
+database bypass by an operator with production access.
 
 ## Accept Work
 
@@ -27,8 +60,8 @@
 8. Add `mrwk:paid` to the bounty issue only after all awards are exhausted or
    the bounty is intentionally closed.
 
-To close an open bounty without paying the remaining awards, release the unused
-reserve:
+To close an open bounty without paying the remaining awards, propose a reserve
+release:
 
 ```bash
 curl -X POST https://api.mrwk.ltclab.site/api/v1/bounties/<id>/close \
@@ -60,20 +93,20 @@ curl -X POST https://api.mrwk.ltclab.site/api/v1/bounties/<id>/pay \
   }'
 ```
 
-`to_account` must be a registered `mrwk1...` wallet or `github:{login}`.
-Successful responses include `submission_id`, `ledger_sequence`, `ledger_url`,
-`proof_hash`, and `proof_url` so operators can reconcile the payment without
-scraping the ledger. If the same bounty/submission URL is paid twice, the API
-returns `409` with `status: "already_paid"` and the existing proof links instead
-of creating another ledger entry.
+`to_account` must be a registered `mrwk1...` wallet or `github:{login}`. The API
+returns a pending treasury proposal. After the delay, execute the proposal to
+record the ledger payment and public proof. If the same bounty/submission URL is
+already paid, the API returns `409` with `status: "already_paid"` and the
+existing proof links instead of queuing another proposal.
 
 Manual payout checklist:
 
 1. Verify the public proof and wallet address.
-2. Pay through `POST /api/v1/bounties/{id}/pay`.
-3. Confirm the explorer/API shows the proof.
-4. Add `mrwk:paid` to the paid comment or submission when possible.
-5. Add `mrwk:paid` to the bounty issue only after all awards are exhausted or
+2. Propose payment through `POST /api/v1/bounties/{id}/pay`.
+3. Confirm the public proposal, wait for the delay, then execute it.
+4. Confirm the explorer/API shows the proof.
+5. Add `mrwk:paid` to the paid comment or submission when possible.
+6. Add `mrwk:paid` to the bounty issue only after all awards are exhausted or
    the bounty is intentionally closed.
 
 Do not apply `mrwk:accepted` to maintainer-authored bounty issues for payment;

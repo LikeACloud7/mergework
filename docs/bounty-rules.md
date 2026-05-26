@@ -106,14 +106,20 @@ maintainer comment, or MRWK proof exists.
 
 ## Payout Flow
 
-1. A maintainer posts a bounty and MRWK is reserved from treasury.
-   Multi-award bounties reserve `reward_mrwk * max_awards`.
+1. A maintainer proposes a bounty. After the 24 hour treasury delay, execution
+   reserves MRWK from treasury. Multi-award bounties reserve
+   `reward_mrwk * max_awards`.
 2. A contributor submits an issue, PR, docs change, test, or report.
 3. Automated checks may verify objective facts.
 4. For PR submissions, a maintainer applies `mrwk:accepted` to the PR.
-5. For comment or wallet-proof submissions, a maintainer pays through the admin
-   payout API.
+5. For comment or wallet-proof submissions, a maintainer proposes payment
+   through the admin payout API and executes it after the treasury delay.
 6. MergeWork creates one ledger payment and one public proof per accepted award.
+
+Admin bounty creation, manual payouts, and bounty close/release use public
+treasury proposals with delay, caps, and challenge logs. This protects normal
+app paths. It does not prevent direct server or database bypass by an operator
+with production access. PR webhook payouts still use the accepted-label flow.
 
 Webhook replay or duplicate submission URLs must not create duplicate payments.
 Single-award bounties close after one payment. Multi-award bounties stay open

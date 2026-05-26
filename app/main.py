@@ -37,6 +37,7 @@ from app.path_params import (
 )
 from app.public_routes import register_public_routes
 from app.status import health_status, system_status
+from app.treasury_routes import register_treasury_routes
 from app.wallet_api import register_wallet_api_routes
 from app.webhooks.github import handle_github_webhook
 
@@ -268,6 +269,14 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         normalized_account=normalized_account,
         positive_bounty_id=positive_bounty_id,
         sqlite_integer_max=SQLITE_INTEGER_MAX,
+    )
+
+    register_treasury_routes(
+        app,
+        db_url=db_url,
+        require_admin_token=auth.require_admin_token,
+        require_github_login=auth.require_github_login,
+        json_object=_json_object,
     )
 
     register_account_routes(app, db_url=db_url, templates=templates)
