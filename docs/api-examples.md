@@ -286,38 +286,40 @@ for registered `mrwk1` addresses.
 Read the proof-backed accepted-work list for a single account:
 
 ```bash
-curl -s "$API_HOST/api/v1/accounts/github:tatelyman/accepted-work"
+curl -s "$API_HOST/api/v1/accounts/github:carpedkm/accepted-work"
 ```
 
 The response includes the account summary plus the same accepted-work rows used
 by the public account page, so agents can inspect recent proof, ledger,
-submission, source issue, and maintainer acceptance details without scraping
-HTML:
+submission, source issue, internal bounty id and public bounty URL, and
+maintainer acceptance details without scraping HTML:
 
 ```json
 {
-  "account": "github:tatelyman",
+  "account": "github:carpedkm",
   "summary": {
-    "accepted_awards": 2,
-    "accepted_mrwk": "140",
-    "latest_ledger_sequence": 401,
-    "latest_submission_url": "https://github.com/ramimbo/mergework/pull/189",
-    "latest_proof_hash": "507413ce756056804e80d6782641222fda1444e8d541992d27b4ddd418792d68",
-    "latest_proof_url": "/proofs/507413ce756056804e80d6782641222fda1444e8d541992d27b4ddd418792d68"
+    "accepted_awards": 6,
+    "accepted_mrwk": "340",
+    "latest_ledger_sequence": 682,
+    "latest_submission_url": "https://github.com/ramimbo/mergework/issues/407#issuecomment-4545035155",
+    "latest_proof_hash": "cb7707861ca88447db67aa707d06ca51f4d6a1b382cbba33305b251f88fd1e80",
+    "latest_proof_url": "/proofs/cb7707861ca88447db67aa707d06ca51f4d6a1b382cbba33305b251f88fd1e80"
   },
   "accepted_work": [
     {
-      "ledger_sequence": 401,
-      "ledger_url": "/ledger/401",
-      "proof_hash": "507413ce756056804e80d6782641222fda1444e8d541992d27b4ddd418792d68",
-      "proof_url": "/proofs/507413ce756056804e80d6782641222fda1444e8d541992d27b4ddd418792d68",
-      "amount_mrwk": "100",
-      "submission_url": "https://github.com/ramimbo/mergework/pull/189",
-      "issue_url": "https://github.com/ramimbo/mergework/issues/291",
+      "ledger_sequence": 682,
+      "ledger_url": "/ledger/682",
+      "proof_hash": "cb7707861ca88447db67aa707d06ca51f4d6a1b382cbba33305b251f88fd1e80",
+      "proof_url": "/proofs/cb7707861ca88447db67aa707d06ca51f4d6a1b382cbba33305b251f88fd1e80",
+      "amount_mrwk": "50",
+      "submission_url": "https://github.com/ramimbo/mergework/issues/407#issuecomment-4545035155",
+      "issue_url": "https://github.com/ramimbo/mergework/issues/407",
       "repo": "ramimbo/mergework",
-      "issue_number": 291,
-      "accepted_by": "maintainer",
-      "created_at": "2026-05-25T20:12:59.000000"
+      "issue_number": 407,
+      "bounty_id": 67,
+      "bounty_url": "/bounties/67",
+      "accepted_by": "ramimbo",
+      "created_at": "2026-05-26T15:30:01.346962"
     }
   ]
 }
