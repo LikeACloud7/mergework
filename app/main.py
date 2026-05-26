@@ -49,11 +49,7 @@ from app.ledger.service import (
     submit_wallet_transfer,
     validate_public_url,
 )
-from app.ledger_views import (
-    account_ledger_transactions,
-    ledger_entry_to_dict,
-    recent_ledger_entries,
-)
+from app.ledger_views import ledger_entry_to_dict, recent_ledger_entries
 from app.mcp import handle_mcp_request
 from app.mcp_work_proof import (
     generic_work_proof_guidance_json,
@@ -74,6 +70,7 @@ from app.path_params import (
     positive_ledger_sequence,
     proof_hash_from_path,
 )
+from app.public_routes import register_public_routes
 from app.serializers import (
     bounty_awards_to_dict,
     bounty_list_summary,
@@ -758,77 +755,16 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             mergework_hub_context(status_data, settings.public_base_url),
         )
 
-    @app.get("/bounties", response_class=HTMLResponse)
-    def bounties_page(
-        request: Request, status: str | None = Query(None), q: str | None = Query(None)
-    ) -> HTMLResponse:
-        selected_status = status.strip().lower() if status is not None else None
-        query_text = q.strip() if q is not None else ""
-        bounties = list_bounties_by_status(status, q)
-        return templates.TemplateResponse(
-            request,
-            "bounties.html",
-            {
-                "bounties": bounties,
-                "summary": bounty_list_summary(bounties),
-                "selected_status": selected_status,
-                "query_text": query_text,
-            },
-        )
-
-    @app.get("/bounties/{bounty_id}", response_class=HTMLResponse)
-    def bounty_page(request: Request, bounty_id: int) -> HTMLResponse:
-        return templates.TemplateResponse(
-            request, "bounty_detail.html", {"bounty": api_bounty(bounty_id)}
-        )
-
-    @app.get("/ledger", response_class=HTMLResponse)
-    def ledger_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "ledger.html", {"entries": api_ledger()})
-
-    @app.get("/ledger/{sequence}", response_class=HTMLResponse)
-    def ledger_entry_page(request: Request, sequence: int) -> HTMLResponse:
-        return templates.TemplateResponse(
-            request, "ledger_entry.html", {"entry": api_ledger_entry(sequence)}
-        )
-
-    @app.get("/wallets", response_class=HTMLResponse)
-    def wallets_page(request: Request) -> HTMLResponse:
-        with session_scope(db_url) as session:
-            wallets = session.scalars(
-                select(Wallet).order_by(Wallet.created_at.desc()).limit(100)
-            ).all()
-            wallet_rows = [wallet_to_dict(session, wallet) for wallet in wallets]
-        return templates.TemplateResponse(request, "wallets.html", {"wallets": wallet_rows})
-
-    @app.get("/wallets/{address}", response_class=HTMLResponse)
-    def wallet_page(request: Request, address: str) -> HTMLResponse:
-        address = normalized_wallet_address(address)
-        with session_scope(db_url) as session:
-            wallet = session.get(Wallet, address)
-            if wallet is None:
-                raise HTTPException(status_code=404, detail="wallet not found")
-            wallet_data = wallet_to_dict(session, wallet)
-            transactions = account_ledger_transactions(session, wallet.address)
-        return templates.TemplateResponse(
-            request,
-            "wallet_detail.html",
-            {"wallet": wallet_data, "transactions": transactions},
-        )
-
-    @app.get("/transfer", response_class=HTMLResponse)
-    def transfer_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "transfer.html")
-
-    @app.get("/proofs/{proof_hash}", response_class=HTMLResponse)
-    def proof_page(request: Request, proof_hash: str) -> HTMLResponse:
-        return templates.TemplateResponse(
-            request, "proof.html", {"proof": api_proof(proof_hash), "proof_hash": proof_hash}
-        )
-
-    @app.get("/docs", response_class=HTMLResponse)
-    def docs_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "docs.html")
+    register_public_routes(
+        app,
+        db_url=db_url,
+        templates=templates,
+        list_bounties_by_status=list_bounties_by_status,
+        api_bounty=api_bounty,
+        api_ledger=api_ledger,
+        api_ledger_entry=api_ledger_entry,
+        api_proof=api_proof,
+    )
 
     @app.get("/auth/github/login")
     def auth_github_login(next_path: str | None = Query(None, alias="next")) -> RedirectResponse:
