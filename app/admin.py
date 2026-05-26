@@ -5,8 +5,10 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.ledger.service import create_bounty
 from app.models import WebhookEvent
 
+ADMIN_WEBHOOK_LIMIT_OPTIONS = [10, 25, 50, 100]
 WEBHOOK_OUTCOME_SCAN_ORDER = {
     "missing_submitter": 0,
     "bounty_not_found": 1,
@@ -74,3 +76,47 @@ def webhook_status_summary(session: Session) -> list[dict[str, Any]]:
             str(item["processed_status"]),
         ),
     )
+
+
+def admin_page_context(
+    session: Session,
+    *,
+    login: str,
+    csrf_token: str,
+    webhook_status: str | None,
+    webhook_limit: int,
+) -> dict[str, Any]:
+    normalized_status = normalize_webhook_status_filter(webhook_status) or ""
+    return {
+        "login": login,
+        "csrf_token": csrf_token,
+        "webhook_events": list_webhook_events(session, normalized_status, webhook_limit),
+        "webhook_status_summary": webhook_status_summary(session),
+        "webhook_limit": webhook_limit,
+        "webhook_limit_options": ADMIN_WEBHOOK_LIMIT_OPTIONS,
+        "webhook_status": normalized_status,
+    }
+
+
+def create_admin_bounty_from_form(
+    session: Session,
+    *,
+    repo: str,
+    issue_number: int,
+    issue_url: str,
+    title: str,
+    reward_mrwk: str,
+    max_awards: int,
+    acceptance: str,
+) -> int:
+    bounty = create_bounty(
+        session,
+        repo=repo,
+        issue_number=issue_number,
+        issue_url=issue_url,
+        title=title,
+        reward_mrwk=reward_mrwk,
+        max_awards=max_awards,
+        acceptance=acceptance,
+    )
+    return int(bounty.id)

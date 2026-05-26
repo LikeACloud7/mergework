@@ -19,10 +19,10 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.admin import (
+    admin_page_context,
+    create_admin_bounty_from_form,
     list_webhook_events,
-    normalize_webhook_status_filter,
     webhook_events_to_dict,
-    webhook_status_summary,
 )
 from app.bounty_attempts import (
     list_bounty_attempts,
@@ -1111,22 +1111,18 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             if _oauth_configured(settings):
                 return RedirectResponse("/auth/github/login?next=/admin", status_code=302)
             raise HTTPException(status_code=503, detail="GitHub OAuth is not configured")
-        normalized_status = normalize_webhook_status_filter(webhook_status) or ""
         with session_scope(db_url) as session:
-            webhook_events = list_webhook_events(session, normalized_status, webhook_limit)
-            webhook_summary = webhook_status_summary(session)
+            context = admin_page_context(
+                session,
+                login=login,
+                csrf_token=_csrf_token("admin-bounty", login, settings.cookie_secret),
+                webhook_status=webhook_status,
+                webhook_limit=webhook_limit,
+            )
         return templates.TemplateResponse(
             request,
             "admin.html",
-            {
-                "login": login,
-                "csrf_token": _csrf_token("admin-bounty", login, settings.cookie_secret),
-                "webhook_events": webhook_events,
-                "webhook_status_summary": webhook_summary,
-                "webhook_limit": webhook_limit,
-                "webhook_limit_options": [10, 25, 50, 100],
-                "webhook_status": normalized_status,
-            },
+            context,
         )
 
     @app.post("/admin/bounties")
@@ -1152,7 +1148,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             raise HTTPException(status_code=403, detail="invalid CSRF token")
         with session_scope(db_url) as session:
             try:
-                bounty = create_bounty(
+                bounty_id = create_admin_bounty_from_form(
                     session,
                     repo=repo,
                     issue_number=issue_number,
@@ -1164,7 +1160,6 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 )
             except LedgerError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
-            bounty_id = bounty.id
         return RedirectResponse(f"/bounties/{bounty_id}", status_code=303)
 
     return app
