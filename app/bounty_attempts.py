@@ -43,7 +43,7 @@ def _attempt_effective_status(attempt: BountyAttempt, now: datetime) -> str:
 
 
 def bounty_attempt_to_dict(attempt: BountyAttempt, now: datetime | None = None) -> dict[str, Any]:
-    now = now or _utc_now()
+    now = _as_utc(now or _utc_now())
     return {
         "id": attempt.id,
         "bounty_id": attempt.bounty_id,

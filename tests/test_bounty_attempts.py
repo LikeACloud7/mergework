@@ -19,16 +19,17 @@ def _set_login(client: TestClient, login: str) -> None:
 
 
 def test_bounty_attempt_serializer_reports_expired_effective_status() -> None:
-    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    now = datetime(2026, 5, 25, 12, 0)
+    stored_now = now.replace(tzinfo=UTC)
     attempt = BountyAttempt(
         id=7,
         bounty_id=321,
         submitter_account="github:alice",
         source_url="https://github.com/ramimbo/mergework/pull/500",
         status="active",
-        expires_at=now - timedelta(minutes=1),
-        created_at=now - timedelta(hours=2),
-        updated_at=now - timedelta(hours=2),
+        expires_at=stored_now - timedelta(minutes=1),
+        created_at=stored_now - timedelta(hours=2),
+        updated_at=stored_now - timedelta(hours=2),
     )
 
     payload = bounty_attempt_to_dict(attempt, now)
