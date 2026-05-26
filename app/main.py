@@ -343,7 +343,7 @@ def _normalized_account(account: str) -> str:
             raise HTTPException(status_code=400, detail="reserve bounty id is too large")
         return f"{reserve_prefix}{normalized_bounty_id}"
     if lower.startswith("mrwk1"):
-        return clean.lower()
+        return _normalized_wallet_address(clean)
     if lower.startswith("github:"):
         login = clean.split(":", 1)[1].lower()
         if not GITHUB_LOGIN_RE.fullmatch(login):
