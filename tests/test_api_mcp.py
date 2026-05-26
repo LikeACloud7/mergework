@@ -1381,6 +1381,9 @@ def test_mcp_submit_work_proof_returns_structured_bounty_guidance(sqlite_url: st
     assert structured["bounty_id"] == bounty_id
     assert structured["issue_number"] == 315
     assert structured["status"] == "open"
+    assert structured["availability"] == "open_for_submissions"
+    assert structured["can_submit"] is True
+    assert structured["availability_warnings"] == []
     assert structured["awards_remaining"] == 3
     assert structured["max_awards"] == 3
     assert structured["awards_paid"] == 0
@@ -1417,6 +1420,9 @@ def test_mcp_submit_work_proof_returns_structured_generic_guidance(sqlite_url: s
         "bounty_id": None,
         "issue_number": None,
         "status": "generic_guidance",
+        "availability": "unknown_without_bounty",
+        "can_submit": None,
+        "availability_warnings": [],
         "awards_remaining": None,
         "reward_mrwk": None,
         "repository": None,
@@ -1432,6 +1438,85 @@ def test_mcp_submit_work_proof_returns_structured_generic_guidance(sqlite_url: s
         ],
     }
     assert json.loads(response_result["content"][0]["text"]) == result
+
+
+def test_mcp_submit_work_proof_structures_terminal_bounty_availability(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        paid_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=316,
+            issue_url="https://github.com/ramimbo/mergework/issues/316",
+            title="Paid structured guidance",
+            reward_mrwk="100",
+            acceptance="Expose paid guidance state.",
+        )
+        closed_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=317,
+            issue_url="https://github.com/ramimbo/mergework/issues/317",
+            title="Closed structured guidance",
+            reward_mrwk="100",
+            max_awards=2,
+            acceptance="Expose closed guidance state.",
+        )
+        paid_bounty_id = paid_bounty.id
+        closed_bounty_id = closed_bounty.id
+        pay_bounty(
+            session,
+            bounty_id=paid_bounty_id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/316",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        close_bounty(
+            session,
+            bounty_id=closed_bounty_id,
+            closed_by="maintainer",
+            reference="https://github.com/ramimbo/mergework/issues/317#close",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    def structured_guidance(bounty_id: int, request_id: int) -> dict[str, object]:
+        response = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": "tools/call",
+                "params": {
+                    "name": "submit_work_proof",
+                    "arguments": {"bounty_id": bounty_id, "format": "json"},
+                },
+            },
+        ).json()["result"]
+        assert json.loads(response["content"][0]["text"]) == response["structuredContent"]
+        return response["structuredContent"]
+
+    paid = structured_guidance(paid_bounty_id, 1)
+    closed = structured_guidance(closed_bounty_id, 2)
+
+    assert paid["status"] == "paid"
+    assert paid["availability"] == "not_currently_open"
+    assert paid["can_submit"] is False
+    assert paid["availability_warnings"] == [
+        "bounty is paid",
+        "bounty has no award slots remaining",
+    ]
+    assert closed["status"] == "closed"
+    assert closed["availability"] == "not_currently_open"
+    assert closed["can_submit"] is False
+    assert closed["availability_warnings"] == [
+        "bounty is closed",
+        "bounty has no award slots remaining",
+    ]
 
 
 def test_mcp_submit_work_proof_reports_unknown_bounty(sqlite_url: str) -> None:
