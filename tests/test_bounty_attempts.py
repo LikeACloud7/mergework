@@ -140,6 +140,38 @@ def test_bounty_attempts_register_list_duplicate_and_release(sqlite_url: str, mo
         )
 
 
+def test_bounty_attempts_accept_empty_body_defaults_to_login(sqlite_url: str, monkeypatch) -> None:
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", COOKIE_SECRET)
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=325,
+            issue_url="https://github.com/ramimbo/mergework/issues/325",
+            title="Bodyless attempt registration",
+            reward_mrwk="250",
+            acceptance="Default attempt account from the authenticated GitHub login.",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    _set_login(client, "carol")
+
+    created = client.post(f"/api/v1/bounties/{bounty.id}/attempts")
+
+    assert created.status_code == 201
+    attempt = created.json()["attempt"]
+    assert attempt["submitter_account"] == "github:carol"
+    assert attempt["source_url"] is None
+
+    released = client.post(f"/api/v1/bounty-attempts/{attempt['id']}/release")
+
+    assert released.status_code == 200
+    assert released.json()["status"] == "released"
+    assert released.json()["attempt"]["status"] == "released"
+
+
 def test_expired_bounty_attempt_is_visible_but_no_longer_blocks_submitter(
     sqlite_url: str,
     monkeypatch,

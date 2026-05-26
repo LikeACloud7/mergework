@@ -42,6 +42,12 @@ def _attempt_effective_status(attempt: BountyAttempt, now: datetime) -> str:
     return attempt.status
 
 
+async def _optional_json_object(request: Request, json_object: JsonObjectLoader) -> dict[str, Any]:
+    if not (await request.body()).strip():
+        return {}
+    return await json_object(request)
+
+
 def bounty_attempt_to_dict(attempt: BountyAttempt, now: datetime | None = None) -> dict[str, Any]:
     now = _as_utc(now or _utc_now())
     return {
@@ -143,7 +149,7 @@ def register_bounty_attempt_routes(
         github_login: str = Depends(require_github_login),
     ) -> JSONResponse:
         bounty_id = positive_bounty_id(bounty_id)
-        data = await json_object(request)
+        data = await _optional_json_object(request, json_object)
         submitter_account = attempt_submitter_account(data, github_login)
         ttl_seconds = optional_int(data, "ttl_seconds", DEFAULT_ATTEMPT_TTL_SECONDS)
         if ttl_seconds < MIN_ATTEMPT_TTL_SECONDS:
@@ -249,7 +255,7 @@ def register_bounty_attempt_routes(
             raise HTTPException(status_code=400, detail="attempt id must be positive")
         if attempt_id > sqlite_integer_max:
             raise HTTPException(status_code=400, detail="attempt id is too large")
-        data = await json_object(request)
+        data = await _optional_json_object(request, json_object)
         submitter_account = attempt_submitter_account(data, github_login)
         now = _utc_now()
         with session_scope(db_url) as session:
