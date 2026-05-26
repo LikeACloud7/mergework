@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from app.models import Bounty
 from app.serializers import bounty_to_dict
+
+SubmissionAvailability = Literal["open", "full", "closed", "unknown"]
 
 
 def work_proof_guidance(bounty: Bounty) -> str:
@@ -43,17 +45,26 @@ def work_proof_submission_requirements(
     *,
     bounty_id: int | None,
     issue_number: int | None,
-    can_submit: bool | None,
+    availability: SubmissionAvailability,
 ) -> dict[str, Any]:
     issue_ref = str(issue_number) if issue_number is not None else "<issue_number>"
     bounty_ref = str(bounty_id) if bounty_id is not None else "<bounty_id>"
-    if can_submit is True:
+    if availability == "open":
         first_action = {
             "id": "confirm_award_slot",
             "required": True,
             "text": "Confirm this bounty is open and has at least one award slot remaining.",
         }
-    elif can_submit is False:
+    elif availability == "full":
+        first_action = {
+            "id": "watch_for_award_slot",
+            "required": True,
+            "text": (
+                "This bounty is open but has no award slots remaining; check for new "
+                "capacity before submitting new work."
+            ),
+        }
+    elif availability == "closed":
         first_action = {
             "id": "choose_open_bounty",
             "required": True,
@@ -117,9 +128,16 @@ def work_proof_submission_requirements(
     }
 
 
+def _submission_availability(bounty_data: dict[str, Any]) -> SubmissionAvailability:
+    if bounty_data["status"] == "open":
+        return "open" if bounty_data["awards_remaining"] > 0 else "full"
+    return "closed"
+
+
 def work_proof_guidance_json(bounty: Bounty) -> dict[str, Any]:
     bounty_data = bounty_to_dict(bounty)
-    can_submit = bounty_data["status"] == "open" and bounty_data["awards_remaining"] > 0
+    submission_availability = _submission_availability(bounty_data)
+    can_submit = submission_availability == "open"
     availability_warnings = []
     if bounty_data["status"] != "open":
         availability_warnings.append(f"bounty is {bounty_data['status']}")
@@ -149,7 +167,7 @@ def work_proof_guidance_json(bounty: Bounty) -> dict[str, Any]:
         "submission_requirements": work_proof_submission_requirements(
             bounty_id=bounty_data["id"],
             issue_number=bounty_data["issue_number"],
-            can_submit=can_submit,
+            availability=submission_availability,
         ),
         "safety_rules": [
             "Do not include private keys, seed material, secrets, deployment "
@@ -167,9 +185,13 @@ def generic_work_proof_guidance_json() -> dict[str, Any]:
         "can_submit": None,
         "availability_warnings": [],
         "awards_remaining": None,
+        "max_awards": None,
+        "awards_paid": None,
         "reward_mrwk": None,
+        "available_mrwk": None,
         "repository": None,
         "issue_url": None,
+        "title": None,
         "acceptance": None,
         "submission_format": (
             "Open a focused PR or issue, reference the MRWK bounty, include test "
@@ -178,7 +200,7 @@ def generic_work_proof_guidance_json() -> dict[str, Any]:
         "submission_requirements": work_proof_submission_requirements(
             bounty_id=None,
             issue_number=None,
-            can_submit=None,
+            availability="unknown",
         ),
         "safety_rules": [
             "Do not include private keys, seed material, secrets, deployment "
