@@ -182,7 +182,8 @@ Tools:
 - `submit_wallet_transfer`
 - `get_ledger_entry`
 - `get_proof`
-- `submit_work_proof`
+- `submit_work_proof` (`format: "json"` returns structuredContent; `tools/list`
+  advertises the selector and format schema)
 
 ## Contribution Rules
 
