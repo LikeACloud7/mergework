@@ -288,3 +288,12 @@ def test_api_examples_document_activity_response_shape() -> None:
     assert "bounty repo, bounty issue URL" in examples
     assert "newest ledger sequence" in examples
     assert "/api/v1/proofs/<proof_hash>" in examples
+
+
+def test_api_examples_document_accepted_work_bounty_context() -> None:
+    examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
+
+    assert "/api/v1/accounts/github:carpedkm/accepted-work" in examples
+    assert '"bounty_id": 67' in examples
+    assert '"bounty_url": "/bounties/67"' in examples
+    assert "internal bounty id and public bounty URL" in examples
