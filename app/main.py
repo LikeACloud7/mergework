@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlsplit, urlunsplit
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -21,22 +21,13 @@ from app.bounty_attempts import (
 from app.config import get_settings
 from app.db import create_schema, session_scope
 from app.hub import is_ltc_lab_host, ltc_lab_context, mergework_hub_context
-from app.ledger.service import (
-    LedgerError,
-    ensure_genesis,
-    link_wallet_to_github,
-    public_url_or_none,
-    register_wallet,
-    submit_github_claim,
-    submit_wallet_transfer,
-)
+from app.ledger.service import ensure_genesis, public_url_or_none
 from app.ledger_views import ledger_entry_to_dict, recent_ledger_entries
 from app.mcp import handle_mcp_request
 from app.mcp_tools import call_mcp_tool
 from app.me import me_page_context
 from app.models import (
     Proof,
-    Wallet,
 )
 from app.path_params import (
     SQLITE_INTEGER_MAX,
@@ -45,12 +36,8 @@ from app.path_params import (
     proof_hash_from_path,
 )
 from app.public_routes import register_public_routes
-from app.serializers import (
-    ledger_to_dict,
-    wallet_to_dict,
-    wallet_transfer_to_dict,
-)
 from app.status import health_status, system_status
+from app.wallet_api import register_wallet_api_routes
 from app.webhooks.github import handle_github_webhook
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -290,90 +277,17 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         login = auth.github_login_from_request(request)
         return {"authenticated": login is not None, "github_login": login}
 
-    @app.post("/api/v1/wallets/register")
-    async def api_register_wallet(request: Request) -> dict[str, Any]:
-        data = await _json_object(request)
-        with session_scope(db_url) as session:
-            try:
-                wallet = register_wallet(
-                    session,
-                    public_key_hex=_required_str(data, "public_key_hex"),
-                    label=_optional_str(data, "label") if data.get("label") is not None else None,
-                )
-            except LedgerError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
-            return wallet_to_dict(session, wallet)
-
-    @app.get("/api/v1/wallets/register", include_in_schema=False)
-    def api_register_wallet_get() -> None:
-        post_only_route()
-
-    @app.get("/api/v1/wallets/link-github", include_in_schema=False)
-    def api_link_wallet_github_get() -> None:
-        post_only_route()
-
-    @app.get("/api/v1/wallets/{address}")
-    def api_wallet(address: str) -> dict[str, Any]:
-        address = normalized_wallet_address(address)
-        with session_scope(db_url) as session:
-            wallet = session.get(Wallet, address)
-            if wallet is None:
-                raise HTTPException(status_code=404, detail="wallet not found")
-            return wallet_to_dict(session, wallet)
-
-    @app.post("/api/v1/wallets/link-github")
-    async def api_link_wallet_github(
-        request: Request, github_login: str = Depends(auth.require_github_login)
-    ) -> dict[str, Any]:
-        data = await _json_object(request)
-        with session_scope(db_url) as session:
-            try:
-                wallet = link_wallet_to_github(
-                    session,
-                    address=_required_str(data, "address"),
-                    github_login=github_login,
-                    nonce=_required_int(data, "nonce"),
-                    signature_hex=_required_str(data, "signature_hex"),
-                )
-            except LedgerError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
-            return wallet_to_dict(session, wallet)
-
-    @app.post("/api/v1/github/claim")
-    async def api_github_claim(
-        request: Request, github_login: str = Depends(auth.require_github_login)
-    ) -> dict[str, Any]:
-        data = await _json_object(request)
-        with session_scope(db_url) as session:
-            try:
-                entry = submit_github_claim(
-                    session,
-                    address=_required_str(data, "address"),
-                    github_login=github_login,
-                    nonce=_required_int(data, "nonce"),
-                    signature_hex=_required_str(data, "signature_hex"),
-                )
-            except LedgerError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
-            return ledger_to_dict(entry)
-
-    @app.post("/api/v1/transfers")
-    async def api_submit_transfer(request: Request) -> dict[str, Any]:
-        data = await _json_object(request)
-        with session_scope(db_url) as session:
-            try:
-                transfer = submit_wallet_transfer(
-                    session,
-                    from_address=_required_str(data, "from_address"),
-                    to_address=_required_str(data, "to_address"),
-                    amount_mrwk=_required_str(data, "amount_mrwk"),
-                    nonce=_required_int(data, "nonce"),
-                    memo=_optional_str(data, "memo"),
-                    signature_hex=_required_str(data, "signature_hex"),
-                )
-            except LedgerError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
-            return wallet_transfer_to_dict(transfer)
+    register_wallet_api_routes(
+        app,
+        db_url=db_url,
+        require_github_login=auth.require_github_login,
+        json_object=_json_object,
+        required_str=_required_str,
+        required_int=_required_int,
+        optional_str=_optional_str,
+        normalized_wallet_address=normalized_wallet_address,
+        post_only_route=post_only_route,
+    )
 
     @app.get("/api/v1/ledger")
     def api_ledger(limit: Annotated[int, Query(ge=1, le=200)] = 50) -> list[dict[str, Any]]:
