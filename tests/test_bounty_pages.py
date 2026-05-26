@@ -493,6 +493,24 @@ def test_bounties_list_cards_have_status_pills(sqlite_url: str) -> None:
     # Reward should be highlighted
     assert "<strong>75 MRWK</strong> per award" in page.text
 
+    # Also verify a closed bounty gets the right pill
+    with session_scope(sqlite_url) as session:
+        closed_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=93,
+            issue_url="https://github.com/ramimbo/mergework/issues/93",
+            title="Closed bounty for status pill test",
+            reward_mrwk="30",
+            acceptance="Should show a muted status pill.",
+        )
+        close_bounty(session, bounty_id=closed_bounty.id, closed_by="maintainer")
+
+    page = client.get("/bounties")
+    assert page.status_code == 200
+    assert "status-pill status-closed" in page.text
+    assert "bounty-card bounty-card--closed" in page.text
+
 
 def test_bounty_detail_page_has_back_navigation(sqlite_url: str) -> None:
     """Bounty detail page should have a back link to the bounties list."""
