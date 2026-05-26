@@ -35,12 +35,29 @@ Run these before opening a PR:
 
 ## Architecture Map
 
-- `app/ledger/`: fixed-supply MRWK ledger and proof logic.
-- `app/wallets.py`: MRWK wallet address, canonical payload, and signature helpers.
-- `app/webhooks/`: GitHub webhook verification and idempotent processing.
-- `app/main.py`: FastAPI routes, pages, API, and MCP endpoint.
+- `app/models.py`, `app/db.py`, `app/config.py`: SQLAlchemy models, database
+  connection, and application configuration.
+- `app/ledger/`: fixed-supply MRWK ledger, proof logic, and payout reconciliation.
+- `app/wallets.py`: MRWK wallet address, canonical payload, and Ed25519 signature
+  helpers.
+- `app/webhooks/`: GitHub webhook signature verification and idempotent
+  label-to-payout processing.
+- `app/auth.py`, `app/me.py`: GitHub OAuth sign-in, session handling, and
+  authenticated user profile.
+- `app/bounty_api.py`, `app/bounty_attempts.py`, `app/activity.py`: bounty CRUD,
+  advisory attempt reservations, and proof-backed accepted-work summaries.
+- `app/admin.py`, `app/admin_routes.py`: admin-token gated endpoints for bounty
+  posting, acceptance, payment, and webhook-event inspection.
+- `app/mcp.py`, `app/mcp_tools.py`: Model Context Protocol server and tool
+  implementations (`list_bounties`, `get_bounty`, `get_balance`, etc.).
+- `app/main.py`: FastAPI application, route registration, and lifespan.
+- `app/public_routes.py`, `app/hub.py`: public HTML pages and hub dashboard.
+- `app/templates/`, `app/static/`: Jinja2 HTML templates, CSS, and client-side JS.
+- `migrations/`, `alembic.ini`: database schema migrations.
+- `scripts/`: quality gates, smoke checks, payout reconciliation, and deploy
+  readiness checks.
+- `tests/`: behavior tests for ledger, webhooks, API, MCP, and wallets.
 - `docs/`: contributor-facing and operator-facing documentation.
-- `tests/`: behavior tests for ledger, webhooks, API, and MCP.
 
 ## Contribution Rules
 
