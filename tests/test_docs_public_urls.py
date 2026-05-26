@@ -224,9 +224,18 @@ def test_api_examples_document_activity_response_shape() -> None:
         '"latest_submission_url": "https://github.com/ramimbo/mergework/pull/226#pullrequestreview-4354910919"'
         in examples
     )
+    assert '"latest_bounty_repo": "ramimbo/mergework"' in examples
+    assert '"latest_bounty_issue_number": 219' in examples
+    assert (
+        '"latest_bounty_issue_url": "https://github.com/ramimbo/mergework/issues/219"' in examples
+    )
     assert '"recent": [' in examples
     assert '"ledger_sequence": 399' in examples
+    assert '"bounty_repo": "ramimbo/mergework"' in examples
     assert '"bounty_id": 37' in examples
     assert '"bounty_issue_number": 219' in examples
+    assert '"bounty_issue_url": "https://github.com/ramimbo/mergework/issues/219"' in examples
+    assert '"bounty_url": "/bounties/37"' in examples
+    assert "bounty repo, bounty issue URL" in examples
     assert "newest ledger sequence" in examples
     assert "/api/v1/proofs/<proof_hash>" in examples
