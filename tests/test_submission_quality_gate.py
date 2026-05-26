@@ -449,6 +449,56 @@ def test_submission_quality_gate_live_bounties_use_api_award_capacity(monkeypatc
     } in result["checks"]
 
 
+def test_submission_quality_gate_live_context_warns_when_attempt_id_missing(
+    monkeypatch,
+) -> None:
+    def fake_run(args, **kwargs):
+        if args[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="[]", stderr="")
+        if args[:3] == ["gh", "issue", "list"]:
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout=json.dumps([{"number": 319, "title": "MRWK bounty: gate", "state": "OPEN"}]),
+                stderr="",
+            )
+        if args[:3] == ["gh", "issue", "view"]:
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout=json.dumps({"createdAt": "2026-05-20T00:00:00Z", "comments": []}),
+                stderr="",
+            )
+        raise AssertionError(args)
+
+    monkeypatch.setattr(submission_quality_gate.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        submission_quality_gate,
+        "_load_api_bounties",
+        lambda repo, api_host: {319: {"number": 319, "state": "OPEN", "awards_remaining": 1}},
+    )
+
+    data = submission_quality_gate._load_live_context(
+        "ramimbo/mergework",
+        "Summary: work\n\nRefs #319\n\nValidation: pytest passed",
+        "https://api.example.test",
+    )
+    result = evaluate_submission(data)
+
+    assert data["bounties"][0]["active_attempts"] == []
+    assert data["bounties"][0]["active_attempts_verified"] is False
+    assert (
+        "active attempts unavailable for bounty #319: "
+        "MergeWork API bounty id unavailable for attempts lookup"
+    ) in data["load_warning"]
+    assert result["status"] == "warn"
+    assert {
+        "name": "active_attempts",
+        "status": "warn",
+        "message": "active attempts for bounty #319 could not be verified",
+    } in result["checks"]
+
+
 def test_submission_quality_gate_live_context_adds_maintainer_activity(monkeypatch) -> None:
     def fake_run(args, **kwargs):
         if args[:3] == ["gh", "pr", "list"]:

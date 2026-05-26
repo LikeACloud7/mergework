@@ -535,6 +535,13 @@ def _load_live_context(
                     load_warnings.append(
                         f"active attempts unavailable for bounty #{issue['number']}: {exc}"
                     )
+            else:
+                bounties[-1]["active_attempts"] = []
+                bounties[-1]["active_attempts_verified"] = False
+                load_warnings.append(
+                    f"active attempts unavailable for bounty #{issue['number']}: "
+                    "MergeWork API bounty id unavailable for attempts lookup"
+                )
     data = {"submission_text": submission_text, "bounties": bounties, "pull_requests": prs}
     if load_warnings:
         data["load_warning"] = "; ".join(load_warnings)
