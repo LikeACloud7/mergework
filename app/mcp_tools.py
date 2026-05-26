@@ -237,7 +237,7 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
                     Bounty.issue_number == positive_int_arg("issue_number")
                 )
                 if repo_selector is not None:
-                    issue_query = issue_query.where(Bounty.repo == repo_selector)
+                    issue_query = issue_query.where(func.lower(Bounty.repo) == repo_selector)
                 bounties = session.scalars(issue_query.order_by(Bounty.id.desc()).limit(2)).all()
                 if not bounties:
                     return "bounty not found"
