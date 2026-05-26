@@ -11,7 +11,7 @@ from app.ledger.service import LedgerError
 
 MCPToolHandler = Callable[[str, str, dict[str, Any]], str | dict[str, Any]]
 
-MCP_TOOLS: list[dict[str, str]] = [
+MCP_TOOLS: list[dict[str, Any]] = [
     {
         "name": "list_bounties",
         "description": "List MRWK bounties with optional status, q, and limit filters",
@@ -39,6 +39,32 @@ MCP_TOOLS: list[dict[str, str]] = [
     {
         "name": "submit_work_proof",
         "description": "Return submission instructions, optionally for a bounty_id or issue_number",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "bounty_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Internal MRWK bounty id. Use either bounty_id or issue_number.",
+                },
+                "issue_number": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": (
+                        "GitHub issue number for an MRWK bounty. "
+                        "Use either issue_number or bounty_id."
+                    ),
+                },
+                "format": {
+                    "type": "string",
+                    "enum": ["text", "json"],
+                    "default": "text",
+                    "description": "Use json for machine-readable structuredContent guidance.",
+                },
+            },
+            "additionalProperties": False,
+            "not": {"required": ["bounty_id", "issue_number"]},
+        },
     },
 ]
 
