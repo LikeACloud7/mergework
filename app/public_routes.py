@@ -15,6 +15,11 @@ from app.db import session_scope
 from app.ledger_views import account_ledger_transactions
 from app.models import Wallet
 from app.serializers import bounty_list_summary, wallet_to_dict
+from app.status import (
+    CURRENT_TRANSFER_PATHS,
+    FUTURE_PATH_BOUNDARY,
+    UNSUPPORTED_PUBLIC_PATHS_SUMMARY,
+)
 
 
 def public_bounties_context(
@@ -117,4 +122,12 @@ def register_public_routes(
 
     @app.get("/docs", response_class=HTMLResponse)
     def docs_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "docs.html")
+        return templates.TemplateResponse(
+            request,
+            "docs.html",
+            {
+                "current_transfer_paths": CURRENT_TRANSFER_PATHS,
+                "future_path_boundary": FUTURE_PATH_BOUNDARY,
+                "unsupported_public_paths_summary": UNSUPPORTED_PUBLIC_PATHS_SUMMARY,
+            },
+        )

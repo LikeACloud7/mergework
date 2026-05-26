@@ -76,6 +76,29 @@ def test_head_requests_match_get_routes_without_body(sqlite_url: str) -> None:
     assert post_only.headers["allow"] == "POST"
 
 
+def test_public_pages_clarify_current_transfer_paths(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    for path in ("/", "/docs"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert "github:* balance claims into a linked wallet" in response.text
+        assert "payouts to linked mrwk1 wallets" in response.text
+        assert "signed wallet-to-wallet transfers between registered wallets" in response.text
+        assert (
+            "MergeWork does not currently operate a public BTC, USDC, fiat, "
+            "bridge, exchange, or off-ramp."
+        ) in response.text
+        assert (
+            "Future public snapshots, bridges, and onchain claims require separate "
+            "maintainer/contributor discussion before implementation."
+        ) in response.text
+
+
 def test_trailing_slash_redirects_keep_forwarded_https_scheme(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
