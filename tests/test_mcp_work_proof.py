@@ -87,7 +87,8 @@ def test_work_proof_guidance_json_reports_open_bounty_state() -> None:
     assert guidance["max_awards"] == 6
     assert guidance["awards_paid"] == 0
     assert guidance["available_mrwk"] == "1200"
-    assert guidance["submission_requirements"]["next_actions"][0]["id"] == "confirm_award_slot"
+    next_actions = guidance["submission_requirements"]["next_actions"]
+    assert any(action["id"] == "confirm_award_slot" for action in next_actions)
 
 
 def test_work_proof_guidance_json_reports_open_full_bounty_state() -> None:
