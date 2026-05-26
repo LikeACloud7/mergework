@@ -243,6 +243,10 @@ def test_bounties_page_and_api_sort_public_rows(sqlite_url: str) -> None:
     assert default_rows.status_code == 200
     assert [row["issue_number"] for row in default_rows.json()] == [71, 70, 69]
 
+    whitespace_sort_rows = client.get("/api/v1/bounties", params={"sort": "   "})
+    assert whitespace_sort_rows.status_code == 200
+    assert [row["issue_number"] for row in whitespace_sort_rows.json()] == [71, 70, 69]
+
     reward_rows = client.get("/api/v1/bounties?sort=reward")
     assert reward_rows.status_code == 200
     assert [row["issue_number"] for row in reward_rows.json()] == [70, 71, 69]
@@ -262,6 +266,13 @@ def test_bounties_page_and_api_sort_public_rows(sqlite_url: str) -> None:
     assert 'name="sort"' in available_page.text
     assert '<option value="available" selected>Most MRWK available</option>' in available_page.text
     assert 'href="/bounties?status=open&sort=available"' in available_page.text
+
+    whitespace_sort_page = client.get("/bounties", params={"sort": "   "})
+    assert whitespace_sort_page.status_code == 200
+    assert whitespace_sort_page.text.index(high_capacity.title) < whitespace_sort_page.text.index(
+        high_reward.title
+    )
+    assert '<option value="newest" selected>Newest first</option>' in whitespace_sort_page.text
 
     invalid_sort = client.get("/api/v1/bounties?sort=bogus")
     assert invalid_sort.status_code == 400
