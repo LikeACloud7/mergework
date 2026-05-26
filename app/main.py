@@ -282,6 +282,7 @@ def _safe_next_path(next_path: str | None) -> str:
         or len(next_path) > 2048
         or "\\" in next_path
         or decoded_next_path.startswith("//")
+        or len(decoded_next_path) > 2048
         or "\\" in decoded_next_path
         or any(ord(char) < 32 or 127 <= ord(char) < 160 for char in next_path)
         or any(ord(char) < 32 or 127 <= ord(char) < 160 for char in decoded_next_path)

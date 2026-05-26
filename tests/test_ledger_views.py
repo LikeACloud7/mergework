@@ -35,8 +35,9 @@ def test_recent_ledger_entries_attach_payment_proof_hash(sqlite_url: str) -> Non
         detail = ledger_entry_to_dict(session, proof.ledger_sequence)
         missing = ledger_entry_to_dict(session, 9999)
 
-    payment_row = next(row for row in rows if row["sequence"] == proof.ledger_sequence)
-    assert payment_row["proof_hash"] == proof.hash
+    payment_rows = [row for row in rows if row["sequence"] == proof.ledger_sequence]
+    assert len(payment_rows) == 1
+    assert payment_rows[0]["proof_hash"] == proof.hash
     assert detail is not None
     assert detail["proof_hash"] == proof.hash
     assert missing is None

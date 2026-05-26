@@ -446,7 +446,12 @@ def test_github_login_redirects_when_oauth_is_configured(sqlite_url: str, monkey
 
 @pytest.mark.parametrize(
     "next_path",
-    ("//evil.example/path", "/\\evil.example/path", "/me\nLocation:https://evil.example"),
+    (
+        "//evil.example/path",
+        "/\\evil.example/path",
+        "/me\nLocation:https://evil.example",
+        "/" + ("a" * 2048),
+    ),
 )
 def test_oauth_next_path_rejects_redirect_ambiguity(next_path: str) -> None:
     assert _safe_next_path(next_path) == "/me"
