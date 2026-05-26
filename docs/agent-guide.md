@@ -225,8 +225,9 @@ The gate is advisory. It does not reserve work, claim acceptance, make payments,
 or block maintainer decisions. It checks for a `Bounty #<issue>` or
 `Refs #<issue>` reference, whether the referenced bounty appears open, whether
 the bounty has recent maintainer activity, whether the draft includes a concise
-summary and validation evidence, and whether a similar open PR already
-references the same bounty. When live GitHub or
+summary and validation evidence, whether multiple bounty references are mixed
+into one draft, and whether a similar open PR already references the same
+bounty. When live GitHub or
 MergeWork API data is unavailable, the gate degrades to advisory warnings
 instead of blocking submission.
 
@@ -235,8 +236,9 @@ Results:
 - `PASS`: the draft has the expected reference, summary, evidence, and no
   obvious duplicate from the available GitHub data.
 - `WARN`: the draft may still be valid, but agents should fix missing evidence,
-  add a clearer summary, inspect similar open PRs, or confirm a stale bounty
-  round still has maintainer activity before submitting.
+  add a clearer summary, keep one bounty target per submission, inspect similar
+  open PRs, or confirm a stale bounty round still has maintainer activity before
+  submitting.
 - `FAIL`: do not submit until the missing bounty reference or closed/exhausted
   bounty reference is fixed.
 
