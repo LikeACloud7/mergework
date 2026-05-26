@@ -240,6 +240,7 @@ code.hash { overflow-wrap: anywhere; }
   border: 1px solid var(--line);
   background: var(--panel);
   border-radius: 6px;
+  min-width: 0;
   padding: 14px;
 }
 .bounty-list-summary span {
@@ -247,6 +248,11 @@ code.hash { overflow-wrap: anywhere; }
   color: var(--muted);
   font-size: .9rem;
   margin-bottom: 6px;
+  min-width: 0;
+}
+.bounty-list-summary code {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 .bounty-list-summary strong {
   display: block;
@@ -322,6 +328,7 @@ button { cursor: pointer; color: white; background: var(--accent); border-color:
   header { align-items: flex-start; flex-direction: column; }
   .search-row { grid-template-columns: 1fr; }
   .detail dl { grid-template-columns: 1fr; }
+  .bounty-list-summary { grid-template-columns: 1fr; }
   .bounty-summary { grid-template-columns: 1fr; }
   .ledger-card-head { grid-template-columns: 1fr; }
   .ledger-card-title { align-items: flex-start; flex-direction: column; }
