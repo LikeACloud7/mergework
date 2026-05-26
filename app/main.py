@@ -9,7 +9,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
-from urllib.parse import urlencode, urlsplit, urlunsplit
+from urllib.parse import unquote, urlencode, urlsplit, urlunsplit
 
 import httpx
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
@@ -47,6 +47,11 @@ from app.ledger.service import (
     submit_github_claim,
     submit_wallet_transfer,
     validate_public_url,
+)
+from app.ledger_views import (
+    account_ledger_transactions,
+    ledger_entry_to_dict,
+    recent_ledger_entries,
 )
 from app.mcp import handle_mcp_request
 from app.models import (
@@ -260,15 +265,6 @@ def _is_ltc_lab_host(request: Request) -> bool:
     return _host_without_port(request) in {"ltclab.site", "www.ltclab.site"}
 
 
-def _proof_hashes_by_sequence(session: Session, sequences: list[int]) -> dict[int, str]:
-    if not sequences:
-        return {}
-    rows = session.execute(
-        select(Proof.ledger_sequence, Proof.hash).where(Proof.ledger_sequence.in_(sequences))
-    ).all()
-    return {int(sequence): str(proof_hash) for sequence, proof_hash in rows}
-
-
 def _oauth_configured(settings: Settings) -> bool:
     return bool(
         settings.github_oauth_client_id
@@ -278,13 +274,17 @@ def _oauth_configured(settings: Settings) -> bool:
 
 
 def _safe_next_path(next_path: str | None) -> str:
+    decoded_next_path = unquote(next_path) if next_path else ""
     if (
         not next_path
         or not next_path.startswith("/")
         or next_path.startswith("//")
         or len(next_path) > 2048
         or "\\" in next_path
+        or decoded_next_path.startswith("//")
+        or "\\" in decoded_next_path
         or any(ord(char) < 32 or 127 <= ord(char) < 160 for char in next_path)
+        or any(ord(char) < 32 or 127 <= ord(char) < 160 for char in decoded_next_path)
     ):
         return "/me"
     return next_path
@@ -1061,21 +1061,16 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     @app.get("/api/v1/ledger")
     def api_ledger(limit: Annotated[int, Query(ge=1, le=200)] = 50) -> list[dict[str, Any]]:
         with session_scope(db_url) as session:
-            entries = session.scalars(
-                select(LedgerEntry).order_by(LedgerEntry.sequence.desc()).limit(limit)
-            ).all()
-            proofs = _proof_hashes_by_sequence(session, [entry.sequence for entry in entries])
-            return [ledger_to_dict(entry, proofs.get(entry.sequence)) for entry in entries]
+            return recent_ledger_entries(session, limit)
 
     @app.get("/api/v1/ledger/{sequence}")
     def api_ledger_entry(sequence: int) -> dict[str, Any]:
         sequence = _positive_ledger_sequence(sequence)
         with session_scope(db_url) as session:
-            entry = session.get(LedgerEntry, sequence)
+            entry = ledger_entry_to_dict(session, sequence)
             if entry is None:
                 raise HTTPException(status_code=404, detail="ledger entry not found")
-            proof = session.scalar(select(Proof).where(Proof.ledger_sequence == sequence).limit(1))
-            return ledger_to_dict(entry, proof.hash if proof else None)
+            return entry
 
     @app.get("/api/v1/proofs/{proof_hash}")
     def api_proof(proof_hash: str) -> dict[str, Any]:
@@ -1197,14 +1192,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         with session_scope(db_url) as session:
             account_data = api_account(account)
             accepted_summary = safe_account_accepted_summary(session, account)
-            entries = session.scalars(
-                select(LedgerEntry)
-                .where(or_(LedgerEntry.from_account == account, LedgerEntry.to_account == account))
-                .order_by(LedgerEntry.sequence.desc())
-                .limit(100)
-            ).all()
-            proofs = _proof_hashes_by_sequence(session, [entry.sequence for entry in entries])
-            transactions = [ledger_to_dict(entry, proofs.get(entry.sequence)) for entry in entries]
+            transactions = account_ledger_transactions(session, account)
             accepted_work = safe_accepted_work_for_account(session, account)
         return templates.TemplateResponse(
             request,
@@ -1234,19 +1222,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             if wallet is None:
                 raise HTTPException(status_code=404, detail="wallet not found")
             wallet_data = wallet_to_dict(session, wallet)
-            entries = session.scalars(
-                select(LedgerEntry)
-                .where(
-                    or_(
-                        LedgerEntry.from_account == wallet.address,
-                        LedgerEntry.to_account == wallet.address,
-                    )
-                )
-                .order_by(LedgerEntry.sequence.desc())
-                .limit(100)
-            ).all()
-            proofs = _proof_hashes_by_sequence(session, [entry.sequence for entry in entries])
-            transactions = [ledger_to_dict(entry, proofs.get(entry.sequence)) for entry in entries]
+            transactions = account_ledger_transactions(session, wallet.address)
         return templates.TemplateResponse(
             request,
             "wallet_detail.html",
@@ -1727,13 +1703,10 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | 
             )
             return json.dumps(wallet_transfer_to_dict(transfer))
         if name == "get_ledger_entry":
-            entry = session.get(LedgerEntry, positive_int_arg("sequence"))
+            entry = ledger_entry_to_dict(session, positive_int_arg("sequence"))
             if entry is None:
                 return "ledger entry not found"
-            proof = session.scalar(
-                select(Proof).where(Proof.ledger_sequence == entry.sequence).limit(1)
-            )
-            return json.dumps(ledger_to_dict(entry, proof.hash if proof else None))
+            return json.dumps(entry)
         if name == "get_proof":
             proof = session.get(Proof, _proof_hash_from_path(str_arg("hash")))
             if proof is None:
