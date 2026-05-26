@@ -7,6 +7,7 @@ from sqlalchemy import func, or_, select
 
 from app.accounts import normalized_account, normalized_wallet_address
 from app.bounty_attempts import list_bounty_attempts
+from app.bounty_sorting import normalize_bounty_sort, sort_bounties
 from app.db import session_scope
 from app.ledger.service import format_mrwk, get_balance, register_wallet, submit_wallet_transfer
 from app.ledger_views import ledger_entry_to_dict
@@ -135,10 +136,11 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
                 if issue_number is not None:
                     text_filter = or_(text_filter, Bounty.issue_number == issue_number)
                 query = query.where(text_filter)
-            bounties = session.scalars(
-                query.order_by(Bounty.id.desc()).limit(list_limit_arg())
-            ).all()
-            return json.dumps([bounty_to_dict(bounty) for bounty in bounties])
+            sort = normalize_bounty_sort(optional_clean_str_arg("sort"))
+            limit = list_limit_arg()
+            bounties = session.scalars(query.order_by(Bounty.id.desc())).all()
+            sorted_bounties = sort_bounties([bounty_to_dict(bounty) for bounty in bounties], sort)
+            return json.dumps(sorted_bounties[:limit])
         if name == "get_bounty":
             bounty = session.get(Bounty, positive_int_arg("id"))
             if bounty is None:
