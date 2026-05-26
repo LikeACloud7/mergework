@@ -111,6 +111,15 @@ SQLITE_INTEGER_MAX = 2**63 - 1
 DEFAULT_ATTEMPT_TTL_SECONDS = 24 * 60 * 60
 MIN_ATTEMPT_TTL_SECONDS = 60
 MAX_ATTEMPT_TTL_SECONDS = 7 * 24 * 60 * 60
+WEBHOOK_OUTCOME_SCAN_ORDER = {
+    "missing_submitter": 0,
+    "bounty_not_found": 1,
+    "exhausted_bounty": 2,
+    "duplicate_delivery": 3,
+    "delivery_payload_mismatch": 4,
+    "already_paid": 5,
+    "paid": 6,
+}
 
 
 def _request_was_forwarded_https(request: Request) -> bool:
@@ -244,6 +253,27 @@ def _existing_payout_proof_for_submission(
         select(Proof)
         .where(Proof.submission_id == submission.id, Proof.kind == "bounty_payment")
         .limit(1)
+    )
+
+
+def webhook_status_summary(session: Session) -> list[dict[str, Any]]:
+    status_expr = func.lower(WebhookEvent.processed_status)
+    count_expr = func.count(WebhookEvent.delivery_id)
+    rows = session.execute(
+        select(status_expr, count_expr)
+        .group_by(status_expr)
+        .order_by(count_expr.desc(), status_expr.asc())
+    ).all()
+    summary = [
+        {"processed_status": str(status), "count": int(count)} for status, count in rows if status
+    ]
+    return sorted(
+        summary,
+        key=lambda item: (
+            WEBHOOK_OUTCOME_SCAN_ORDER.get(str(item["processed_status"]), 100),
+            -int(item["count"]),
+            str(item["processed_status"]),
+        ),
     )
 
 
@@ -1432,6 +1462,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                     WebhookEvent.created_at.desc(), WebhookEvent.delivery_id.desc()
                 ).limit(webhook_limit)
             ).all()
+            webhook_summary = webhook_status_summary(session)
         return templates.TemplateResponse(
             request,
             "admin.html",
@@ -1439,6 +1470,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
                 "login": login,
                 "csrf_token": _csrf_token("admin-bounty", login, settings.cookie_secret),
                 "webhook_events": webhook_events,
+                "webhook_status_summary": webhook_summary,
                 "webhook_limit": webhook_limit,
                 "webhook_limit_options": [10, 25, 50, 100],
                 "webhook_status": normalized_status,
