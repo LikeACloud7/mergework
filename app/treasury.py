@@ -229,6 +229,8 @@ def propose_treasury_action(
     if clean_action not in TREASURY_ACTIONS:
         raise LedgerError("unsupported treasury action")
     clean_payload = _canonical_payload(clean_action, payload)
+    if clean_action == "pay_bounty":
+        resolve_payout_account(session, str(clean_payload["to_account"]))
     now = _db_now()
     proposal = TreasuryProposal(
         action=clean_action,

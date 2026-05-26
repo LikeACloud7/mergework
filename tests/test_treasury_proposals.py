@@ -266,6 +266,42 @@ def test_manual_payout_creates_proposal_then_executes_after_delay(
         assert verify_supply_conservation(session) is True
 
 
+def test_manual_payout_rejects_invalid_target_before_proposal_creation(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=13,
+            issue_url="https://github.com/ramimbo/mergework/issues/13",
+            title="Manual payout invalid target",
+            reward_mrwk="15",
+            acceptance="Contributor comments with proof.",
+        )
+        bounty_id = bounty.id
+
+    response = client.post(
+        f"/api/v1/bounties/{bounty_id}/pay",
+        headers=ADMIN_HEADERS,
+        json={
+            "to_account": "not-a-valid-ledger-account",
+            "submission_url": "https://github.com/ramimbo/mergework/issues/13#issuecomment-1",
+            "accepted_by": "maintainer",
+        },
+    )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]
+        == "to_account must be a github:<login> account or registered mrwk1 wallet"
+    )
+    with session_scope(sqlite_url) as session:
+        assert session.scalar(select(func.count(TreasuryProposal.id))) == 0
+
+
 def test_challenges_require_accepted_work_and_can_block_invalid_proposals(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
