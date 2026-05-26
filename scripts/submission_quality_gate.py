@@ -28,7 +28,15 @@ def _check(name: str, status: str, message: str) -> dict[str, str]:
 
 
 def _bounty_refs(text: str) -> list[int]:
-    return sorted({int(match) for match in BOUNTY_REF_RE.findall(text)})
+    refs: list[int] = []
+    seen: set[int] = set()
+    for match in BOUNTY_REF_RE.findall(text):
+        ref = int(match)
+        if ref in seen:
+            continue
+        seen.add(ref)
+        refs.append(ref)
+    return refs
 
 
 def _bounty_is_payable(raw: dict[str, Any]) -> bool:
@@ -181,6 +189,16 @@ def evaluate_submission(data: dict[str, Any]) -> dict[str, Any]:
         )
     else:
         checks.append(_check("bounty_reference", "pass", f"found bounty reference #{bounty_ref}"))
+        if len(refs) > 1:
+            joined_refs = ", ".join(f"#{ref}" for ref in refs)
+            checks.append(
+                _check(
+                    "single_bounty_reference",
+                    "warn",
+                    f"submission references multiple bounties ({joined_refs}); "
+                    "keep one bounty target or split the work",
+                )
+            )
         bounty = bounties.get(bounty_ref)
         if bounty is None:
             checks.append(

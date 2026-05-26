@@ -124,6 +124,49 @@ def test_submission_quality_gate_warns_for_similar_open_pr() -> None:
     ]
 
 
+def test_submission_quality_gate_warns_for_multiple_bounty_references() -> None:
+    result = evaluate_submission(
+        {
+            "submission_text": """
+            Summary:
+            Add focused quality-gate validation.
+
+            Bounty #320
+            Closes #319
+
+            Validation:
+            - pytest passed.
+            """,
+            "bounties": [
+                {"number": 319, "state": "CLOSED", "awards_remaining": 0},
+                {"number": 320, "state": "OPEN", "awards_remaining": 1},
+            ],
+            "pull_requests": [],
+        }
+    )
+
+    assert result["status"] == "warn"
+    assert result["bounty_reference"] == 320
+    assert {
+        "name": "bounty_payable",
+        "status": "pass",
+        "message": "referenced bounty #320 is open",
+    } in result["checks"]
+    assert {
+        "name": "single_bounty_reference",
+        "status": "warn",
+        "message": (
+            "submission references multiple bounties (#320, #319); "
+            "keep one bounty target or split the work"
+        ),
+    } in result["checks"]
+    assert {
+        "name": "bounty_payable",
+        "status": "fail",
+        "message": "referenced bounty #319 is closed or exhausted",
+    } not in result["checks"]
+
+
 def test_submission_quality_gate_passes_recent_maintainer_activity() -> None:
     result = evaluate_submission(
         {
