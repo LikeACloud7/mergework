@@ -1601,10 +1601,19 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | 
 
     def work_proof_guidance_json(bounty: Bounty) -> dict[str, Any]:
         bounty_data = bounty_to_dict(bounty)
+        can_submit = bounty_data["status"] == "open" and bounty_data["awards_remaining"] > 0
+        availability_warnings = []
+        if bounty_data["status"] != "open":
+            availability_warnings.append(f"bounty is {bounty_data['status']}")
+        if bounty_data["awards_remaining"] <= 0:
+            availability_warnings.append("bounty has no award slots remaining")
         return {
             "bounty_id": bounty_data["id"],
             "issue_number": bounty_data["issue_number"],
             "status": bounty_data["status"],
+            "availability": "open_for_submissions" if can_submit else "not_currently_open",
+            "can_submit": can_submit,
+            "availability_warnings": availability_warnings,
             "awards_remaining": bounty_data["awards_remaining"],
             "max_awards": bounty_data["max_awards"],
             "awards_paid": bounty_data["awards_paid"],
@@ -1630,6 +1639,9 @@ def _call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | 
             "bounty_id": None,
             "issue_number": None,
             "status": "generic_guidance",
+            "availability": "unknown_without_bounty",
+            "can_submit": None,
+            "availability_warnings": [],
             "awards_remaining": None,
             "reward_mrwk": None,
             "repository": None,
