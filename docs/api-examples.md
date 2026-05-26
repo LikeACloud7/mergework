@@ -515,3 +515,91 @@ block is a JSON string with proof metadata plus the stored public proof payload:
 In that MCP payload, `bounty_id` is the internal MergeWork bounty id. The
 `proof.issue_number` value is the source GitHub issue number when the proof was
 created from a GitHub bounty claim.
+
+## Pre-Bounty Preflight Checks
+
+Before opening a PR or claiming a bounty, check the live API for award capacity and active attempts. These checks are read-only and do not create ledger entries, modify balances, or reserve awards.
+
+### Check Bounty Capacity
+
+Use the bounties list or single-bounty endpoint to confirm a bounty is still open and has available awards:
+
+```bash
+# List all open bounties with their capacity
+curl -s "$API_HOST/api/v1/bounties?status=open"
+
+# Quick capacity summary
+curl -s "$API_HOST/api/v1/bounties/summary?status=open"
+
+# Inspect one bounty by its internal id (from /api/v1/bounties)
+curl -s "$API_HOST/api/v1/bounties/<bounty_id>"
+```
+
+The single-bounty response includes `max_awards`, `awards_paid`, and `awards_remaining`:
+
+```json
+{
+  "id": 36,
+  "issue_number": 164,
+  "reward_mrwk": "100",
+  "max_awards": 5,
+  "awards_paid": 4,
+  "awards_remaining": 1,
+  "status": "open"
+}
+```
+
+Do not open a PR if `awards_remaining` is zero, or if the bounty `status` is `paid` or `closed`.
+
+### Check Active Attempts
+
+Before registering a new attempt or opening a PR, inspect existing active attempts for the same bounty:
+
+```bash
+curl -s "$API_HOST/api/v1/bounties/<bounty_id>/attempts"
+```
+
+The response lists active attempt reservations:
+
+```json
+[
+  {
+    "id": 12,
+    "bounty_id": 53,
+    "submitter_account": "github:tatelyman",
+    "source_url": "https://github.com/ramimbo/mergework/tree/attempt-bounty-321",
+    "status": "active",
+    "expires_at": "2026-05-26T22:07:00+00:00",
+    "created_at": "2026-05-25T22:07:00+00:00"
+  }
+]
+```
+
+If another active attempt already covers your exact intended scope, pick a different scope or bounty rather than racing with a duplicate PR. Expired or released attempts can be included for abandoned-work audit:
+
+```bash
+curl -s "$API_HOST/api/v1/bounties/<bounty_id>/attempts?include_expired=true"
+```
+
+### Verify Open PRs for the Same Bounty Issue
+
+Cross-reference open GitHub PRs against the bounty issue number. Open multiple PRs for the same bounty issue from different contributors is normal for multi-award bounties, but you should avoid overlapping scope:
+
+```bash
+# Check open PRs referencing the same bounty issue via the GitHub API
+curl -s -H "Accept: application/vnd.github+json" \
+  "https://api.github.com/repos/ramimbo/mergework/issues?state=open&per_page=50"
+```
+
+Filter by PR body references (`Bounty #N` or `Refs #N`) to find scope-alike PRs before opening new work.
+
+### Avoid Exhausted, Paid, and Stale Rounds
+
+Before opening work on a bounty round:
+
+1. **Check the live bounty API** — if `status` is not `"open"` or `awards_remaining` is zero, the round is exhausted or closed and no new work will be accepted.
+2. **Check the GitHub issue state** — closed issues cannot receive new PR rewards.
+3. **Check for recent maintainer comments** — if a maintainer has marked the bounty as superseded or redirected work elsewhere, that is authoritative.
+4. **Verify stale rounds** — a round is stale when the bounty text, latest maintainer comment, or open PR queue suggests the requested work is already handled, no longer needed, or no longer being reviewed. Do not target stale rounds unless a maintainer explicitly redirects the work.
+
+Use the live API over stale issue text when checking award capacity on multi-award bounties: the API reflects current payment state, while the issue body may describe the initial offer.
