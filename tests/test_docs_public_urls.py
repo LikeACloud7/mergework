@@ -186,6 +186,27 @@ def test_api_examples_document_mcp_wallet_transfer_response() -> None:
     assert '\\"memo\\":\\"agent payout consolidation\\"' in examples
 
 
+def test_api_examples_document_mcp_lookup_response_shapes() -> None:
+    examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
+
+    assert '"name":"get_ledger_entry"' in examples
+    assert '"arguments":{"sequence":42}' in examples
+    assert "same ledger-entry shape as" in examples
+    assert '\\"sequence\\":42' in examples
+    assert '\\"type\\":\\"bounty_payment\\"' in examples
+    assert (
+        '\\"proof_hash\\":\\"a29b9cf54f2ea4734d58e9371b20234f85936e95bd8c45687f0644ad6a9e6871\\"'
+        in examples
+    )
+    assert '"name":"get_wallet"' in examples
+    assert '"arguments":{"address":"<wallet_address>"}' in examples
+    assert "same public wallet shape as" in examples
+    assert "wallet not found" in examples
+    assert '\\"address\\":\\"<wallet_address>\\"' in examples
+    assert '\\"label\\":\\"MCP wallet\\"' in examples
+    assert '\\"next_nonce\\":1' in examples
+
+
 def test_agent_guide_explains_internal_bounty_ids() -> None:
     guide = Path("docs/agent-guide.md").read_text(encoding="utf-8")
 
