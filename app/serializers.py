@@ -46,8 +46,8 @@ def bounty_awards_to_dict(session: Session, bounty_id: int) -> list[dict[str, An
     ).all()
     awards: list[dict[str, Any]] = []
     for proof in proofs:
-        data = json.loads(proof.public_json)
-        if not isinstance(data, dict) or data.get("kind") != "bounty_payment":
+        data = _proof_payload(proof)
+        if data is None:
             continue
         proof_hash = str(proof.hash)
         awards.append(
