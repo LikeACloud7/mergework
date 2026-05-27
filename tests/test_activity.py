@@ -149,6 +149,10 @@ def test_activity_api_filters_accepted_work_by_query(sqlite_url: str) -> None:
     by_proof = client.get(f"/api/v1/activity?q={alice_proof.hash[:12]}").json()
     by_issue_ref = client.get("/api/v1/activity?q=%23164").json()
     no_match = client.get("/api/v1/activity?q=carol").json()
+    invalid_hash_queries = [
+        client.get("/api/v1/activity", params={"q": query}).json()
+        for query in ("#", "#abc", "#123abc")
+    ]
 
     assert by_account["query"] == "alice"
     assert by_account["totals"] == {
@@ -178,6 +182,14 @@ def test_activity_api_filters_accepted_work_by_query(sqlite_url: str) -> None:
     }
     assert no_match["contributors"] == []
     assert no_match["recent"] == []
+    for invalid_hash_query in invalid_hash_queries:
+        assert invalid_hash_query["totals"] == {
+            "accepted_awards": 0,
+            "accepted_mrwk": "0",
+            "contributors": 0,
+        }
+        assert invalid_hash_query["contributors"] == []
+        assert invalid_hash_query["recent"] == []
 
 
 def test_activity_page_renders_empty_and_paid_states(sqlite_url: str) -> None:
