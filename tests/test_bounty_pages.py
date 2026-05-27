@@ -415,6 +415,11 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert "Bounty Payment" in ledger_entry_page.text
     assert "Bounty scan status" in ledger_entry_page.text
     assert "Award paid" in ledger_entry_page.text
+    assert 'aria-label="Ledger entry navigation"' in ledger_entry_page.text
+    assert 'href="/ledger">All ledger entries</a>' in ledger_entry_page.text
+    assert f'href="/ledger/{payment_sequence - 1}">Previous entry</a>' in ledger_entry_page.text
+    assert f'href="/api/v1/ledger/{payment_sequence}">Entry JSON</a>' in ledger_entry_page.text
+    assert f'href="/ledger/{payment_sequence + 1}">Next entry</a>' in ledger_entry_page.text
     assert client.get("/api/v1/ledger/0").status_code == 400
     assert client.get("/ledger/0").status_code == 400
 
