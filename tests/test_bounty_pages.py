@@ -126,6 +126,61 @@ def test_bounties_summary_api_matches_public_list_filters(sqlite_url: str) -> No
     assert invalid.json()["detail"] == "status must be one of: open, paid, closed"
 
 
+def test_bounties_page_honors_limit_filter(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=72,
+            issue_url="https://github.com/ramimbo/mergework/issues/72",
+            title="Old public bounty",
+            reward_mrwk="20",
+            acceptance="Old row should be hidden when the page limit is two.",
+        )
+        middle = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=73,
+            issue_url="https://github.com/ramimbo/mergework/issues/73",
+            title="Middle public bounty",
+            reward_mrwk="30",
+            acceptance="Middle row should stay visible with the newest row.",
+        )
+        newest = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=74,
+            issue_url="https://github.com/ramimbo/mergework/issues/74",
+            title="Newest public bounty",
+            reward_mrwk="40",
+            acceptance="Newest row should stay visible.",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    limited_page = client.get("/bounties?limit=2")
+    assert limited_page.status_code == 200
+    assert limited_page.text.index(newest.title) < limited_page.text.index(middle.title)
+    assert "Old public bounty" not in limited_page.text
+    assert "<strong>2</strong>" in limited_page.text
+    assert '<option value="2" selected>2</option>' in limited_page.text
+    assert '<option value=""' in limited_page.text
+    assert 'href="/bounties?status=open&limit=2"' in limited_page.text
+
+    filtered_limited_page = client.get("/bounties?q=public&sort=reward&limit=2")
+    assert filtered_limited_page.status_code == 200
+    assert (
+        '<option value="reward" selected>Highest per-award reward</option>'
+        in filtered_limited_page.text
+    )
+    assert 'href="/bounties?sort=reward&limit=2">Clear search</a>' in filtered_limited_page.text
+
+    invalid_limit = client.get("/bounties?limit=0")
+    assert invalid_limit.status_code == 422
+
+
 def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:

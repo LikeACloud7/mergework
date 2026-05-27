@@ -31,4 +31,6 @@ def test_public_bounties_context_normalizes_filter_state() -> None:
             "available": "Most MRWK available",
             "awards": "Most award slots",
         },
+        "selected_limit": None,
+        "limit_options": (10, 25, 50, 100, 200),
     }
