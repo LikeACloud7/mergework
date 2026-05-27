@@ -129,7 +129,14 @@ def _maintainer_activity_check(
             "warn",
             f"recent maintainer activity for bounty #{bounty_ref} could not be verified",
         )
-    max_age_days = int(bounty.get("max_maintainer_age_days", DEFAULT_MAX_MAINTAINER_AGE_DAYS))
+    try:
+        max_age_days = int(bounty.get("max_maintainer_age_days", DEFAULT_MAX_MAINTAINER_AGE_DAYS))
+    except (TypeError, ValueError):
+        return _check(
+            "maintainer_activity",
+            "warn",
+            f"recent maintainer activity for bounty #{bounty_ref} could not be verified",
+        )
     delta = now - last_activity
     age_days = max(0, int(delta.total_seconds() // 86400))
     if delta > timedelta(days=max_age_days):
