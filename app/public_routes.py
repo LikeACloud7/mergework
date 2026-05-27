@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.accounts import normalized_wallet_address
 from app.bounty_sorting import BOUNTY_SORT_LABELS, normalize_bounty_sort
 from app.db import session_scope
-from app.ledger_views import account_ledger_transactions
+from app.ledger_views import account_ledger_transaction_types, account_ledger_transactions
 from app.models import Wallet
 from app.path_params import proof_hash_from_path
 from app.serializers import bounty_list_summary, wallet_to_dict
@@ -42,14 +42,21 @@ def wallets_page_context(session: Session) -> dict[str, Any]:
     return {"wallets": [wallet_to_dict(session, wallet) for wallet in wallets]}
 
 
-def wallet_page_context(session: Session, address: str) -> dict[str, Any]:
+def wallet_page_context(
+    session: Session, address: str, transaction_type: str | None = None
+) -> dict[str, Any]:
     normalized_address = normalized_wallet_address(address)
     wallet = session.get(Wallet, normalized_address)
     if wallet is None:
         raise HTTPException(status_code=404, detail="wallet not found")
+    selected_transaction_type = transaction_type.strip() if transaction_type is not None else ""
     return {
         "wallet": wallet_to_dict(session, wallet),
-        "transactions": account_ledger_transactions(session, wallet.address),
+        "transactions": account_ledger_transactions(
+            session, wallet.address, entry_type=selected_transaction_type or None
+        ),
+        "transaction_types": account_ledger_transaction_types(session, wallet.address),
+        "selected_transaction_type": selected_transaction_type,
     }
 
 
@@ -101,9 +108,13 @@ def register_public_routes(
         return templates.TemplateResponse(request, "wallets.html", context)
 
     @app.get("/wallets/{address}", response_class=HTMLResponse)
-    def wallet_page(request: Request, address: str) -> HTMLResponse:
+    def wallet_page(
+        request: Request,
+        address: str,
+        type: str | None = Query(None),  # noqa: A002
+    ) -> HTMLResponse:
         with session_scope(db_url) as session:
-            context = wallet_page_context(session, address)
+            context = wallet_page_context(session, address, type)
         return templates.TemplateResponse(request, "wallet_detail.html", context)
 
     @app.get("/transfer", response_class=HTMLResponse)

@@ -516,10 +516,21 @@ def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) ->
     _register_wallet(client, public_hex, "Main smoke wallet")
     _register_wallet(client, funded_public, "Funded smoke wallet")
     _fund_wallet(sqlite_url, funded_address)
+    with session_scope(sqlite_url) as session:
+        add_ledger_entry(
+            session,
+            entry_type="wallet_transfer",
+            from_account=funded_address,
+            to_account="github:filter-target",
+            amount_microunits=0,
+            reference="test-wallet-detail-filter",
+        )
 
     wallets = client.get("/wallets").text
     detail = client.get(f"/wallets/{address}").text
     funded_detail = client.get(f"/wallets/{funded_address}").text
+    funded_type_filter = client.get(f"/wallets/{funded_address}?type=test_funding").text
+    funded_missing_type = client.get(f"/wallets/{funded_address}?type=bounty_payment").text
     transfer = client.get("/transfer").text
     me = client.get("/me").text
 
@@ -537,6 +548,10 @@ def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) ->
     assert "To claim GitHub bounty balance" in detail
     assert "No activity yet" in detail
     assert "No activity yet" not in funded_detail
+    assert "Filter wallet transactions" in funded_detail
+    assert 'value="test_funding" selected' in funded_type_filter
+    assert "Showing test_funding transactions." in funded_type_filter
+    assert "No wallet transactions match this type." in funded_missing_type
     assert "Signed transfer" in transfer
     assert "both wallets are registered" in transfer
     assert "/static/wallet.js" in transfer
