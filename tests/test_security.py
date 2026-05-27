@@ -302,7 +302,7 @@ def test_admin_bounty_api_returns_400_for_malformed_json(
     assert missing_field.json()["detail"] == "repo is required"
 
 
-def test_admin_bounty_api_defers_duplicate_repo_issue_to_execution(
+def test_admin_bounty_api_rejects_duplicate_pending_repo_issue_proposal(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
@@ -324,14 +324,12 @@ def test_admin_bounty_api_defers_duplicate_repo_issue_to_execution(
     )
 
     assert first.status_code == 200
-    assert duplicate.status_code == 200
+    assert duplicate.status_code == 400
+    assert duplicate.json()["detail"] == "create_bounty proposal already pending"
     first_execution = _execute_treasury_proposal(client, sqlite_url, first.json()["id"])
-    duplicate_execution = _execute_treasury_proposal(client, sqlite_url, duplicate.json()["id"])
 
     assert first_execution.status_code == 200
     assert first_execution.json()["result"]["bounty"]["issue_number"] == 77
-    assert duplicate_execution.status_code == 400
-    assert duplicate_execution.json()["detail"] == "bounty already exists for issue"
 
 
 def test_admin_bounty_api_rejects_fractional_integer_fields(

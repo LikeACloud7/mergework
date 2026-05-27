@@ -201,21 +201,78 @@ def test_create_bounty_execution_enforces_epoch_reserve_cap(
             reward_mrwk="9000",
             acceptance="Accepted work.",
         )
-    proposal = client.post(
+    response = client.post(
         "/api/v1/bounties",
         headers=ADMIN_HEADERS,
         json=_bounty_payload(issue_number=2, reward_mrwk="1001"),
-    ).json()
-    _make_executable(sqlite_url, proposal["id"])
-
-    response = client.post(
-        f"/api/v1/treasury/proposals/{proposal['id']}/execute", headers=ADMIN_HEADERS
     )
 
     assert response.status_code == 400
     assert response.json()["detail"] == "treasury epoch reserve cap exceeded"
     with session_scope(sqlite_url) as session:
         assert session.scalar(select(func.count(Bounty.id))) == 1
+        assert session.scalar(select(func.count(TreasuryProposal.id))) == 0
+
+
+def test_create_bounty_proposal_rejects_mismatched_issue_url(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    payload = _bounty_payload(issue_number=82)
+    payload["issue_url"] = "https://github.com/not-the/repo/issues/1"
+
+    response = client.post("/api/v1/bounties", headers=ADMIN_HEADERS, json=payload)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "issue_url must match repo and issue_number"
+    with session_scope(sqlite_url) as session:
+        assert session.scalar(select(func.count(TreasuryProposal.id))) == 0
+
+
+def test_duplicate_pending_create_bounty_proposal_is_rejected(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    first = client.post(
+        "/api/v1/bounties",
+        headers=ADMIN_HEADERS,
+        json=_bounty_payload(issue_number=83),
+    )
+
+    duplicate = client.post(
+        "/api/v1/bounties",
+        headers=ADMIN_HEADERS,
+        json=_bounty_payload(issue_number=83),
+    )
+
+    assert first.status_code == 200
+    assert duplicate.status_code == 400
+    assert duplicate.json()["detail"] == "create_bounty proposal already pending"
+    with session_scope(sqlite_url) as session:
+        assert session.scalar(select(func.count(TreasuryProposal.id))) == 1
+
+
+def test_pending_create_bounty_proposals_count_toward_epoch_cap(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    first = client.post(
+        "/api/v1/bounties",
+        headers=ADMIN_HEADERS,
+        json=_bounty_payload(issue_number=84, reward_mrwk="6000"),
+    )
+
+    over_cap = client.post(
+        "/api/v1/bounties",
+        headers=ADMIN_HEADERS,
+        json=_bounty_payload(issue_number=85, reward_mrwk="5000"),
+    )
+
+    assert first.status_code == 200
+    assert over_cap.status_code == 400
+    assert over_cap.json()["detail"] == "treasury epoch reserve cap exceeded"
+    with session_scope(sqlite_url) as session:
+        assert session.scalar(select(func.count(TreasuryProposal.id))) == 1
 
 
 def test_manual_payout_creates_proposal_then_executes_after_delay(
@@ -300,6 +357,190 @@ def test_manual_payout_rejects_invalid_target_before_proposal_creation(
     )
     with session_scope(sqlite_url) as session:
         assert session.scalar(select(func.count(TreasuryProposal.id))) == 0
+
+
+def test_manual_payout_rejects_missing_bounty_before_proposal_creation(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+
+    response = client.post(
+        "/api/v1/bounties/999/pay",
+        headers=ADMIN_HEADERS,
+        json={
+            "to_account": "github:bob",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/999",
+            "accepted_by": "maintainer",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "bounty not found"
+    with session_scope(sqlite_url) as session:
+        assert session.scalar(select(func.count(TreasuryProposal.id))) == 0
+
+
+def test_manual_payout_rejects_existing_unpaid_submission_before_proposal_creation(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    submission_url = "https://github.com/ramimbo/mergework/issues/81#issuecomment-1"
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=81,
+            issue_url="https://github.com/ramimbo/mergework/issues/81",
+            title="Manual payout with existing unpaid submission",
+            reward_mrwk="10",
+            acceptance="Contributor comments with proof.",
+        )
+        session.add(
+            Submission(
+                bounty_id=bounty.id,
+                submitter_account="github:bob",
+                url=submission_url,
+            )
+        )
+        bounty_id = bounty.id
+
+    response = client.post(
+        f"/api/v1/bounties/{bounty_id}/pay",
+        headers=ADMIN_HEADERS,
+        json={
+            "to_account": "github:bob",
+            "submission_url": submission_url,
+            "accepted_by": "maintainer",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "submission already paid"
+    with session_scope(sqlite_url) as session:
+        assert session.scalar(select(func.count(TreasuryProposal.id))) == 0
+
+
+def test_manual_payout_rejects_duplicate_pending_submission_proposal(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=86,
+            issue_url="https://github.com/ramimbo/mergework/issues/86",
+            title="Duplicate pending payout proposal",
+            reward_mrwk="5",
+            max_awards=2,
+            acceptance="Contributor comments with proof.",
+        )
+        bounty_id = bounty.id
+    payload = {
+        "to_account": "github:bob",
+        "submission_url": "https://github.com/ramimbo/mergework/pull/86",
+        "accepted_by": "maintainer",
+    }
+    first = client.post(f"/api/v1/bounties/{bounty_id}/pay", headers=ADMIN_HEADERS, json=payload)
+
+    duplicate = client.post(
+        f"/api/v1/bounties/{bounty_id}/pay", headers=ADMIN_HEADERS, json=payload
+    )
+
+    assert first.status_code == 200
+    assert duplicate.status_code == 400
+    assert duplicate.json()["detail"] == "pay_bounty proposal already pending for submission"
+    with session_scope(sqlite_url) as session:
+        assert session.scalar(select(func.count(TreasuryProposal.id))) == 1
+
+
+def test_manual_payout_rejects_pending_capacity_overcommit(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=87,
+            issue_url="https://github.com/ramimbo/mergework/issues/87",
+            title="Pending payout capacity",
+            reward_mrwk="5",
+            acceptance="Contributor comments with proof.",
+        )
+        bounty_id = bounty.id
+    first = client.post(
+        f"/api/v1/bounties/{bounty_id}/pay",
+        headers=ADMIN_HEADERS,
+        json={
+            "to_account": "github:alice",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/87",
+            "accepted_by": "maintainer",
+        },
+    )
+
+    second = client.post(
+        f"/api/v1/bounties/{bounty_id}/pay",
+        headers=ADMIN_HEADERS,
+        json={
+            "to_account": "github:bob",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/88",
+            "accepted_by": "maintainer",
+        },
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 400
+    assert second.json()["detail"] == "pending payout proposals exceed bounty remaining awards"
+    with session_scope(sqlite_url) as session:
+        assert session.scalar(select(func.count(TreasuryProposal.id))) == 1
+
+
+def test_manual_payout_freezes_github_destination_at_proposal_creation(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=88,
+            issue_url="https://github.com/ramimbo/mergework/issues/88",
+            title="Frozen payout destination",
+            reward_mrwk="5",
+            acceptance="Contributor comments with proof.",
+        )
+        bounty_id = bounty.id
+    proposal = client.post(
+        f"/api/v1/bounties/{bounty_id}/pay",
+        headers=ADMIN_HEADERS,
+        json={
+            "to_account": "github:bob",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/88",
+            "accepted_by": "maintainer",
+        },
+    )
+    assert proposal.status_code == 200
+    assert proposal.json()["payload"]["to_account"] == "github:bob"
+    with session_scope(sqlite_url) as session:
+        wallet = register_wallet(session, public_key_hex="22" * 32, label="Bob")
+        wallet.github_login = "bob"
+        wallet_address = wallet.address
+
+    _make_executable(sqlite_url, proposal.json()["id"])
+    executed = client.post(
+        f"/api/v1/treasury/proposals/{proposal.json()['id']}/execute", headers=ADMIN_HEADERS
+    )
+
+    assert executed.status_code == 200
+    assert executed.json()["result"]["payout"]["to_account"] == "github:bob"
+    with session_scope(sqlite_url) as session:
+        assert get_balance(session, "github:bob") == 5_000_000
+        assert get_balance(session, wallet_address) == 0
 
 
 def test_challenges_require_accepted_work_and_can_block_invalid_proposals(
@@ -393,49 +634,116 @@ def test_machine_challenge_after_execution_is_rejected_without_mutating_status(
     assert detail.json()["executed_at"] is not None
 
 
-def test_submission_already_paid_challenge_requires_paid_proof(
+def test_close_bounty_rejects_missing_bounty_before_proposal_creation(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     client = _client(sqlite_url, monkeypatch)
-    submission_url = "https://github.com/ramimbo/mergework/issues/81#issuecomment-1"
+
+    response = client.post(
+        "/api/v1/bounties/999/close",
+        headers=ADMIN_HEADERS,
+        json={"closed_by": "maintainer"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "bounty not found"
+    with session_scope(sqlite_url) as session:
+        assert session.scalar(select(func.count(TreasuryProposal.id))) == 0
+
+
+def test_close_bounty_rejects_duplicate_pending_close_proposal(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
     with session_scope(sqlite_url) as session:
         ensure_genesis(session)
-        _seed_accepted_work(session, "alice")
         bounty = create_bounty(
             session,
             repo="ramimbo/mergework",
-            issue_number=81,
-            issue_url="https://github.com/ramimbo/mergework/issues/81",
-            title="Manual payout with existing unpaid submission",
-            reward_mrwk="10",
+            issue_number=89,
+            issue_url="https://github.com/ramimbo/mergework/issues/89",
+            title="Duplicate pending close proposal",
+            reward_mrwk="5",
             acceptance="Contributor comments with proof.",
         )
-        session.add(
-            Submission(
-                bounty_id=bounty.id,
-                submitter_account="github:bob",
-                url=submission_url,
-            )
-        )
         bounty_id = bounty.id
-    proposal = client.post(
-        f"/api/v1/bounties/{bounty_id}/pay",
+    first = client.post(
+        f"/api/v1/bounties/{bounty_id}/close",
+        headers=ADMIN_HEADERS,
+        json={"closed_by": "maintainer"},
+    )
+
+    duplicate = client.post(
+        f"/api/v1/bounties/{bounty_id}/close",
+        headers=ADMIN_HEADERS,
+        json={"closed_by": "maintainer"},
+    )
+
+    assert first.status_code == 200
+    assert duplicate.status_code == 400
+    assert duplicate.json()["detail"] == "close_bounty proposal already pending"
+    with session_scope(sqlite_url) as session:
+        assert session.scalar(select(func.count(TreasuryProposal.id))) == 1
+
+
+def test_pending_payout_and_close_proposals_are_mutually_exclusive(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        payout_first = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=90,
+            issue_url="https://github.com/ramimbo/mergework/issues/90",
+            title="Pending payout before close",
+            reward_mrwk="5",
+            acceptance="Contributor comments with proof.",
+        )
+        close_first = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=91,
+            issue_url="https://github.com/ramimbo/mergework/issues/91",
+            title="Pending close before payout",
+            reward_mrwk="5",
+            acceptance="Contributor comments with proof.",
+        )
+        payout_first_id = payout_first.id
+        close_first_id = close_first.id
+    payout = client.post(
+        f"/api/v1/bounties/{payout_first_id}/pay",
         headers=ADMIN_HEADERS,
         json={
             "to_account": "github:bob",
-            "submission_url": submission_url,
+            "submission_url": "https://github.com/ramimbo/mergework/pull/90",
             "accepted_by": "maintainer",
         },
-    ).json()
-    client.cookies.set("mrwk_user", signed_value("alice", "test-cookie-secret"))
-
-    challenge = client.post(
-        f"/api/v1/treasury/proposals/{proposal['id']}/challenges",
-        json={"challenge_type": "submission_already_paid", "reason": "Submission exists."},
     )
-    detail = client.get(f"/api/v1/treasury/proposals/{proposal['id']}")
+    close_after_payout = client.post(
+        f"/api/v1/bounties/{payout_first_id}/close",
+        headers=ADMIN_HEADERS,
+        json={"closed_by": "maintainer"},
+    )
+    close = client.post(
+        f"/api/v1/bounties/{close_first_id}/close",
+        headers=ADMIN_HEADERS,
+        json={"closed_by": "maintainer"},
+    )
+    payout_after_close = client.post(
+        f"/api/v1/bounties/{close_first_id}/pay",
+        headers=ADMIN_HEADERS,
+        json={
+            "to_account": "github:bob",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/91",
+            "accepted_by": "maintainer",
+        },
+    )
 
-    assert challenge.status_code == 200
-    assert challenge.json()["status"] == "rejected"
-    assert detail.status_code == 200
-    assert detail.json()["status"] == "pending"
+    assert payout.status_code == 200
+    assert close_after_payout.status_code == 400
+    assert close_after_payout.json()["detail"] == "bounty has pending payout proposals"
+    assert close.status_code == 200
+    assert payout_after_close.status_code == 400
+    assert payout_after_close.json()["detail"] == "bounty has pending close proposal"

@@ -27,11 +27,12 @@ def _positive_proposal_id(proposal_id: int) -> int:
 
 
 def _proposal_error(exc: LedgerError) -> HTTPException:
-    if str(exc) == "proposal not found":
-        return HTTPException(status_code=404, detail=str(exc))
-    if str(exc) == "proposal already executed":
-        return HTTPException(status_code=409, detail=str(exc))
-    return HTTPException(status_code=400, detail=str(exc))
+    detail = str(exc)
+    if detail in {"proposal not found", "bounty not found"}:
+        return HTTPException(status_code=404, detail=detail)
+    if detail in {"proposal already executed", "submission already paid"}:
+        return HTTPException(status_code=409, detail=detail)
+    return HTTPException(status_code=400, detail=detail)
 
 
 def register_treasury_routes(

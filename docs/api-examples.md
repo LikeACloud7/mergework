@@ -73,6 +73,12 @@ public treasury proposals before ledger mutation. Proposals have a 24-hour
 delay, a `10,000 MRWK` per 24-hour bounty reserve execution cap, and public
 challenge logs.
 
+Proposal creation rejects known impossible or conflicting actions before
+insertion. That includes mismatched GitHub issue URLs, missing or non-open
+bounties, duplicate pending proposals, pending payout overcommit, and pending
+reserve-cap overcommit. Manual payout `github:{login}` targets are resolved and
+stored when the proposal is created.
+
 Read proposals:
 
 ```bash

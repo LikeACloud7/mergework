@@ -65,6 +65,15 @@ def _existing_payout_proof_for_submission(
     )
 
 
+def _ledger_http_error(exc: LedgerError) -> HTTPException:
+    detail = str(exc)
+    if detail == "bounty not found":
+        return HTTPException(status_code=404, detail=detail)
+    if detail == "submission already paid":
+        return HTTPException(status_code=409, detail=detail)
+    return HTTPException(status_code=400, detail=detail)
+
+
 def register_bounty_api_routes(
     app: FastAPI,
     *,
@@ -177,7 +186,7 @@ def register_bounty_api_routes(
             except KeyError as exc:
                 raise HTTPException(status_code=400, detail=f"{exc.args[0]} is required") from exc
             except LedgerError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                raise _ledger_http_error(exc) from exc
             return proposal_to_dict(proposal)
 
     @app.get("/api/v1/bounties/{bounty_id}")
@@ -223,7 +232,7 @@ def register_bounty_api_routes(
                 ) from exc
             raise
         except LedgerError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise _ledger_http_error(exc) from exc
         accepted_by = optional_str(data, "accepted_by", admin_login) or admin_login
         verifier_result = {
             "source": "admin_api",
@@ -261,7 +270,7 @@ def register_bounty_api_routes(
                     proposed_by=admin_login,
                 )
             except LedgerError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                raise _ledger_http_error(exc) from exc
             return proposal_to_dict(proposal)
 
     @app.post("/api/v1/bounties/{bounty_id}/close")
@@ -287,7 +296,7 @@ def register_bounty_api_routes(
                     proposed_by=admin_login,
                 )
             except LedgerError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                raise _ledger_http_error(exc) from exc
             return proposal_to_dict(proposal)
 
     return {

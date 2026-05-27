@@ -4,6 +4,7 @@ import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -170,6 +171,167 @@ def _canonical_payload(action: str, payload: dict[str, Any]) -> dict[str, Any]:
     raise LedgerError("unsupported treasury action")
 
 
+def _github_issue_url_matches(repo: str, issue_number: int, issue_url: str) -> bool:
+    parsed = urlparse(issue_url)
+    if (parsed.hostname or "").lower() != "github.com":
+        return False
+    parts = [part for part in parsed.path.strip("/").split("/") if part]
+    if len(parts) != 4 or parts[2] != "issues" or not parts[3].isdigit():
+        return False
+    return f"{parts[0]}/{parts[1]}".lower() == repo.lower() and int(parts[3]) == issue_number
+
+
+def _pending_action_payloads(
+    session: Session, action: str
+) -> list[tuple[TreasuryProposal, dict[str, Any]]]:
+    proposals = session.scalars(
+        select(TreasuryProposal)
+        .where(TreasuryProposal.status == "pending", TreasuryProposal.action == action)
+        .order_by(TreasuryProposal.id.asc())
+    ).all()
+    return [(proposal, proposal_payload(proposal)) for proposal in proposals]
+
+
+def _pending_create_bounty_reserved_microunits(
+    session: Session, *, through_proposal_id: int | None = None
+) -> int:
+    total = 0
+    for proposal, payload in _pending_action_payloads(session, "create_bounty"):
+        if through_proposal_id is not None and int(proposal.id) > through_proposal_id:
+            continue
+        total += parse_mrwk_amount(str(payload["reward_mrwk"])) * int(payload["max_awards"])
+    return total
+
+
+def _has_pending_create_bounty_proposal(
+    session: Session,
+    *,
+    repo: str,
+    issue_number: int,
+    exclude_proposal_id: int | None = None,
+) -> bool:
+    for proposal, payload in _pending_action_payloads(session, "create_bounty"):
+        if exclude_proposal_id is not None and proposal.id == exclude_proposal_id:
+            continue
+        if (
+            str(payload["repo"]).lower() == repo.lower()
+            and int(payload["issue_number"]) == issue_number
+        ):
+            return True
+    return False
+
+
+def _pending_pay_bounty_payloads(
+    session: Session, bounty_id: int, *, through_proposal_id: int | None = None
+) -> list[tuple[TreasuryProposal, dict[str, Any]]]:
+    pending: list[tuple[TreasuryProposal, dict[str, Any]]] = []
+    for proposal, payload in _pending_action_payloads(session, "pay_bounty"):
+        if through_proposal_id is not None and int(proposal.id) > through_proposal_id:
+            continue
+        if int(payload["bounty_id"]) == bounty_id:
+            pending.append((proposal, payload))
+    return pending
+
+
+def _has_pending_pay_bounty_proposal(
+    session: Session,
+    *,
+    bounty_id: int,
+    submission_url: str | None = None,
+    exclude_proposal_id: int | None = None,
+) -> bool:
+    for proposal, payload in _pending_pay_bounty_payloads(session, bounty_id):
+        if exclude_proposal_id is not None and proposal.id == exclude_proposal_id:
+            continue
+        if submission_url is None or str(payload["submission_url"]) == submission_url:
+            return True
+    return False
+
+
+def _has_pending_close_bounty_proposal(
+    session: Session, *, bounty_id: int, exclude_proposal_id: int | None = None
+) -> bool:
+    for proposal, payload in _pending_action_payloads(session, "close_bounty"):
+        if exclude_proposal_id is not None and proposal.id == exclude_proposal_id:
+            continue
+        if int(payload["bounty_id"]) == bounty_id:
+            return True
+    return False
+
+
+def _validate_create_bounty_proposal(session: Session, payload: dict[str, Any]) -> None:
+    repo = str(payload["repo"])
+    issue_number = int(payload["issue_number"])
+    issue_url = str(payload["issue_url"])
+    if not _github_issue_url_matches(repo, issue_number, issue_url):
+        raise LedgerError("issue_url must match repo and issue_number")
+    if _has_pending_create_bounty_proposal(session, repo=repo, issue_number=issue_number):
+        raise LedgerError("create_bounty proposal already pending")
+    reserved = parse_mrwk_amount(str(payload["reward_mrwk"])) * int(payload["max_awards"])
+    if (
+        _epoch_reserved_microunits(session, _db_now())
+        + _pending_create_bounty_reserved_microunits(session)
+        + reserved
+        > TREASURY_EPOCH_RESERVE_CAP_MICRO
+    ):
+        raise LedgerError("treasury epoch reserve cap exceeded")
+
+
+def _existing_submission_for_payload(
+    session: Session, *, bounty_id: int, submission_url: str
+) -> Submission | None:
+    return session.scalar(
+        select(Submission)
+        .where(Submission.bounty_id == bounty_id, Submission.url == submission_url)
+        .limit(1)
+    )
+
+
+def _validate_pay_bounty_proposal(session: Session, payload: dict[str, Any]) -> None:
+    bounty_id = int(payload["bounty_id"])
+    bounty = session.get(Bounty, bounty_id)
+    if bounty is None:
+        raise LedgerError("bounty not found")
+    if bounty.status != "open":
+        raise LedgerError("bounty is not open")
+    if _has_pending_close_bounty_proposal(session, bounty_id=bounty_id):
+        raise LedgerError("bounty has pending close proposal")
+    submission_url = str(payload["submission_url"])
+    if (
+        _existing_submission_for_payload(
+            session, bounty_id=bounty_id, submission_url=submission_url
+        )
+        is not None
+    ):
+        raise LedgerError("submission already paid")
+    pending_payouts = _pending_pay_bounty_payloads(session, bounty_id)
+    if any(
+        str(pending_payload["submission_url"]) == submission_url
+        for _, pending_payload in pending_payouts
+    ):
+        raise LedgerError("pay_bounty proposal already pending for submission")
+    requested_awards = len(pending_payouts) + 1
+    if bounty.awards_paid + requested_awards > bounty.max_awards:
+        raise LedgerError("pending payout proposals exceed bounty remaining awards")
+    if get_balance(session, reserve_account_for_bounty(bounty.id)) < (
+        bounty.reward_microunits * requested_awards
+    ):
+        raise LedgerError("pending payout proposals exceed bounty reserve")
+
+
+def _validate_close_bounty_proposal(session: Session, payload: dict[str, Any]) -> None:
+    bounty_id = int(payload["bounty_id"])
+    bounty = session.get(Bounty, bounty_id)
+    if bounty is None:
+        raise LedgerError("bounty not found")
+    if bounty.status != "open":
+        raise LedgerError("bounty is not open")
+    if _has_pending_close_bounty_proposal(session, bounty_id=bounty_id):
+        raise LedgerError("close_bounty proposal already pending")
+    if _has_pending_pay_bounty_proposal(session, bounty_id=bounty_id):
+        raise LedgerError("bounty has pending payout proposals")
+
+
 def _proposal_hash(action: str, payload: dict[str, Any]) -> str:
     body = canonical_json({"action": action, "payload": payload})
     return hashlib.sha256(body.encode()).hexdigest()
@@ -230,7 +392,14 @@ def propose_treasury_action(
         raise LedgerError("unsupported treasury action")
     clean_payload = _canonical_payload(clean_action, payload)
     if clean_action == "pay_bounty":
-        resolve_payout_account(session, str(clean_payload["to_account"]))
+        clean_payload["to_account"] = resolve_payout_account(
+            session, str(clean_payload["to_account"])
+        )
+        _validate_pay_bounty_proposal(session, clean_payload)
+    elif clean_action == "create_bounty":
+        _validate_create_bounty_proposal(session, clean_payload)
+    elif clean_action == "close_bounty":
+        _validate_close_bounty_proposal(session, clean_payload)
     now = _db_now()
     proposal = TreasuryProposal(
         action=clean_action,
@@ -306,14 +475,13 @@ def _execute_create_bounty(
 
 
 def _execute_pay_bounty(session: Session, payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
-    to_account = resolve_payout_account(session, str(payload["to_account"]))
     verifier_result = {"source": "treasury_proposal", "accepted_by": payload["accepted_by"]}
     if payload.get("note"):
         verifier_result["note"] = str(payload["note"])
     proof = pay_bounty(
         session,
         bounty_id=int(payload["bounty_id"]),
-        to_account=to_account,
+        to_account=str(payload["to_account"]),
         submission_url=str(payload["submission_url"]),
         accepted_by=str(payload["accepted_by"]),
         verifier_result=verifier_result,
@@ -404,10 +572,24 @@ def _machine_challenge_is_valid(
             )
             .limit(1)
         )
-        return existing_bounty is not None
+        return existing_bounty is not None or _has_pending_create_bounty_proposal(
+            session,
+            repo=str(payload["repo"]),
+            issue_number=int(payload["issue_number"]),
+            exclude_proposal_id=proposal.id,
+        )
     if challenge_type == "bounty_not_open" and proposal.action in {"pay_bounty", "close_bounty"}:
         bounty = session.get(Bounty, int(payload["bounty_id"]))
-        return bounty is None or bounty.status != "open"
+        bounty_id = int(payload["bounty_id"])
+        if bounty is None or bounty.status != "open":
+            return True
+        if proposal.action == "pay_bounty":
+            return _has_pending_close_bounty_proposal(
+                session, bounty_id=bounty_id, exclude_proposal_id=proposal.id
+            )
+        return _has_pending_close_bounty_proposal(
+            session, bounty_id=bounty_id, exclude_proposal_id=proposal.id
+        ) or _has_pending_pay_bounty_proposal(session, bounty_id=bounty_id)
     if challenge_type == "submission_already_paid" and proposal.action == "pay_bounty":
         existing_submission = session.scalar(
             select(Submission)
@@ -417,28 +599,28 @@ def _machine_challenge_is_valid(
             )
             .limit(1)
         )
-        if existing_submission is None:
-            return False
-        paid_proof = session.scalar(
-            select(Proof.hash)
-            .where(
-                Proof.kind == "bounty_payment",
-                Proof.submission_id == existing_submission.id,
-            )
-            .limit(1)
+        return existing_submission is not None or _has_pending_pay_bounty_proposal(
+            session,
+            bounty_id=int(payload["bounty_id"]),
+            submission_url=str(payload["submission_url"]),
+            exclude_proposal_id=proposal.id,
         )
-        return paid_proof is not None
     if challenge_type == "insufficient_reserve" and proposal.action == "pay_bounty":
         bounty = session.get(Bounty, int(payload["bounty_id"]))
         if bounty is None:
             return True
-        return (
-            get_balance(session, reserve_account_for_bounty(bounty.id)) < bounty.reward_microunits
+        pending_count = len(
+            _pending_pay_bounty_payloads(session, bounty.id, through_proposal_id=int(proposal.id))
         )
+        return bounty.awards_paid + pending_count > bounty.max_awards or get_balance(
+            session, reserve_account_for_bounty(bounty.id)
+        ) < (bounty.reward_microunits * pending_count)
     if challenge_type == "epoch_cap_exceeded" and proposal.action == "create_bounty":
-        reserved = parse_mrwk_amount(str(payload["reward_mrwk"])) * int(payload["max_awards"])
         return (
-            _epoch_reserved_microunits(session, _db_now()) + reserved
+            _epoch_reserved_microunits(session, _db_now())
+            + _pending_create_bounty_reserved_microunits(
+                session, through_proposal_id=int(proposal.id)
+            )
             > TREASURY_EPOCH_RESERVE_CAP_MICRO
         )
     return False

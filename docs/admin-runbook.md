@@ -40,6 +40,11 @@ users with at least one accepted MRWK award can submit proposal challenges.
 Machine-checkable valid challenges block execution. Subjective challenges are
 public notes and do not block by themselves.
 
+Proposal creation rejects known impossible or conflicting actions before they
+enter the public queue, including mismatched GitHub issue URLs, missing or
+non-open bounties, duplicate pending proposals, and pending reserve-cap
+overcommit.
+
 This governance surface makes normal app-path treasury movement public,
 delayed, capped, and challengeable. It does not prevent direct server or
 database bypass by an operator with production access.
@@ -93,11 +98,13 @@ curl -X POST https://api.mrwk.ltclab.site/api/v1/bounties/<id>/pay \
   }'
 ```
 
-`to_account` must be a registered `mrwk1...` wallet or `github:{login}`. The API
-returns a pending treasury proposal. After the delay, execute the proposal to
-record the ledger payment and public proof. If the same bounty/submission URL is
-already paid, the API returns `409` with `status: "already_paid"` and the
-existing proof links instead of queuing another proposal.
+`to_account` must be a registered `mrwk1...` wallet or `github:{login}`. GitHub
+targets are resolved once when the proposal is created; later wallet linking
+does not change the stored payout destination. The API returns a pending
+treasury proposal. After the delay, execute the proposal to record the ledger
+payment and public proof. If the same bounty/submission URL is already paid,
+the API returns `409` with `status: "already_paid"` and the existing proof links
+instead of queuing another proposal.
 
 Manual payout checklist:
 
