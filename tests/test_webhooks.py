@@ -193,11 +193,16 @@ def test_accepted_pr_label_pays_pr_author_for_colon_bounty_reference(
         )
 
     result = handle_github_webhook(sqlite_url, headers, body, "secret")
+    replay = handle_github_webhook(sqlite_url, headers, body, "secret")
 
     assert result["status"] == "paid"
+    assert replay == {"status": "duplicate", "processed_status": "paid"}
     with session_scope(sqlite_url) as session:
         assert get_balance(session, "github:contributor") == 150_000_000
         assert get_balance(session, "github:maintainer") == 0
+        event = session.get(WebhookEvent, "delivery-pr-colon-bounty-ref")
+        assert event is not None
+        assert event.processed_status == "paid"
 
 
 def test_accepted_issue_event_for_pull_request_does_not_pay_matching_bounty(
