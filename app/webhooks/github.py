@@ -280,7 +280,7 @@ def handle_github_webhook(
     if not isinstance(payload, dict):
         _record_event(database_url, delivery_id, event_type, hashed, "invalid_payload")
         return {"status": "invalid_payload"}
-    if event_type in {"issues", "pull_request", "label", "check_suite", "push"}:
+    if event_type in {"issues", "pull_request"}:
         return _handle_accepted_issue_label(
             database_url, payload, event_type, delivery_id, hashed, accepted_labelers
         )
