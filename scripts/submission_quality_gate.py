@@ -12,6 +12,10 @@ from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 BOUNTY_REF_RE = re.compile(r"\b(?:bounty|refs?|fixes|closes|claims?)\s+#(\d+)", re.IGNORECASE)
+LEADING_BOUNTY_REF_RE = re.compile(
+    r"^/?(?:bounty|refs?|fixes|closes|claims?)\s+#\d+\s*[:-]?\s*",
+    re.IGNORECASE,
+)
 EVIDENCE_RE = re.compile(
     r"\b(pytest|ruff|mypy|validation|verified|test evidence|checks? passed)\b",
     re.IGNORECASE,
@@ -148,6 +152,9 @@ def _maintainer_activity_check(
 def _title_from_submission(text: str) -> str:
     for line in text.splitlines():
         clean = line.strip(" -:\t")
+        if not clean:
+            continue
+        clean = LEADING_BOUNTY_REF_RE.sub("", clean).strip(" -:\t")
         if not clean:
             continue
         if SUMMARY_RE.search(clean) and len(clean.split()) <= 4:
