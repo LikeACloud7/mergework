@@ -422,6 +422,33 @@ def test_submission_quality_gate_warns_for_malformed_maintainer_age_threshold() 
     } in result["checks"]
 
 
+def test_submission_quality_gate_warns_for_none_maintainer_age_threshold() -> None:
+    result = evaluate_submission(
+        {
+            "submission_text": "Summary: add validation\n\nRefs #319\n\nValidation: pytest passed",
+            "now": "2026-05-26T12:00:00Z",
+            "bounties": [
+                {
+                    "number": 319,
+                    "state": "OPEN",
+                    "awards_remaining": 1,
+                    "last_maintainer_activity_at": "2026-05-25T12:00:00Z",
+                    "maintainer_activity_verified": True,
+                    "max_maintainer_age_days": None,
+                }
+            ],
+            "pull_requests": [],
+        }
+    )
+
+    assert result["status"] == "warn"
+    assert {
+        "name": "maintainer_activity",
+        "status": "warn",
+        "message": "recent maintainer activity for bounty #319 could not be verified",
+    } in result["checks"]
+
+
 def test_submission_quality_gate_cli_returns_failure_exit(capsys, tmp_path) -> None:
     fixture = {
         "submission_text": "Summary: missing reference\n\nValidation: pytest passed",
