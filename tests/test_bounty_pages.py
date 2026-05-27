@@ -180,6 +180,12 @@ def test_bounties_page_honors_limit_filter(sqlite_url: str) -> None:
     invalid_limit = client.get("/bounties?limit=0")
     assert invalid_limit.status_code == 422
 
+    max_limit = client.get("/bounties?limit=200")
+    assert max_limit.status_code == 200
+
+    too_large_limit = client.get("/bounties?limit=201")
+    assert too_large_limit.status_code == 422
+
 
 def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) -> None:
     create_schema(sqlite_url)
