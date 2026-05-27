@@ -124,6 +124,7 @@ def test_bounty_urls_reject_non_public_hosts(sqlite_url: str) -> None:
         for issue_number, issue_url in enumerate(
             (
                 "https://localhost/ramimbo/mergework/issues/21",
+                "https://internal/ramimbo/mergework/issues/21",
                 "https://127.0.0.1/ramimbo/mergework/issues/21",
                 "https://10.0.0.5/ramimbo/mergework/issues/21",
                 "https://100.64.0.1/ramimbo/mergework/issues/21",
