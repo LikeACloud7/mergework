@@ -138,6 +138,11 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
                 query = query.where(text_filter)
             sort = normalize_bounty_sort(optional_clean_str_arg("sort"))
             limit = list_limit_arg()
+            if sort == "newest":
+                newest_bounties = session.scalars(
+                    query.order_by(Bounty.id.desc()).limit(limit)
+                ).all()
+                return json.dumps([bounty_to_dict(bounty) for bounty in newest_bounties])
             bounties = session.scalars(query.order_by(Bounty.id.desc())).all()
             sorted_bounties = sort_bounties([bounty_to_dict(bounty) for bounty in bounties], sort)
             return json.dumps(sorted_bounties[:limit])

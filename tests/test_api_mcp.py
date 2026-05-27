@@ -495,6 +495,18 @@ def test_mcp_list_bounties_honors_sort_argument(sqlite_url: str) -> None:
     payload = json.loads(result["result"]["content"][0]["text"])
     assert [item["id"] for item in payload] == [large_bounty.id, small_bounty.id]
 
+    limited = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {"name": "list_bounties", "arguments": {"sort": "reward", "limit": 1}},
+        },
+    ).json()
+    limited_payload = json.loads(limited["result"]["content"][0]["text"])
+    assert [item["id"] for item in limited_payload] == [large_bounty.id]
+
 
 @pytest.mark.parametrize(
     ("arguments", "request_id"),
@@ -504,6 +516,7 @@ def test_mcp_list_bounties_honors_sort_argument(sqlite_url: str) -> None:
         ({"q": 284}, 33),
         ({"limit": 0}, 34),
         ({"limit": 101}, 35),
+        ({"sort": "invalid"}, 36),
     ],
 )
 def test_mcp_list_bounties_rejects_invalid_filters(
