@@ -227,6 +227,8 @@ def test_activity_page_renders_empty_and_paid_states(sqlite_url: str) -> None:
     assert "github:bob" in paid.text
     assert "75 MRWK" in paid.text
     assert 'role="search"' in paid.text
+    assert 'aria-label="Activity inspection links"' in paid.text
+    assert 'href="/api/v1/activity">View JSON activity</a>' in paid.text
     assert 'name="q"' in paid.text
     assert f'href="/bounties/{bounty.id}">Bounty #{bounty.id}</a>' in paid.text
     assert "Latest bounty" in paid.text
@@ -241,6 +243,7 @@ def test_activity_page_renders_empty_and_paid_states(sqlite_url: str) -> None:
     assert filtered.status_code == 200
     assert 'value="bob"' in filtered.text
     assert "Showing accepted work matching “bob”." in filtered.text
+    assert 'href="/api/v1/activity?q=bob">View JSON activity</a>' in filtered.text
     assert 'href="/activity">Clear</a>' in filtered.text
     assert "No contributors match this search." not in filtered.text
     assert "No accepted work matches this search." not in filtered.text
