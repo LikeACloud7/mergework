@@ -62,6 +62,70 @@ Use the smallest template that makes the claim reviewable. Delete fields that do
 not apply, but keep the evidence specific enough that a maintainer can reproduce
 the work without reading unrelated context.
 
+## Agent-Readable Bounty Post Template
+
+Maintainers should post MRWK bounties with stable headings so humans, GitHub
+search, public API clients, and MCP agents can extract the same scope and reward
+facts without guessing. Put the amount in the issue title and repeat it in the
+body.
+
+Issue title:
+
+```text
+MRWK bounty: <amount> MRWK - <short scope>
+```
+
+Issue body:
+
+```text
+## MRWK Bounty
+
+Reward: `<amount> MRWK per accepted award`
+Max awards: `<number>`
+
+## Work Needed
+
+Describe the useful accepted work in concrete, bounded terms.
+
+## Acceptance Criteria
+
+- Link the expected issue, PR, review, report, or proof surface.
+- State the files, routes, APIs, docs, or behaviors that must be changed or checked.
+- Explain what must be true before `mrwk:accepted` or an admin payout is recorded.
+
+## How To Submit
+
+Open a focused PR or public comment that links this issue with
+`Bounty #<issue number>` or `Refs #<issue number>`.
+
+## Evidence or Tests Required
+
+- List the exact commands, URLs, screenshots, logs, or reproduction steps needed.
+- Include expected and observed behavior for reviews, smoke checks, and bug reports.
+- Keep private security details, secrets, wallet recovery data, and admin tokens out
+  of public artifacts.
+
+## Out of Scope
+
+- List duplicate, broad rewrite, typo-only, style-only, speculative tokenomics,
+  private-security-detail, price, liquidity, bridge, exchange, cash-out, or unrelated
+  changes that do not qualify.
+
+## Duplicate and Stale Work Rules
+
+- Duplicate work is judged by the first useful, reviewable submission that matches
+  the bounty criteria.
+- Stale claims may be released or ignored when they do not include reviewable
+  evidence or no longer match current repository behavior.
+```
+
+Agents need these fields because GitHub issue search, the public bounty API, and
+MCP bounty tools expose title, issue URL, `reward_mrwk`, `max_awards`,
+`awards_remaining`, labels, and public comments. Stable headings let agents match
+the human bounty text to those machine-readable fields, avoid duplicate claims,
+and produce focused evidence without inventing payout, price, exchange, liquidity,
+bridge, or acceptance claims.
+
 PR or fix claim:
 
 ```text
