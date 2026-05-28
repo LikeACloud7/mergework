@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import subprocess
 
+import pytest
+
 from scripts import submission_quality_gate
 from scripts.submission_quality_gate import evaluate_submission, main
 
@@ -106,11 +108,12 @@ def test_submission_quality_gate_accepts_github_linking_keywords() -> None:
         assert result["bounty_reference"] == 319
 
 
-def test_submission_quality_gate_rejects_linking_keyword_issue_suffix() -> None:
+@pytest.mark.parametrize("reference", ("Fixes #319abc", "Fixes #319_abc", "Fixes #319-abc"))
+def test_submission_quality_gate_rejects_linking_keyword_issue_suffix(reference: str) -> None:
     result = evaluate_submission(
         {
             "submission_text": (
-                "Summary: add validation\n\nFixes #319abc\n\nValidation: pytest passed"
+                f"Summary: add validation\n\n{reference}\n\nValidation: pytest passed"
             ),
             "bounties": [{"number": 319, "state": "OPEN", "awards_remaining": 1}],
             "pull_requests": [],

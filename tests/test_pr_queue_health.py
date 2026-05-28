@@ -166,7 +166,8 @@ def test_pr_queue_health_accepts_github_linking_keywords() -> None:
     assert report["missing_bounty_references"] == []
 
 
-def test_pr_queue_health_rejects_linking_keyword_issue_suffix() -> None:
+@pytest.mark.parametrize("reference", ("Fixes #310abc", "Fixes #310_abc", "Fixes #310-abc"))
+def test_pr_queue_health_rejects_linking_keyword_issue_suffix(reference: str) -> None:
     report = analyze_queue(
         {
             "bounties": [{"number": 310, "state": "OPEN", "awards_remaining": 1}],
@@ -174,7 +175,7 @@ def test_pr_queue_health_rejects_linking_keyword_issue_suffix() -> None:
                 {
                     "number": 8,
                     "title": "Harden bounty queue checks",
-                    "body": "Fixes #310abc",
+                    "body": reference,
                     "merge_state": "clean",
                     "labels": [],
                 }
