@@ -44,7 +44,7 @@
   </div>
   {% if accepted_summary.latest_proof_hash %}
   {% set latest_submission_url = safe_public_url(accepted_summary.latest_submission_url) %}
-  <p>
+  <p class="reference-cell">
     Latest accepted work:
     {% if latest_submission_url %}
     <a href="{{ latest_submission_url }}">{{ accepted_summary.latest_submission_url | replace("https://github.com/", "") }}</a>

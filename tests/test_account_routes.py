@@ -92,6 +92,7 @@ def test_registered_account_routes_preserve_api_and_page_shapes(sqlite_url: str)
     assert page_response.status_code == 200
     assert "github:bob" in page_response.text
     assert "25 MRWK" in page_response.text
+    assert '<p class="reference-cell">' in page_response.text
     assert f'href="/proofs/{proof.hash}"' in page_response.text
 
 
