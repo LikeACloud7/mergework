@@ -197,6 +197,8 @@ reference, intended files or surfaces, expected PR size, test plan, evidence,
 and out-of-scope notes. If the diff grows beyond the expected size, split it or
 explain why the larger review remains focused.
 
-Paid bounty links are tracked in
-[docs/paid-bounties.md](paid-bounties.md) and the public
+Paid bounty records are proof-backed in the public activity feed, the activity
+API, per-bounty accepted awards, ledger entries, and proof pages. The
+[paid bounty guide](paid-bounties.md) points to those authoritative records.
+Maintainers may post short human-readable payment summaries in the public
 [GitHub discussion](https://github.com/ramimbo/mergework/discussions/16).
