@@ -557,6 +557,15 @@ def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) ->
     assert "Main smoke wallet" in main_search
     assert "Funded smoke wallet" not in main_search
     assert "alice-smoke" in github_search
+    assert 'href="/accounts/github:alice-smoke">alice-smoke</a>' in wallets
+    assert 'href="/accounts/github:alice-smoke">alice-smoke</a>' in github_search
+    funded_row_start = wallets.index(
+        f'<a href="/wallets/{funded_address}"><code>{funded_address}</code></a>'
+    )
+    funded_row = wallets[funded_row_start : wallets.index("</tr>", funded_row_start)]
+    assert "<td>Funded smoke wallet</td>" in funded_row
+    assert "<td>\n          -\n        </td>" in funded_row
+    assert "/accounts/github:" not in funded_row
     assert "No registered wallets match this search." in no_wallet_match
     assert "To claim GitHub bounty balance" in detail
     assert "No activity yet" in detail
