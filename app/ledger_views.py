@@ -50,3 +50,15 @@ def account_ledger_transactions(
         query = query.where(LedgerEntry.entry_type == entry_type)
     entries = session.scalars(query.order_by(LedgerEntry.sequence.desc()).limit(limit)).all()
     return ledger_entries_to_dicts(session, entries)
+
+
+def account_ledger_transaction_types(session: Session, account: str) -> list[str]:
+    return [
+        str(entry_type)
+        for entry_type in session.scalars(
+            select(LedgerEntry.entry_type)
+            .where(or_(LedgerEntry.from_account == account, LedgerEntry.to_account == account))
+            .distinct()
+            .order_by(LedgerEntry.entry_type.asc())
+        ).all()
+    ]
