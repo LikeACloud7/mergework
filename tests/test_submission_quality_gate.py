@@ -294,6 +294,42 @@ def test_submission_quality_gate_warns_for_similar_open_pr() -> None:
     ]
 
 
+def test_submission_quality_gate_matches_similar_pr_when_title_starts_with_ref() -> None:
+    result = evaluate_submission(
+        {
+            "submission_text": """
+            Refs #319: Add agent submission quality gate.
+
+            Validation: pytest passed.
+            """,
+            "bounties": [{"number": 319, "state": "OPEN", "awards_remaining": 1}],
+            "pull_requests": [
+                {
+                    "number": 12,
+                    "title": "Add agent submission quality gate",
+                    "body": "Refs #319",
+                    "state": "OPEN",
+                    "url": "https://github.com/ramimbo/mergework/pull/12",
+                }
+            ],
+        }
+    )
+
+    assert result["status"] == "warn"
+    assert {
+        "name": "similar_open_pr",
+        "status": "warn",
+        "message": "similar open PRs already reference this bounty",
+    } in result["checks"]
+    assert result["similar_open_prs"] == [
+        {
+            "number": 12,
+            "title": "Add agent submission quality gate",
+            "url": "https://github.com/ramimbo/mergework/pull/12",
+        }
+    ]
+
+
 def test_submission_quality_gate_warns_for_multiple_bounty_references() -> None:
     result = evaluate_submission(
         {
