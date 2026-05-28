@@ -562,9 +562,33 @@ def test_admin_payout_api_returns_existing_proof_for_duplicate_submission(
     )
 
     assert final.status_code == 200
-    assert final.json()["bounty_status"] == "paid"
-    assert final.json()["awards_paid"] == 2
-    assert final.json()["awards_remaining"] == 0
+    final_body = final.json()
+    assert final_body["bounty_status"] == "paid"
+    assert final_body["awards_paid"] == 2
+    assert final_body["awards_remaining"] == 0
+
+    paid_duplicate = client.post(
+        f"/api/v1/bounties/{bounty_id}/pay",
+        headers=headers,
+        json={
+            "to_account": "github:carol",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/284",
+            "accepted_by": "maintainer",
+        },
+    )
+
+    assert paid_duplicate.status_code == 409
+    assert paid_duplicate.json()["status"] == "already_paid"
+    assert paid_duplicate.json()["proof_hash"] == final_body["proof_hash"]
+    assert paid_duplicate.json()["ledger_sequence"] == final_body["ledger_sequence"]
+    assert paid_duplicate.json()["submission_id"] == final_body["submission_id"]
+    with session_scope(sqlite_url) as session:
+        payments = session.scalars(
+            select(LedgerEntry).where(LedgerEntry.entry_type == "bounty_payment")
+        ).all()
+        assert len(payments) == 2
+        assert get_balance(session, "github:bob") == 15_000_000
+        assert get_balance(session, "github:carol") == 0
 
 
 def test_admin_payout_reconciliation_api_reports_missing_and_duplicate_evidence(

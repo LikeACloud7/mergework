@@ -652,6 +652,14 @@ def pay_bounty(
     bounty = session.get(Bounty, bounty_id)
     if bounty is None:
         raise LedgerError("bounty not found")
+    clean_submission_url = validate_public_url(submission_url)
+    existing_submission = session.scalar(
+        select(Submission)
+        .where(Submission.bounty_id == bounty.id, Submission.url == clean_submission_url)
+        .limit(1)
+    )
+    if existing_submission is not None:
+        raise LedgerError("submission already paid")
     if bounty.awards_paid >= bounty.max_awards:
         raise LedgerError("bounty already paid")
     if bounty.status != "open":
@@ -661,14 +669,6 @@ def pay_bounty(
     if "accepted_by" in clean_verifier_result:
         clean_verifier_result["accepted_by"] = clean_accepted_by
     clean_to_account = _clean_required_text(to_account, "to_account", 128)
-    clean_submission_url = validate_public_url(submission_url)
-    existing_submission = session.scalar(
-        select(Submission)
-        .where(Submission.bounty_id == bounty.id, Submission.url == clean_submission_url)
-        .limit(1)
-    )
-    if existing_submission is not None:
-        raise LedgerError("submission already paid")
     reserve_account = reserve_account_for_bounty(bounty.id)
     if get_balance(session, reserve_account) < bounty.reward_microunits:
         raise LedgerError("bounty reserve balance too low")
