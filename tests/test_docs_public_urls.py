@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from scripts.docs_smoke import REQUIRED, _template_field_is_required
@@ -29,7 +30,7 @@ def test_paid_bounties_points_to_authoritative_payment_records() -> None:
     assert "GET /api/v1/bounties/{id}" in paid
     assert "GET /api/v1/proofs/{proof_hash}" in paid
     assert "https://github.com/ramimbo/mergework/discussions/16" in paid
-    assert "| 2026-" not in paid
+    assert not re.search(r"(?m)^\|\s*20\d{2}-\d{2}-\d{2}\b", paid)
 
 
 def test_api_examples_document_internal_bounty_ids() -> None:
