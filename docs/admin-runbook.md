@@ -128,6 +128,47 @@ post comments. It reports missing bounty references, closed or exhausted bounty
 references, dirty or unknown merge state, `mrwk:needs-info`, and likely duplicate
 PR scope within the same bounty issue.
 
+### Claim Inventory
+
+Use the claim-inventory report when a busy bounty round needs a public,
+read-only reconciliation pass across issue comments, PR comments, PR reviews,
+and already-paid public proof data:
+
+```bash
+python scripts/claim_inventory.py --repo ramimbo/mergework --format markdown
+```
+
+The live command uses read-only `gh issue list/view` and `gh pr list/view`
+calls plus public MergeWork API reads. It does not write GitHub comments, labels,
+issue edits, admin-token API calls, local database queries, payout actions, or
+private deployment reads. Use `--api-host` to point at another public API host
+when reviewing staging-like public data:
+
+```bash
+python scripts/claim_inventory.py \
+  --repo ramimbo/mergework \
+  --api-host https://api.mrwk.ltclab.site \
+  --format json
+```
+
+For offline payout reviews, save fixture data and run:
+
+```bash
+python scripts/claim_inventory.py --input claim-inventory.json --format markdown
+```
+
+Each output row includes `source_url`, `bounty_issue`, internal `bounty_id`
+when known, `claimant`, `source_type`, `duplicate_key`, `likely_status`, and a
+`proof_url` when the public activity/proof data already paid that source. The
+`likely_status` enum is:
+
+- `already_paid`: public proof data maps the source URL to an existing proof.
+- `unpaid_candidate`: the source looks like a live unpaid claim for a known bounty.
+- `duplicate_candidate`: another source shares the same bounty/source duplicate key.
+- `missing_bounty_ref`: the source looks claim-like but has no bounty reference.
+- `unknown_bounty`: the source references a bounty absent from the public API/fixture.
+- `ignored_or_unclear`: the source is public but not clearly actionable.
+
 For offline checks, save fixture data and run:
 
 ```bash
