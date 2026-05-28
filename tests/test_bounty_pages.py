@@ -454,6 +454,21 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert "Bounty Payment" in ledger_entry_page.text
     assert "Bounty scan status" in ledger_entry_page.text
     assert "Award paid" in ledger_entry_page.text
+    assert 'aria-label="Ledger entry navigation"' in ledger_entry_page.text
+    assert 'href="/ledger">All ledger entries</a>' in ledger_entry_page.text
+    assert f'href="/ledger/{payment_sequence - 1}">Previous entry</a>' in ledger_entry_page.text
+    assert f'href="/api/v1/ledger/{payment_sequence}">Entry JSON</a>' in ledger_entry_page.text
+    assert f'href="/ledger/{payment_sequence + 1}">Next entry</a>' in ledger_entry_page.text
+    genesis_page = client.get("/ledger/1")
+    assert genesis_page.status_code == 200
+    assert 'href="/ledger">All ledger entries</a>' in genesis_page.text
+    assert 'href="/ledger/0">Previous entry</a>' not in genesis_page.text
+    assert 'href="/ledger/2">Next entry</a>' in genesis_page.text
+    latest_sequence = client.get("/api/v1/ledger?limit=1").json()[0]["sequence"]
+    latest_page = client.get(f"/ledger/{latest_sequence}")
+    assert latest_page.status_code == 200
+    assert f'href="/ledger/{latest_sequence - 1}">Previous entry</a>' in latest_page.text
+    assert f'href="/ledger/{latest_sequence + 1}">Next entry</a>' not in latest_page.text
     assert client.get("/api/v1/ledger/0").status_code == 400
     assert client.get("/ledger/0").status_code == 400
 

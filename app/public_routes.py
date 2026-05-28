@@ -77,6 +77,25 @@ def wallet_page_context(
     }
 
 
+def ledger_entry_page_context(
+    sequence: int, api_ledger_entry: Callable[[int], dict[str, Any]]
+) -> dict[str, Any]:
+    entry = api_ledger_entry(sequence)
+    previous_sequence = entry["sequence"] - 1 if entry["sequence"] > 1 else None
+    next_sequence = entry["sequence"] + 1
+    try:
+        api_ledger_entry(next_sequence)
+    except HTTPException as exc:
+        if exc.status_code != 404:
+            raise
+        next_sequence = None
+    return {
+        "entry": entry,
+        "previous_sequence": previous_sequence,
+        "next_sequence": next_sequence,
+    }
+
+
 def register_public_routes(
     app: FastAPI,
     *,
@@ -115,7 +134,7 @@ def register_public_routes(
     @app.get("/ledger/{sequence}", response_class=HTMLResponse)
     def ledger_entry_page(request: Request, sequence: int) -> HTMLResponse:
         return templates.TemplateResponse(
-            request, "ledger_entry.html", {"entry": api_ledger_entry(sequence)}
+            request, "ledger_entry.html", ledger_entry_page_context(sequence, api_ledger_entry)
         )
 
     @app.get("/wallets", response_class=HTMLResponse)
