@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.db import create_schema, session_scope
 from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
+from app.models import Proof
 
 
 def test_bounties_page_renders_and_filters_by_status(sqlite_url: str) -> None:
@@ -363,6 +364,44 @@ def test_bounty_detail_shows_accepted_award_history(sqlite_url: str) -> None:
     assert f'href="/proofs/{second_proof.hash}"' in page.text
     assert f'href="/ledger/{second_proof.ledger_sequence}"' in page.text
     assert "/accounts/github:bob" in page.text
+
+
+def test_bounty_detail_skips_malformed_award_proof_payloads(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=165,
+            issue_url="https://github.com/ramimbo/mergework/issues/165",
+            title="Malformed award proof payload",
+            reward_mrwk="100",
+            acceptance="Bounty details should survive malformed stored proof JSON.",
+        )
+        proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/203",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        proof_row = session.get(Proof, proof.hash)
+        assert proof_row is not None
+        proof_row.public_json = "{"
+        bounty_id = bounty.id
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    api_response = client.get(f"/api/v1/bounties/{bounty_id}")
+    page = client.get(f"/bounties/{bounty_id}")
+
+    assert api_response.status_code == 200
+    assert api_response.json()["accepted_awards"] == []
+    assert page.status_code == 200
+    assert "Malformed award proof payload" in page.text
+    assert "No accepted work has been paid for this bounty yet." in page.text
 
 
 def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) -> None:
