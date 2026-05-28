@@ -11,11 +11,8 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
-LINKED_BOUNTY_VERBS = r"bounty|claims?|close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs?|references?"
-BOUNTY_REF_RE = re.compile(
-    rf"\b(?:{LINKED_BOUNTY_VERBS})\s+#(\d+)(?![A-Za-z0-9_-])",
-    re.IGNORECASE,
-)
+from scripts.bounty_refs import BOUNTY_REF_RE
+
 EVIDENCE_RE = re.compile(
     r"\b(pytest|ruff|mypy|validation|verified|test evidence|checks? passed)\b",
     re.IGNORECASE,

@@ -130,6 +130,8 @@ def test_pr_queue_health_accepts_claim_command_reference() -> None:
 def test_pr_queue_health_accepts_github_linking_keywords() -> None:
     references = (
         "Bounty #310",
+        "Claim #310",
+        "Claims #310",
         "Ref #310",
         "Refs #310",
         "Reference #310",

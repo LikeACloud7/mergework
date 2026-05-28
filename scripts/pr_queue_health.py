@@ -8,11 +8,8 @@ import sys
 from collections import defaultdict
 from typing import Any
 
-LINKED_BOUNTY_VERBS = r"bounty|claims?|close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs?|references?"
-BOUNTY_REF_RE = re.compile(
-    rf"\b(?:{LINKED_BOUNTY_VERBS})\s+#(\d+)(?![A-Za-z0-9_-])",
-    re.IGNORECASE,
-)
+from scripts.bounty_refs import BOUNTY_REF_RE
+
 NOISY_TITLE_PREFIX_RE = re.compile(r"^\s*(?:\[[^\]]+\]\s*)+")
 UNSTABLE_MERGE_STATES = {"blocked", "conflicting", "dirty", "unknown", "unstable"}
 GH_TIMEOUT_SECONDS = 30

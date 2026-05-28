@@ -69,6 +69,8 @@ def test_submission_quality_gate_accepts_claim_command_reference() -> None:
 def test_submission_quality_gate_accepts_github_linking_keywords() -> None:
     references = (
         "Bounty #319",
+        "Claim #319",
+        "Claims #319",
         "Ref #319",
         "Refs #319",
         "Reference #319",
