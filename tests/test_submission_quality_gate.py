@@ -66,6 +66,29 @@ def test_submission_quality_gate_accepts_claim_command_reference() -> None:
     } in result["checks"]
 
 
+def test_submission_quality_gate_ignores_oversized_numeric_bounty_refs() -> None:
+    oversized_ref = "9" * 5000
+
+    result = evaluate_submission(
+        {
+            "submission_text": (
+                f"Summary: add validation\n\nRefs #{oversized_ref}\nRefs #319\n\n"
+                "Validation: pytest passed"
+            ),
+            "bounties": [{"number": 319, "state": "OPEN", "awards_remaining": 1}],
+            "pull_requests": [],
+        }
+    )
+
+    assert result["status"] == "pass"
+    assert result["bounty_reference"] == 319
+    assert {
+        "name": "bounty_reference",
+        "status": "pass",
+        "message": "found bounty reference #319",
+    } in result["checks"]
+
+
 def test_submission_quality_gate_fails_missing_reference() -> None:
     result = evaluate_submission(
         {
@@ -262,6 +285,42 @@ def test_submission_quality_gate_warns_for_similar_open_pr() -> None:
     )
 
     assert result["status"] == "warn"
+    assert result["similar_open_prs"] == [
+        {
+            "number": 12,
+            "title": "Add agent submission quality gate",
+            "url": "https://github.com/ramimbo/mergework/pull/12",
+        }
+    ]
+
+
+def test_submission_quality_gate_matches_similar_pr_when_title_starts_with_ref() -> None:
+    result = evaluate_submission(
+        {
+            "submission_text": """
+            Refs #319: Add agent submission quality gate.
+
+            Validation: pytest passed.
+            """,
+            "bounties": [{"number": 319, "state": "OPEN", "awards_remaining": 1}],
+            "pull_requests": [
+                {
+                    "number": 12,
+                    "title": "Add agent submission quality gate",
+                    "body": "Refs #319",
+                    "state": "OPEN",
+                    "url": "https://github.com/ramimbo/mergework/pull/12",
+                }
+            ],
+        }
+    )
+
+    assert result["status"] == "warn"
+    assert {
+        "name": "similar_open_pr",
+        "status": "warn",
+        "message": "similar open PRs already reference this bounty",
+    } in result["checks"]
     assert result["similar_open_prs"] == [
         {
             "number": 12,

@@ -34,6 +34,7 @@ from app.models import (
     TreasuryProposal,
     utc_now,
 )
+from app.path_params import SQLITE_INTEGER_MAX
 from app.serializers import bounty_to_dict
 
 TREASURY_PROPOSAL_DELAY = timedelta(hours=24)
@@ -112,7 +113,7 @@ def _canonical_payload(action: str, payload: dict[str, Any]) -> dict[str, Any]:
             raise LedgerError("issue_number must be positive")
         if max_awards <= 0:
             raise LedgerError("max_awards must be positive")
-        if issue_number > 2**63 - 1:
+        if issue_number > SQLITE_INTEGER_MAX:
             raise LedgerError("issue_number is too large")
         if max_awards > 1_000:
             raise LedgerError("max_awards is too large")
@@ -135,6 +136,8 @@ def _canonical_payload(action: str, payload: dict[str, Any]) -> dict[str, Any]:
         bounty_id = _payload_int(_required_payload_value(payload, "bounty_id"), "bounty_id")
         if bounty_id <= 0:
             raise LedgerError("bounty id must be positive")
+        if bounty_id > SQLITE_INTEGER_MAX:
+            raise LedgerError("bounty id is too large")
         clean: dict[str, Any] = {
             "bounty_id": bounty_id,
             "to_account": _clean_string(
@@ -159,6 +162,8 @@ def _canonical_payload(action: str, payload: dict[str, Any]) -> dict[str, Any]:
         bounty_id = _payload_int(_required_payload_value(payload, "bounty_id"), "bounty_id")
         if bounty_id <= 0:
             raise LedgerError("bounty id must be positive")
+        if bounty_id > SQLITE_INTEGER_MAX:
+            raise LedgerError("bounty id is too large")
         reference = _optional_string(payload.get("reference"), "reference", 500)
         clean = {
             "bounty_id": bounty_id,
@@ -486,7 +491,19 @@ def _execute_pay_bounty(session: Session, payload: dict[str, Any]) -> tuple[dict
         accepted_by=str(payload["accepted_by"]),
         verifier_result=verifier_result,
     )
-    return {"payout": _payout_response_from_proof(proof)}, proof.ledger_sequence
+    bounty = session.get(Bounty, int(payload["bounty_id"]))
+    if bounty is None:
+        raise LedgerError("bounty not found")
+    bounty_state = bounty_to_dict(bounty)
+    payout_response = _payout_response_from_proof(proof)
+    payout_response.update(
+        {
+            "bounty_status": bounty_state["status"],
+            "awards_paid": bounty_state["awards_paid"],
+            "awards_remaining": bounty_state["awards_remaining"],
+        }
+    )
+    return {"payout": payout_response}, proof.ledger_sequence
 
 
 def _execute_close_bounty(
@@ -589,7 +606,7 @@ def _machine_challenge_is_valid(
             )
         return _has_pending_close_bounty_proposal(
             session, bounty_id=bounty_id, exclude_proposal_id=proposal.id
-        ) or _has_pending_pay_bounty_proposal(session, bounty_id=bounty_id)
+        )
     if challenge_type == "submission_already_paid" and proposal.action == "pay_bounty":
         existing_submission = session.scalar(
             select(Submission)

@@ -324,7 +324,7 @@ def test_admin_bounty_api_rejects_duplicate_pending_repo_issue_proposal(
     )
 
     assert first.status_code == 200
-    assert duplicate.status_code == 400
+    assert duplicate.status_code == 409
     assert duplicate.json()["detail"] == "create_bounty proposal already pending"
     first_execution = _execute_treasury_proposal(client, sqlite_url, first.json()["id"])
 
@@ -600,12 +600,39 @@ def test_admin_payout_api_returns_existing_proof_for_duplicate_submission(
     final_execution = _execute_treasury_proposal(client, sqlite_url, final.json()["id"])
 
     assert final_execution.status_code == 200
+    final_body = final_execution.json()["result"]["payout"]
+    assert final_body["status"] == "paid"
+    assert final_body["bounty_status"] == "paid"
+    assert final_body["awards_paid"] == 2
+    assert final_body["awards_remaining"] == 0
+
+    paid_duplicate = client.post(
+        f"/api/v1/bounties/{bounty_id}/pay",
+        headers=headers,
+        json={
+            "to_account": "github:carol",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/284",
+            "accepted_by": "maintainer",
+        },
+    )
+
+    assert paid_duplicate.status_code == 409
+    assert paid_duplicate.json()["status"] == "already_paid"
+    assert paid_duplicate.json()["proof_hash"] == final_body["proof_hash"]
+    assert paid_duplicate.json()["ledger_sequence"] == final_body["ledger_sequence"]
+    assert paid_duplicate.json()["submission_id"] == final_body["submission_id"]
     with session_scope(sqlite_url) as session:
         bounty = session.get(Bounty, bounty_id)
+        payments = session.scalars(
+            select(LedgerEntry).where(LedgerEntry.entry_type == "bounty_payment")
+        ).all()
         assert bounty is not None
         assert bounty.status == "paid"
         assert bounty.awards_paid == 2
         assert bounty.max_awards - bounty.awards_paid == 0
+        assert len(payments) == 2
+        assert get_balance(session, "github:bob") == 15_000_000
+        assert get_balance(session, "github:carol") == 0
 
 
 def test_admin_payout_reconciliation_api_reports_missing_and_duplicate_evidence(
@@ -936,6 +963,12 @@ def test_amount_parser_rejects_non_decimal_notation() -> None:
     assert parse_mrwk_amount("1.5") == 1_500_000
     with pytest.raises(LedgerError, match="amount must be positive"):
         parse_mrwk_amount("-1")
+
+
+@pytest.mark.parametrize("amount", ("1.0000000", "0.0000010", "0.1000000"))
+def test_amount_parser_rejects_more_than_six_decimal_places(amount: str) -> None:
+    with pytest.raises(LedgerError, match="MRWK supports at most 6 decimal places"):
+        parse_mrwk_amount(amount)
 
 
 def test_amount_parser_rejects_values_above_fixed_supply() -> None:

@@ -12,6 +12,10 @@ from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 BOUNTY_REF_RE = re.compile(r"\b(?:bounty|refs?|fixes|closes|claims?)\s+#(\d+)", re.IGNORECASE)
+LEADING_BOUNTY_REF_RE = re.compile(
+    r"^/?(?:bounty|refs?|fixes|closes|claims?)\s+#\d+\s*[:-]?\s*",
+    re.IGNORECASE,
+)
 EVIDENCE_RE = re.compile(
     r"\b(pytest|ruff|mypy|validation|verified|test evidence|checks? passed)\b",
     re.IGNORECASE,
@@ -21,6 +25,7 @@ GH_TIMEOUT_SECONDS = 30
 DEFAULT_API_HOST = "https://api.mrwk.ltclab.site"
 DEFAULT_MAX_MAINTAINER_AGE_DAYS = 14
 MAINTAINER_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
+MAX_BOUNTY_REF = 2**63 - 1
 
 
 def _check(name: str, status: str, message: str) -> dict[str, str]:
@@ -31,7 +36,12 @@ def _bounty_refs(text: str) -> list[int]:
     refs: list[int] = []
     seen: set[int] = set()
     for match in BOUNTY_REF_RE.findall(text):
-        ref = int(match)
+        try:
+            ref = int(match)
+        except ValueError:
+            continue
+        if ref > MAX_BOUNTY_REF:
+            continue
         if ref in seen:
             continue
         seen.add(ref)
@@ -148,6 +158,9 @@ def _maintainer_activity_check(
 def _title_from_submission(text: str) -> str:
     for line in text.splitlines():
         clean = line.strip(" -:\t")
+        if not clean:
+            continue
+        clean = LEADING_BOUNTY_REF_RE.sub("", clean).strip(" -:\t")
         if not clean:
             continue
         if SUMMARY_RE.search(clean) and len(clean.split()) <= 4:

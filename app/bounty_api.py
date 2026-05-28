@@ -69,7 +69,14 @@ def _ledger_http_error(exc: LedgerError) -> HTTPException:
     detail = str(exc)
     if detail == "bounty not found":
         return HTTPException(status_code=404, detail=detail)
-    if detail == "submission already paid":
+    if detail in {
+        "submission already paid",
+        "create_bounty proposal already pending",
+        "pay_bounty proposal already pending for submission",
+        "close_bounty proposal already pending",
+        "bounty has pending close proposal",
+        "bounty has pending payout proposals",
+    }:
         return HTTPException(status_code=409, detail=detail)
     return HTTPException(status_code=400, detail=detail)
 

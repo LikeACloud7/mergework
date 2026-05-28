@@ -127,6 +127,55 @@ def test_pr_queue_health_accepts_claim_command_reference() -> None:
     assert report["missing_bounty_references"] == []
 
 
+def test_pr_queue_health_accepts_backticked_bounty_references() -> None:
+    report = analyze_queue(
+        {
+            "bounties": [{"number": 310, "state": "OPEN", "awards_remaining": 1}],
+            "pull_requests": [
+                {
+                    "number": 8,
+                    "title": "Harden bounty submission checks",
+                    "body": "Refs `#310`",
+                    "merge_state": "clean",
+                    "labels": [],
+                },
+                {
+                    "number": 9,
+                    "title": "Document claim command",
+                    "body": "/claim `#310`",
+                    "merge_state": "clean",
+                    "labels": [],
+                },
+            ],
+        }
+    )
+
+    assert report["summary"]["pull_requests"] == 2
+    assert report["summary"]["missing_bounty_references"] == 0
+    assert report["missing_bounty_references"] == []
+
+
+def test_pr_queue_health_ignores_oversized_numeric_bounty_refs() -> None:
+    oversized_ref = "9" * 5000
+    report = analyze_queue(
+        {
+            "bounties": [{"number": 406, "state": "OPEN", "awards_remaining": 1}],
+            "pull_requests": [
+                {
+                    "number": 41,
+                    "title": "Bound bounty references",
+                    "body": f"Refs #{oversized_ref}\nRefs #406",
+                    "merge_state": "clean",
+                    "labels": [],
+                }
+            ],
+        }
+    )
+
+    assert report["summary"]["missing_bounty_references"] == 0
+    assert report["summary"]["closed_bounty_references"] == 0
+
+
 def test_pr_queue_health_markdown_report_includes_required_sections() -> None:
     report = analyze_queue(
         {

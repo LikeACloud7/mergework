@@ -21,6 +21,7 @@ from app.ledger.service import (
 )
 from app.main import create_app
 from app.models import Bounty, Submission, TreasuryChallenge, TreasuryProposal, utc_now
+from app.path_params import SQLITE_INTEGER_MAX
 
 ADMIN_HEADERS = {"x-mergework-admin-token": "admin-token-for-tests"}
 
@@ -246,7 +247,7 @@ def test_duplicate_pending_create_bounty_proposal_is_rejected(
     )
 
     assert first.status_code == 200
-    assert duplicate.status_code == 400
+    assert duplicate.status_code == 409
     assert duplicate.json()["detail"] == "create_bounty proposal already pending"
     with session_scope(sqlite_url) as session:
         assert session.scalar(select(func.count(TreasuryProposal.id))) == 1
@@ -450,7 +451,7 @@ def test_manual_payout_rejects_duplicate_pending_submission_proposal(
     )
 
     assert first.status_code == 200
-    assert duplicate.status_code == 400
+    assert duplicate.status_code == 409
     assert duplicate.json()["detail"] == "pay_bounty proposal already pending for submission"
     with session_scope(sqlite_url) as session:
         assert session.scalar(select(func.count(TreasuryProposal.id))) == 1
@@ -680,7 +681,7 @@ def test_close_bounty_rejects_duplicate_pending_close_proposal(
     )
 
     assert first.status_code == 200
-    assert duplicate.status_code == 400
+    assert duplicate.status_code == 409
     assert duplicate.json()["detail"] == "close_bounty proposal already pending"
     with session_scope(sqlite_url) as session:
         assert session.scalar(select(func.count(TreasuryProposal.id))) == 1
@@ -742,8 +743,45 @@ def test_pending_payout_and_close_proposals_are_mutually_exclusive(
     )
 
     assert payout.status_code == 200
-    assert close_after_payout.status_code == 400
+    assert close_after_payout.status_code == 409
     assert close_after_payout.json()["detail"] == "bounty has pending payout proposals"
     assert close.status_code == 200
-    assert payout_after_close.status_code == 400
+    assert payout_after_close.status_code == 409
     assert payout_after_close.json()["detail"] == "bounty has pending close proposal"
+
+
+@pytest.mark.parametrize("action", ("pay_bounty", "close_bounty"))
+def test_direct_pay_and_close_proposals_reject_oversized_bounty_ids(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch, action: str
+) -> None:
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "test-cookie-secret")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+        raise_server_exceptions=False,
+    )
+    payload: dict[str, object]
+    if action == "pay_bounty":
+        payload = {
+            "bounty_id": SQLITE_INTEGER_MAX + 1,
+            "to_account": "github:bob",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/9223372036854775808",
+            "accepted_by": "maintainer",
+        }
+    else:
+        payload = {
+            "bounty_id": SQLITE_INTEGER_MAX + 1,
+            "closed_by": "maintainer",
+        }
+
+    response = client.post(
+        "/api/v1/treasury/proposals",
+        headers=ADMIN_HEADERS,
+        json={"action": action, "payload": payload},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "bounty id is too large"
+    with session_scope(sqlite_url) as session:
+        assert session.scalar(select(func.count(TreasuryProposal.id))) == 0

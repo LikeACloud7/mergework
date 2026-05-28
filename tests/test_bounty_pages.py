@@ -434,6 +434,11 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert f'href="/bounties/{bounty.id}"' in proof_page.text
     assert f'href="/ledger/{payment_sequence}"' in proof_page.text
 
+    uppercase_proof_page = client.get(f"/proofs/{proof_hash.upper()}")
+    assert uppercase_proof_page.status_code == 200
+    assert f'<code class="hash">{proof_hash}</code>' in uppercase_proof_page.text
+    assert f'<code class="hash">{proof_hash.upper()}</code>' not in uppercase_proof_page.text
+
     missing_proof = client.get(f"/api/v1/proofs/{'0' * 64}")
     assert missing_proof.status_code == 404
     assert client.get("/api/v1/proofs/not-a-proof-hash").status_code == 400
