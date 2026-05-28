@@ -23,6 +23,15 @@ def _fixture() -> dict[str, object]:
                 "proof_url": "/proofs/abc123",
             }
         ],
+        "recent": [
+            {
+                "submission_url": "https://github.com/ramimbo/mergework/issues/578#issuecomment-4",
+                "proof_url": "/proofs/recent-paid",
+                "bounty_issue_number": 578,
+                "bounty_id": 85,
+                "ledger_sequence": 42,
+            }
+        ],
         "issues": [
             {
                 "number": 578,
@@ -57,6 +66,11 @@ def _fixture() -> dict[str, object]:
                             "https://github.com/ramimbo/mergework/pull/533#issuecomment-2 "
                             "works on the public activity page."
                         ),
+                    },
+                    {
+                        "url": "https://github.com/ramimbo/mergework/issues/578#issuecomment-4",
+                        "author": {"login": "recent-winner"},
+                        "body": "/claim https://github.com/ramimbo/mergework/pull/700",
                     },
                 ],
             }
@@ -110,6 +124,14 @@ def test_claim_inventory_classifies_required_statuses(tmp_path, capsys) -> None:
         == "already_paid"
     )
     assert (
+        rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-4"]["likely_status"]
+        == "already_paid"
+    )
+    assert (
+        rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-4"]["proof_url"]
+        == "https://api.example.test/proofs/recent-paid"
+    )
+    assert (
         rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-2"]["likely_status"]
         == "duplicate_candidate"
     )
@@ -138,7 +160,7 @@ def test_claim_inventory_classifies_required_statuses(tmp_path, capsys) -> None:
     input_path.write_text(json.dumps(_fixture()), encoding="utf-8")
     assert main(["--input", str(input_path), "--format", "json"]) == 0
     output = json.loads(capsys.readouterr().out)
-    assert output["summary"]["already_paid"] == 1
+    assert output["summary"]["already_paid"] == 2
 
 
 def test_claim_inventory_markdown_report_is_pasteable() -> None:
@@ -206,6 +228,7 @@ def test_claim_inventory_live_mode_uses_read_only_calls(monkeypatch) -> None:
         lambda api_host: {
             "bounties": [{"id": 87, "issue_number": 581, "status": "open", "awards_remaining": 1}],
             "proofs": [],
+            "recent": [],
         },
     )
 

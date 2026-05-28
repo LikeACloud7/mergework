@@ -139,7 +139,8 @@ python scripts/claim_inventory.py --repo ramimbo/mergework --format markdown
 ```
 
 The live command uses read-only `gh issue list/view` and `gh pr list/view`
-calls plus public MergeWork API reads. It does not write GitHub comments, labels,
+calls plus public MergeWork API reads, including exact paid-award rows from
+`/api/v1/activity` `recent[]`. It does not write GitHub comments, labels,
 issue edits, admin-token API calls, local database queries, payout actions, or
 private deployment reads. Use `--api-host` to point at another public API host
 when reviewing staging-like public data:

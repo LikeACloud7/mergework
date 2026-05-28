@@ -138,10 +138,15 @@ def _bounty_index(data: dict[str, Any]) -> dict[int, dict[str, Any]]:
 def _proof_sources(data: dict[str, Any], api_host: str) -> dict[str, str]:
     proof_by_source: dict[str, str] = {}
     proof_rows: list[Any] = []
-    for key in ("proofs", "accepted_awards", "activity"):
+    for key in ("proofs", "accepted_awards", "activity", "recent"):
         raw = data.get(key)
         if isinstance(raw, list):
             proof_rows.extend(raw)
+        elif isinstance(raw, dict):
+            for nested_key in ("contributors", "recent"):
+                nested = raw.get(nested_key)
+                if isinstance(nested, list):
+                    proof_rows.extend(nested)
     contributors = data.get("contributors")
     if isinstance(contributors, list):
         proof_rows.extend(contributors)
@@ -418,6 +423,9 @@ def load_public_api_state(api_host: str) -> dict[str, Any]:
         contributors = activity.get("contributors")
         if isinstance(contributors, list):
             data["contributors"] = contributors
+        recent = activity.get("recent")
+        if isinstance(recent, list):
+            data["recent"] = recent
     return data
 
 
