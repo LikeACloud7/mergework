@@ -61,6 +61,7 @@ def test_api_examples_document_mcp_get_proof_response_shape() -> None:
 
 def test_api_examples_document_account_response_shape() -> None:
     examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
+    squashed = " ".join(examples.split())
 
     assert "/api/v1/accounts/treasury:mrwk" in examples
     assert '"ledger_address": "github:tatelyman"' in examples
@@ -70,6 +71,13 @@ def test_api_examples_document_account_response_shape() -> None:
     assert "Claim GitHub balances from /me" in examples
     assert "treasury:" in examples
     assert "registered `mrwk1` addresses" in examples
+    assert "Internal ledger accounts use the same account response shape" in examples
+    assert '"account": "treasury:mrwk"' in examples
+    assert '"github_login": null' in examples
+    assert (
+        "Treasury and reserve balances change as bounties are reserved, paid, and released"
+        in squashed
+    )
 
 
 def test_api_examples_document_ledger_response_shape() -> None:

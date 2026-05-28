@@ -358,6 +358,37 @@ For `treasury:` and `reserve:` accounts, `github_login` is `null` and
 `transfer_status` explains that direct MRWK wallet transfers are only available
 for registered `mrwk1` addresses.
 
+Internal ledger accounts use the same account response shape. The treasury
+account is useful when checking public reserve movements, but it is not a
+wallet account:
+
+```bash
+curl -s "$API_HOST/api/v1/accounts/treasury:mrwk"
+```
+
+```json
+{
+  "account": "treasury:mrwk",
+  "ledger_address": "treasury:mrwk",
+  "github_login": null,
+  "exists": true,
+  "balance_mrwk": "99959140",
+  "transfer_status": "Internal ledger account. MRWK wallet transfers are only available for registered mrwk1 addresses.",
+  "accepted_work": {
+    "accepted_awards": 0,
+    "accepted_mrwk": "0",
+    "latest_ledger_sequence": null,
+    "latest_submission_url": null,
+    "latest_proof_hash": null,
+    "latest_proof_url": null
+  }
+}
+```
+
+Treasury and reserve balances change as bounties are reserved, paid, and
+released. Treat the `balance_mrwk` value as a live snapshot, not a fixed
+account invariant.
+
 Read the proof-backed accepted-work list for a single account:
 
 ```bash

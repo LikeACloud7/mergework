@@ -66,6 +66,10 @@ REQUIRED_PUBLIC_PHRASES = {
         "Discussion or decision-support claim:",
         "Do not describe work as accepted, merged, or paid until the public GitHub label",
     ],
+    "docs/api-examples.md": [
+        "Internal ledger accounts use the same account response shape",
+        ("Treasury and reserve balances change as bounties are reserved, paid, and released."),
+    ],
 }
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 DOCS_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/docs.yml"
