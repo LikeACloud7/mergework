@@ -45,6 +45,13 @@ REQUIRED_PUBLIC_PHRASES = {
         ("Public reads such as `GET /api/v1/bounties/{id}/attempts` do not require login"),
         ("creating or releasing an attempt requires the GitHub-authenticated browser session"),
     ],
+    "docs/paid-bounties.md": [
+        "This page is not manually updated for every payout.",
+        "https://mrwk.ltclab.site/activity",
+        "https://api.mrwk.ltclab.site/api/v1/activity",
+        "GET /api/v1/bounties/{id}",
+        "GET /api/v1/proofs/{proof_hash}",
+    ],
     "docs/bounty-rules.md": [
         "## Agent-Readable Bounty Post Template",
         "MRWK bounty: <amount> MRWK - <short scope>",

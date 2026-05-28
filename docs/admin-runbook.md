@@ -142,9 +142,13 @@ live GitHub access.
 
 1. Confirm the webhook or admin API records one ledger payment for that award.
 2. Confirm the proof pays the intended contributor account.
-3. Add the paid bounty row to
-   [docs/paid-bounties.md](paid-bounties.md) and
+3. Comment on the accepted work or bounty issue with the proof link, amount,
+   recipient, and bounty reference.
+4. Close or label the bounty according to its remaining award capacity.
+5. Optionally post a short human-readable payment summary in
    [GitHub Discussions #16](https://github.com/ramimbo/mergework/discussions/16).
+   Do not add manual payment rows to [docs/paid-bounties.md](paid-bounties.md);
+   proof-backed activity, bounty, ledger, and proof endpoints are authoritative.
 
 ## GitHub OAuth
 
