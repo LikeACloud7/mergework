@@ -6,6 +6,11 @@ MRWK for useful accepted work.
 MRWK is native to the MergeWork ledger. The ledger is the source of truth for
 current balances, transfers, and payout proofs.
 
+Normal admin treasury actions use public proposals with a 24-hour delay,
+reserve caps, and challenge logs before they mutate the ledger. This makes
+normal app-path movement visible and rule-checkable; it does not prevent direct
+server or database bypass by an operator with production access.
+
 ## How Earning Works
 
 1. A maintainer posts a bounty linked to a GitHub issue.
