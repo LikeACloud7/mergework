@@ -47,7 +47,7 @@
     <dd>{% if entry.to %}<a href="/accounts/{{ entry.to }}">{{ entry.to }}</a>{% else %}-{% endif %}</dd>
     <dt>Reference</dt>
     {% set reference_url = safe_public_url(entry.reference) %}
-    <dd>{% if reference_url %}<a href="{{ reference_url }}">{{ entry.reference }}</a>{% else %}{{ entry.reference }}{% endif %}</dd>
+    <dd>{% if reference_url %}<a href="{{ reference_url }}" rel="nofollow noopener">{{ entry.reference }}</a>{% else %}{{ entry.reference }}{% endif %}</dd>
     <dt>Previous hash</dt>
     <dd><code>{{ entry.previous_hash }}</code></dd>
     <dt>Entry hash</dt>

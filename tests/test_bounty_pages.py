@@ -576,7 +576,10 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert "Award paid" in ledger_page.text
     assert "Unused reserve released" in ledger_page.text
     assert 'class="ledger-row ledger-row--bounty-payment"' in ledger_page.text
-    assert 'href="https://github.com/ramimbo/mergework/pull/99"' in ledger_page.text
+    assert (
+        'href="https://github.com/ramimbo/mergework/pull/99" rel="nofollow noopener"'
+        in ledger_page.text
+    )
     assert f'href="/proofs/{proof_hash}">Payment proof</a>' in ledger_page.text
 
     ledger_entry_page = client.get(f"/ledger/{payment_sequence}")
@@ -589,6 +592,10 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert f'href="/ledger/{payment_sequence - 1}">Previous entry</a>' in ledger_entry_page.text
     assert f'href="/api/v1/ledger/{payment_sequence}">Entry JSON</a>' in ledger_entry_page.text
     assert f'href="/ledger/{payment_sequence + 1}">Next entry</a>' in ledger_entry_page.text
+    assert (
+        'href="https://github.com/ramimbo/mergework/pull/99" rel="nofollow noopener"'
+        in ledger_entry_page.text
+    )
     genesis_page = client.get("/ledger/1")
     assert genesis_page.status_code == 200
     assert 'href="/ledger">All ledger entries</a>' in genesis_page.text
@@ -617,6 +624,14 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert "MergeWork bounty" in proof_page.text
     assert f'href="/bounties/{bounty.id}"' in proof_page.text
     assert f'href="/ledger/{payment_sequence}"' in proof_page.text
+    assert (
+        'href="https://github.com/ramimbo/mergework/issues/23" rel="nofollow noopener"'
+        in proof_page.text
+    )
+    assert (
+        'href="https://github.com/ramimbo/mergework/pull/99" rel="nofollow noopener"'
+        in proof_page.text
+    )
     assert "Related activity" in proof_page.text
     assert 'href="/activity?q=github%3Acontributor"' in proof_page.text
     assert f'href="/activity?q={proof_hash}"' in proof_page.text
