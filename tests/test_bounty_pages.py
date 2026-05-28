@@ -57,6 +57,7 @@ def test_bounties_page_renders_and_filters_by_status(sqlite_url: str) -> None:
     assert "Bounties shown" in all_rows.text
     assert "Awards open" in all_rows.text
     assert "Open reward pool" in all_rows.text
+    assert 'href="/api/v1/bounties">View JSON results</a>' in all_rows.text
     assert "1</strong>" in all_rows.text
     assert "50 MRWK</strong>" in all_rows.text
     assert "50 MRWK still available" in all_rows.text
@@ -67,6 +68,7 @@ def test_bounties_page_renders_and_filters_by_status(sqlite_url: str) -> None:
     assert "Open public bounty" not in paid_rows.text
     assert f'href="/bounties/{paid_bounty.id}"' in paid_rows.text
     assert 'href="/bounties?status=paid"' in paid_rows.text
+    assert 'href="/api/v1/bounties?status=paid">View JSON results</a>' in paid_rows.text
     assert "0 MRWK</strong>" in paid_rows.text
 
     paid_rows_uppercase = client.get("/bounties?status=PAID")
@@ -179,6 +181,10 @@ def test_bounties_page_honors_limit_filter(sqlite_url: str) -> None:
         in filtered_limited_page.text
     )
     assert 'href="/bounties?sort=reward&limit=2">Clear search</a>' in filtered_limited_page.text
+    assert (
+        'href="/api/v1/bounties?q=public&amp;sort=reward&amp;limit=2">View JSON results</a>'
+        in filtered_limited_page.text
+    )
 
     invalid_limit = client.get("/bounties?limit=0")
     assert invalid_limit.status_code == 422

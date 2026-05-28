@@ -33,4 +33,11 @@ def test_public_bounties_context_normalizes_filter_state() -> None:
         },
         "selected_limit": None,
         "limit_options": (10, 25, 50, 100, 200),
+        "api_results_url": "/api/v1/bounties?status=open&q=proof&sort=reward",
     }
+
+
+def test_public_bounties_context_preserves_limited_json_results_url() -> None:
+    context = public_bounties_context([], status=None, q="issue #580", sort="newest", limit=25)
+
+    assert context["api_results_url"] == "/api/v1/bounties?q=issue+%23580&limit=25"
