@@ -4,12 +4,22 @@
 
 1. Create or choose a GitHub issue.
 2. Decide the MRWK amount using the reference tiers.
-3. Add acceptance text that explains what counts as useful accepted work.
-4. Set `max_awards` to the number of separate payouts allowed. Use `1` for
+3. Use the agent-readable bounty post template in
+   [docs/bounty-rules.md](bounty-rules.md). Keep the issue title in the form
+   `MRWK bounty: <amount> MRWK - <short scope>` and repeat the reward plus
+   `max_awards` in the body.
+4. Add acceptance text that explains what counts as useful accepted work, which
+   files, routes, APIs, docs, or behaviors are in scope, and what evidence or
+   tests a reviewer needs before `mrwk:accepted` or an admin payout is recorded.
+5. Add explicit out-of-scope, duplicate-work, stale-work, and public artifact
+   cautions. Do not include price, investment, exchange, liquidity, bridge,
+   cash-out, fabricated payout, private security detail, secret, or token claims
+   in public bounty text.
+6. Set `max_awards` to the number of separate payouts allowed. Use `1` for
    a single-award bounty.
-5. Use `/admin` or `POST /api/v1/bounties` with an admin token.
+7. Use `/admin` or `POST /api/v1/bounties` with an admin token.
    Multi-award bounties reserve `reward_mrwk * max_awards`.
-6. Add `mrwk:bounty` to the GitHub issue.
+8. Add `mrwk:bounty` to the GitHub issue.
 
 ## Accept Work
 

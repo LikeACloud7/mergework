@@ -46,6 +46,12 @@ REQUIRED_PUBLIC_PHRASES = {
         ("creating or releasing an attempt requires the GitHub-authenticated browser session"),
     ],
     "docs/bounty-rules.md": [
+        "## Agent-Readable Bounty Post Template",
+        "MRWK bounty: <amount> MRWK - <short scope>",
+        "## Evidence or Tests Required",
+        "## Out of Scope",
+        "## Duplicate and Stale Work Rules",
+        "GitHub issue search, the public bounty API, and MCP bounty tools",
         "## Submission Evidence Templates",
         "PR or fix claim:",
         "Review claim:",
@@ -112,6 +118,26 @@ def main() -> int:
     elif "expected pr size:" not in pr_template.read_text(encoding="utf-8").lower():
         print("pull request template must ask for expected PR size")
         ok = False
+    bounty_issue_template = ROOT / ".github/ISSUE_TEMPLATE/bounty.yml"
+    if not bounty_issue_template.exists():
+        print("missing bounty issue template: .github/ISSUE_TEMPLATE/bounty.yml")
+        ok = False
+    else:
+        bounty_template = bounty_issue_template.read_text(encoding="utf-8").lower()
+        for phrase in [
+            "mrwk bounty: <amount> mrwk - <short scope>",
+            "id: evidence",
+            "evidence or tests required",
+            "id: out_of_scope",
+            "id: duplicate_stale_rules",
+        ]:
+            if phrase not in bounty_template:
+                print(f"bounty issue template missing required phrase: {phrase}")
+                ok = False
+        required_tail = bounty_template.split("id: out_of_scope", 1)[-1]
+        if "required: true" not in required_tail.split("id: duplicate_stale_rules", 1)[0]:
+            print("bounty issue template out_of_scope field must be required")
+            ok = False
     if ok:
         print("docs smoke ok")
         return 0
