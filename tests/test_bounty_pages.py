@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.db import create_schema, session_scope
 from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
-from app.models import Proof
+from app.models import LedgerEntry, Proof
 
 
 def test_bounties_page_renders_and_filters_by_status(sqlite_url: str) -> None:
@@ -647,6 +647,56 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert missing_proof.status_code == 404
     assert client.get("/api/v1/proofs/not-a-proof-hash").status_code == 400
     assert client.get("/proofs/not-a-proof-hash").status_code == 400
+
+
+def test_ledger_entry_reference_fallbacks(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=24,
+            issue_url="https://github.com/ramimbo/mergework/issues/24",
+            title="Render ledger references safely",
+            reward_mrwk="50",
+            max_awards=2,
+            acceptance="Ledger detail pages should not link unsafe references.",
+        )
+        empty_reference_proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:empty-reference",
+            submission_url="https://github.com/ramimbo/mergework/pull/100",
+            accepted_by="maintainer",
+            verifier_result={"result": "accepted"},
+        )
+        unsafe_reference_proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:unsafe-reference",
+            submission_url="https://github.com/ramimbo/mergework/pull/101",
+            accepted_by="maintainer",
+            verifier_result={"result": "accepted"},
+        )
+        empty_reference_entry = session.get(LedgerEntry, empty_reference_proof.ledger_sequence)
+        unsafe_reference_entry = session.get(LedgerEntry, unsafe_reference_proof.ledger_sequence)
+        assert empty_reference_entry is not None
+        assert unsafe_reference_entry is not None
+        empty_reference_entry.reference = ""
+        unsafe_reference_entry.reference = "javascript:alert(1)"
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    empty_reference_page = client.get(f"/ledger/{empty_reference_proof.ledger_sequence}")
+    assert empty_reference_page.status_code == 200
+    assert "<dt>Reference</dt>" in empty_reference_page.text
+    assert "<dd>-</dd>" in empty_reference_page.text
+
+    unsafe_reference_page = client.get(f"/ledger/{unsafe_reference_proof.ledger_sequence}")
+    assert unsafe_reference_page.status_code == 200
+    assert "javascript:alert(1)" in unsafe_reference_page.text
+    assert 'href="javascript:alert(1)"' not in unsafe_reference_page.text
 
 
 def test_bounties_list_cards_have_status_pills(sqlite_url: str) -> None:
