@@ -120,7 +120,11 @@ def _bounty_index(data: dict[str, Any]) -> dict[int, dict[str, Any]]:
     for item in data.get("bounties", []):
         if not isinstance(item, dict):
             continue
-        issue = item.get("issue_number", item.get("number"))
+        issue = item.get("issue_number")
+        if issue is None:
+            issue = item.get("number")
+        if not isinstance(issue, str | int):
+            continue
         try:
             issue_number = int(issue)
         except (TypeError, ValueError):
