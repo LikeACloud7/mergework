@@ -21,6 +21,7 @@ from app.ledger.service import (
     wallet_transfer_payload,
 )
 from app.main import _safe_next_path, _signed_value, _verified_value, create_app
+from app.models import Wallet
 from app.wallets import address_from_public_key_hex, canonical_wallet_json
 
 
@@ -515,9 +516,16 @@ def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) ->
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
     _register_wallet(client, public_hex, "Main smoke wallet")
     _register_wallet(client, funded_public, "Funded smoke wallet")
+    with session_scope(sqlite_url) as session:
+        wallet = session.get(Wallet, address)
+        assert wallet is not None
+        wallet.github_login = "alice-smoke"
     _fund_wallet(sqlite_url, funded_address)
 
     wallets = client.get("/wallets").text
+    main_search = client.get("/wallets?q=Main").text
+    github_search = client.get("/wallets?q=alice-smoke").text
+    no_wallet_match = client.get("/wallets?q=missing-wallet").text
     detail = client.get(f"/wallets/{address}").text
     funded_detail = client.get(f"/wallets/{funded_address}").text
     transfer = client.get("/transfer").text
@@ -534,6 +542,11 @@ def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) ->
     assert address in detail
     assert "Main smoke wallet" in wallets
     assert "Main smoke wallet" in detail
+    assert "Search wallets" in wallets
+    assert "Main smoke wallet" in main_search
+    assert "Funded smoke wallet" not in main_search
+    assert "alice-smoke" in github_search
+    assert "No registered wallets match this search." in no_wallet_match
     assert "To claim GitHub bounty balance" in detail
     assert "No activity yet" in detail
     assert "No activity yet" not in funded_detail

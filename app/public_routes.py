@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.accounts import normalized_wallet_address
@@ -37,9 +37,26 @@ def public_bounties_context(
     }
 
 
-def wallets_page_context(session: Session) -> dict[str, Any]:
-    wallets = session.scalars(select(Wallet).order_by(Wallet.created_at.desc()).limit(100)).all()
-    return {"wallets": [wallet_to_dict(session, wallet) for wallet in wallets]}
+def wallets_page_context(session: Session, q: str | None = None) -> dict[str, Any]:
+    query_text = q.strip() if q is not None else ""
+    query = select(Wallet)
+    if query_text:
+        escaped_query = (
+            query_text.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        )
+        like_query = f"%{escaped_query}%"
+        query = query.where(
+            or_(
+                func.lower(Wallet.address).like(like_query, escape="\\"),
+                func.lower(Wallet.label).like(like_query, escape="\\"),
+                func.lower(Wallet.github_login).like(like_query, escape="\\"),
+            )
+        )
+    wallets = session.scalars(query.order_by(Wallet.created_at.desc()).limit(100)).all()
+    return {
+        "wallets": [wallet_to_dict(session, wallet) for wallet in wallets],
+        "query_text": query_text,
+    }
 
 
 def wallet_page_context(session: Session, address: str) -> dict[str, Any]:
@@ -95,9 +112,9 @@ def register_public_routes(
         )
 
     @app.get("/wallets", response_class=HTMLResponse)
-    def wallets_page(request: Request) -> HTMLResponse:
+    def wallets_page(request: Request, q: str | None = Query(None)) -> HTMLResponse:
         with session_scope(db_url) as session:
-            context = wallets_page_context(session)
+            context = wallets_page_context(session, q)
         return templates.TemplateResponse(request, "wallets.html", context)
 
     @app.get("/wallets/{address}", response_class=HTMLResponse)
