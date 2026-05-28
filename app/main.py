@@ -319,7 +319,10 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             proof = session.get(Proof, proof_hash)
             if proof is None:
                 raise HTTPException(status_code=404, detail="proof not found")
-            data = json.loads(proof.public_json)
+            try:
+                data = json.loads(proof.public_json)
+            except (TypeError, json.JSONDecodeError) as exc:
+                raise HTTPException(status_code=500, detail="invalid proof payload") from exc
             if not isinstance(data, dict):
                 raise HTTPException(status_code=500, detail="invalid proof payload")
             return data

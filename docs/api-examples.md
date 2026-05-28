@@ -111,7 +111,7 @@ challenges:
 
 ```bash
 curl -s -X POST "$API_HOST/api/v1/treasury/proposals/<proposal_id>/challenges" \
-  -b "<browser-session-cookie>" \
+  -b "mrwk_user=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{"challenge_type":"subjective_note","reason":"This needs clearer acceptance text."}'
 ```

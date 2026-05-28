@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.db import create_schema, session_scope
 from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
+from app.models import Proof
 
 
 def test_bounties_page_renders_and_filters_by_status(sqlite_url: str) -> None:
@@ -126,6 +127,67 @@ def test_bounties_summary_api_matches_public_list_filters(sqlite_url: str) -> No
     assert invalid.json()["detail"] == "status must be one of: open, paid, closed"
 
 
+def test_bounties_page_honors_limit_filter(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=72,
+            issue_url="https://github.com/ramimbo/mergework/issues/72",
+            title="Old public bounty",
+            reward_mrwk="20",
+            acceptance="Old row should be hidden when the page limit is two.",
+        )
+        middle = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=73,
+            issue_url="https://github.com/ramimbo/mergework/issues/73",
+            title="Middle public bounty",
+            reward_mrwk="30",
+            acceptance="Middle row should stay visible with the newest row.",
+        )
+        newest = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=74,
+            issue_url="https://github.com/ramimbo/mergework/issues/74",
+            title="Newest public bounty",
+            reward_mrwk="40",
+            acceptance="Newest row should stay visible.",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    limited_page = client.get("/bounties?limit=2")
+    assert limited_page.status_code == 200
+    assert limited_page.text.index(newest.title) < limited_page.text.index(middle.title)
+    assert "Old public bounty" not in limited_page.text
+    assert "<strong>2</strong>" in limited_page.text
+    assert '<option value="2" selected>2</option>' in limited_page.text
+    assert '<option value=""' in limited_page.text
+    assert 'href="/bounties?status=open&limit=2"' in limited_page.text
+
+    filtered_limited_page = client.get("/bounties?q=public&sort=reward&limit=2")
+    assert filtered_limited_page.status_code == 200
+    assert (
+        '<option value="reward" selected>Highest per-award reward</option>'
+        in filtered_limited_page.text
+    )
+    assert 'href="/bounties?sort=reward&limit=2">Clear search</a>' in filtered_limited_page.text
+
+    invalid_limit = client.get("/bounties?limit=0")
+    assert invalid_limit.status_code == 422
+
+    max_limit = client.get("/bounties?limit=200")
+    assert max_limit.status_code == 200
+
+    too_large_limit = client.get("/bounties?limit=201")
+    assert too_large_limit.status_code == 422
+
+
 def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
@@ -171,6 +233,16 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
     issue_search = client.get("/api/v1/bounties?q=65")
     assert issue_search.status_code == 200
     assert [row["issue_number"] for row in issue_search.json()] == [65]
+
+    hash_issue_search = client.get("/api/v1/bounties?q=%2365")
+    assert hash_issue_search.status_code == 200
+    assert [row["issue_number"] for row in hash_issue_search.json()] == [65]
+
+    hash_issue_page = client.get("/bounties?q=%2365")
+    assert hash_issue_page.status_code == 200
+    assert "Showing matches for “#65”." in hash_issue_page.text
+    assert "Internal admin cleanup" in hash_issue_page.text
+    assert "Improve public bounty discovery" not in hash_issue_page.text
 
     oversized_issue_search = client.get("/api/v1/bounties", params={"q": "9" * 40})
     assert oversized_issue_search.status_code == 200
@@ -243,6 +315,10 @@ def test_bounties_page_and_api_sort_public_rows(sqlite_url: str) -> None:
     assert default_rows.status_code == 200
     assert [row["issue_number"] for row in default_rows.json()] == [71, 70, 69]
 
+    whitespace_sort_rows = client.get("/api/v1/bounties", params={"sort": "   "})
+    assert whitespace_sort_rows.status_code == 200
+    assert [row["issue_number"] for row in whitespace_sort_rows.json()] == [71, 70, 69]
+
     reward_rows = client.get("/api/v1/bounties?sort=reward")
     assert reward_rows.status_code == 200
     assert [row["issue_number"] for row in reward_rows.json()] == [70, 71, 69]
@@ -262,6 +338,16 @@ def test_bounties_page_and_api_sort_public_rows(sqlite_url: str) -> None:
     assert 'name="sort"' in available_page.text
     assert '<option value="available" selected>Most MRWK available</option>' in available_page.text
     assert 'href="/bounties?status=open&sort=available"' in available_page.text
+
+    whitespace_sort_page = client.get("/bounties", params={"sort": "   "})
+    assert whitespace_sort_page.status_code == 200
+    assert whitespace_sort_page.text.index(high_capacity.title) < whitespace_sort_page.text.index(
+        high_reward.title
+    )
+    assert whitespace_sort_page.text.index(high_reward.title) < whitespace_sort_page.text.index(
+        most_awards.title
+    )
+    assert '<option value="newest" selected>Newest first</option>' in whitespace_sort_page.text
 
     invalid_sort = client.get("/api/v1/bounties?sort=bogus")
     assert invalid_sort.status_code == 400
@@ -296,6 +382,17 @@ def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     assert "100 MRWK" in response.text
     assert "What has to be true" in response.text
     assert "Focused PR improves status, reward, issue link, and acceptance text." in response.text
+    assert "Contributor next steps" in response.text
+    assert "Before you start" in response.text
+    assert "Confirm the source issue is still open" in response.text
+    assert bounty.id != bounty.issue_number
+    assert "link the source issue as <strong>Bounty #4</strong>" in response.text
+    assert "1 award still open for distinct accepted work." in response.text
+    assert (
+        'href="https://github.com/ramimbo/mergework/issues/4" rel="nofollow noopener"'
+        in response.text
+    )
+    assert f'href="/api/v1/bounties/{bounty.id}"' in response.text
 
     missing_response = client.get("/api/v1/bounties/999")
     assert missing_response.status_code == 404
@@ -308,6 +405,40 @@ def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     assert oversized_api_response.json()["detail"] == "bounty id is too large"
     oversized_page_response = client.get(f"/bounties/{oversized_bounty_id}")
     assert oversized_page_response.status_code == 400
+
+
+def test_bounty_detail_warns_when_no_awards_remain(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=5,
+            issue_url="https://github.com/ramimbo/mergework/issues/5",
+            title="One-shot bounty",
+            reward_mrwk="25",
+            max_awards=1,
+            acceptance="Only one accepted award should be paid.",
+        )
+        pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:contributor",
+            submission_url="https://github.com/ramimbo/mergework/pull/5",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get(f"/bounties/{bounty.id}")
+
+    assert response.status_code == 200
+    assert (
+        "No awards remain; treat new work as unpaid unless maintainers reopen the bounty."
+        in response.text
+    )
 
 
 def test_bounty_detail_shows_accepted_award_history(sqlite_url: str) -> None:
@@ -365,6 +496,44 @@ def test_bounty_detail_shows_accepted_award_history(sqlite_url: str) -> None:
     assert "/accounts/github:bob" in page.text
 
 
+def test_bounty_detail_skips_malformed_award_proof_payloads(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=165,
+            issue_url="https://github.com/ramimbo/mergework/issues/165",
+            title="Malformed award proof payload",
+            reward_mrwk="100",
+            acceptance="Bounty details should survive malformed stored proof JSON.",
+        )
+        proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/203",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        proof_row = session.get(Proof, proof.hash)
+        assert proof_row is not None
+        proof_row.public_json = "{"
+        bounty_id = bounty.id
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    api_response = client.get(f"/api/v1/bounties/{bounty_id}")
+    page = client.get(f"/bounties/{bounty_id}")
+
+    assert api_response.status_code == 200
+    assert api_response.json()["accepted_awards"] == []
+    assert page.status_code == 200
+    assert "Malformed award proof payload" in page.text
+    assert "No accepted work has been paid for this bounty yet." in page.text
+
+
 def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
@@ -415,6 +584,21 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert "Bounty Payment" in ledger_entry_page.text
     assert "Bounty scan status" in ledger_entry_page.text
     assert "Award paid" in ledger_entry_page.text
+    assert 'aria-label="Ledger entry navigation"' in ledger_entry_page.text
+    assert 'href="/ledger">All ledger entries</a>' in ledger_entry_page.text
+    assert f'href="/ledger/{payment_sequence - 1}">Previous entry</a>' in ledger_entry_page.text
+    assert f'href="/api/v1/ledger/{payment_sequence}">Entry JSON</a>' in ledger_entry_page.text
+    assert f'href="/ledger/{payment_sequence + 1}">Next entry</a>' in ledger_entry_page.text
+    genesis_page = client.get("/ledger/1")
+    assert genesis_page.status_code == 200
+    assert 'href="/ledger">All ledger entries</a>' in genesis_page.text
+    assert 'href="/ledger/0">Previous entry</a>' not in genesis_page.text
+    assert 'href="/ledger/2">Next entry</a>' in genesis_page.text
+    latest_sequence = client.get("/api/v1/ledger?limit=1").json()[0]["sequence"]
+    latest_page = client.get(f"/ledger/{latest_sequence}")
+    assert latest_page.status_code == 200
+    assert f'href="/ledger/{latest_sequence - 1}">Previous entry</a>' in latest_page.text
+    assert f'href="/ledger/{latest_sequence + 1}">Next entry</a>' not in latest_page.text
     assert client.get("/api/v1/ledger/0").status_code == 400
     assert client.get("/ledger/0").status_code == 400
 
@@ -433,6 +617,11 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert "MergeWork bounty" in proof_page.text
     assert f'href="/bounties/{bounty.id}"' in proof_page.text
     assert f'href="/ledger/{payment_sequence}"' in proof_page.text
+    assert "Related activity" in proof_page.text
+    assert 'href="/activity?q=github%3Acontributor"' in proof_page.text
+    assert f'href="/activity?q={proof_hash}"' in proof_page.text
+    assert f'href="/activity?q={bounty.id}"' in proof_page.text
+    assert 'href="/activity?q=https%3A//github.com/ramimbo/mergework/pull/99"' in proof_page.text
 
     uppercase_proof_page = client.get(f"/proofs/{proof_hash.upper()}")
     assert uppercase_proof_page.status_code == 200

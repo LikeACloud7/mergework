@@ -703,6 +703,53 @@ def test_mcp_get_bounty_can_include_accepted_awards(sqlite_url: str) -> None:
     ]
 
 
+def test_mcp_get_bounty_skips_malformed_award_proof_payloads(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=285,
+            issue_url="https://github.com/ramimbo/mergework/issues/285",
+            title="MCP malformed award proof",
+            reward_mrwk="75",
+            acceptance="Malformed stored proof JSON should not break MCP bounty inspection.",
+        )
+        proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/285",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        proof_row = session.get(Proof, proof.hash)
+        assert proof_row is not None
+        proof_row.public_json = "{"
+        bounty_id = bounty.id
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "get_bounty",
+                "arguments": {"id": bounty_id, "include_awards": True},
+            },
+        },
+    ).json()
+
+    payload = json.loads(result["result"]["content"][0]["text"])
+    assert payload["id"] == bounty_id
+    assert payload["awards_paid"] == 1
+    assert payload["awards"] == []
+
+
 def test_mcp_get_bounty_rejects_fractional_id(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
@@ -1044,6 +1091,79 @@ def test_mcp_get_proof_reports_unknown_hash(sqlite_url: str) -> None:
     ).json()
 
     assert result["result"]["content"][0]["text"] == "proof not found"
+
+
+def test_mcp_get_proof_reports_malformed_payload(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=37,
+            issue_url="https://github.com/ramimbo/mergework/issues/37",
+            title="MCP malformed proof lookup",
+            reward_mrwk="150",
+            acceptance="Accepted label",
+        )
+        proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/37",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        proof_row = session.get(Proof, proof.hash)
+        assert proof_row is not None
+        proof_row.public_json = "{"
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {"name": "get_proof", "arguments": {"hash": proof.hash}},
+        },
+    ).json()
+
+    assert result["result"]["content"][0]["text"] == "invalid proof payload"
+
+
+def test_public_proof_api_reports_malformed_payload(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=38,
+            issue_url="https://github.com/ramimbo/mergework/issues/38",
+            title="Proof payload lookup",
+            reward_mrwk="25",
+            acceptance="Public proof lookups should return bounded errors.",
+        )
+        proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/38",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        proof_row = session.get(Proof, proof.hash)
+        assert proof_row is not None
+        proof_row.public_json = "{"
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get(f"/api/v1/proofs/{proof.hash}")
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "invalid proof payload"
 
 
 def test_mcp_get_proof_rejects_malformed_hash(sqlite_url: str) -> None:

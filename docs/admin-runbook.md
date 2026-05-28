@@ -4,14 +4,24 @@
 
 1. Create or choose a GitHub issue.
 2. Decide the MRWK amount using the reference tiers.
-3. Add acceptance text that explains what counts as useful accepted work.
-4. Set `max_awards` to the number of separate payouts allowed. Use `1` for
+3. Use the agent-readable bounty post template in
+   [docs/bounty-rules.md](bounty-rules.md). Keep the issue title in the form
+   `MRWK bounty: <amount> MRWK - <short scope>` and repeat the reward plus
+   `max_awards` in the body.
+4. Add acceptance text that explains what counts as useful accepted work, which
+   files, routes, APIs, docs, or behaviors are in scope, and what evidence or
+   tests a reviewer needs before `mrwk:accepted` or an admin payout is recorded.
+5. Add explicit out-of-scope, duplicate-work, stale-work, and public artifact
+   cautions. Do not include price, investment, exchange, liquidity, bridge,
+   cash-out, fabricated payout, private security detail, secret, or token claims
+   in public bounty text.
+6. Set `max_awards` to the number of separate payouts allowed. Use `1` for
    a single-award bounty.
-5. Use `/admin` or `POST /api/v1/bounties` with an admin token. This creates
+7. Use `/admin` or `POST /api/v1/bounties` with an admin token. This creates
    a public treasury proposal.
-6. Execute the proposal after the 24-hour delay. Multi-award bounties reserve
+8. Execute the proposal after the 24-hour delay. Multi-award bounties reserve
    `reward_mrwk * max_awards` when the proposal executes.
-7. Add `mrwk:bounty` to the GitHub issue.
+9. Add `mrwk:bounty` to the GitHub issue.
 
 ## Treasury Proposals
 
@@ -172,9 +182,13 @@ live GitHub access.
 
 1. Confirm the webhook or admin API records one ledger payment for that award.
 2. Confirm the proof pays the intended contributor account.
-3. Add the paid bounty row to
-   [docs/paid-bounties.md](paid-bounties.md) and
+3. Comment on the accepted work or bounty issue with the proof link, amount,
+   recipient, and bounty reference.
+4. Close or label the bounty according to its remaining award capacity.
+5. Optionally post a short human-readable payment summary in
    [GitHub Discussions #16](https://github.com/ramimbo/mergework/discussions/16).
+   Do not add manual payment rows to [docs/paid-bounties.md](paid-bounties.md);
+   proof-backed activity, bounty, ledger, and proof endpoints are authoritative.
 
 ## GitHub OAuth
 
