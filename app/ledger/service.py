@@ -51,6 +51,8 @@ def parse_mrwk_amount(amount: str | int | Decimal) -> int:
     amount_text = str(amount).strip()
     if not MRWK_AMOUNT_RE.fullmatch(amount_text):
         raise LedgerError("invalid MRWK amount")
+    if "." in amount_text and len(amount_text.rsplit(".", 1)[1]) > 6:
+        raise LedgerError("MRWK supports at most 6 decimal places")
     try:
         value = Decimal(amount_text)
     except (InvalidOperation, ValueError) as exc:
