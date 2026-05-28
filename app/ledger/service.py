@@ -118,12 +118,15 @@ def validate_public_url(url: str) -> str:
             ascii_hostname = hostname.encode("idna").decode("ascii").rstrip(".")
         except UnicodeError as exc:
             raise LedgerError("URL must include a valid host") from exc
+        labels = ascii_hostname.split(".")
         if (
             not ascii_hostname
             or len(ascii_hostname) > 253
-            or not all(PUBLIC_DNS_LABEL_RE.fullmatch(label) for label in ascii_hostname.split("."))
+            or not all(PUBLIC_DNS_LABEL_RE.fullmatch(label) for label in labels)
         ):
             raise LedgerError("URL must include a valid host") from None
+        if len(labels) < 2:
+            raise LedgerError("URL must use a public host") from None
     else:
         if ip.is_multicast or not ip.is_global:
             raise LedgerError("URL must use a public host")
