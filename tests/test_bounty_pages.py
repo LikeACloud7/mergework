@@ -487,6 +487,11 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert "MergeWork bounty" in proof_page.text
     assert f'href="/bounties/{bounty.id}"' in proof_page.text
     assert f'href="/ledger/{payment_sequence}"' in proof_page.text
+    assert "Related activity" in proof_page.text
+    assert 'href="/activity?q=github%3Acontributor"' in proof_page.text
+    assert f'href="/activity?q={proof_hash}"' in proof_page.text
+    assert f'href="/activity?q={bounty.id}"' in proof_page.text
+    assert 'href="/activity?q=https%3A//github.com/ramimbo/mergework/pull/99"' in proof_page.text
 
     uppercase_proof_page = client.get(f"/proofs/{proof_hash.upper()}")
     assert uppercase_proof_page.status_code == 200
