@@ -52,17 +52,15 @@ def test_docs_page_marks_static_github_links_as_untrusted(sqlite_url: str) -> No
     page = client.get("/docs")
 
     assert page.status_code == 200
-    assert (
-        'href="https://github.com/ramimbo/mergework/discussions/16" rel="nofollow noopener"'
-    ) in page.text
-    assert (
-        'href="https://github.com/ramimbo/mergework/blob/main/docs/bounty-rules.md" '
-        'rel="nofollow noopener"'
-    ) in page.text
-    assert (
-        'href="https://github.com/ramimbo/mergework/blob/main/docs/api-examples.md" '
-        'rel="nofollow noopener"'
-    ) in page.text
+    for url in (
+        "https://github.com/ramimbo/mergework/discussions/16",
+        "https://github.com/ramimbo/mergework/blob/main/docs/bounty-rules.md",
+        "https://github.com/ramimbo/mergework/blob/main/docs/paid-bounties.md",
+        "https://github.com/ramimbo/mergework/blob/main/docs/agent-guide.md",
+        "https://github.com/ramimbo/mergework/blob/main/docs/api-examples.md",
+        "https://github.com/ramimbo/mergework/blob/main/docs/ledger.md",
+    ):
+        assert f'href="{url}" rel="nofollow noopener"' in page.text
 
 
 def test_ltc_lab_header_marks_github_nav_link_as_untrusted(sqlite_url: str) -> None:
