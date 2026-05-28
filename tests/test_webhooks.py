@@ -155,6 +155,55 @@ def test_accepted_pr_label_pays_pr_author_for_linked_bounty_issue(sqlite_url: st
         assert get_balance(session, "github:maintainer") == 0
 
 
+def test_accepted_pr_label_accepts_claim_bounty_reference(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    body = json.dumps(
+        {
+            "action": "labeled",
+            "label": {"name": "mrwk:accepted"},
+            "pull_request": {
+                "number": 9,
+                "html_url": "https://github.com/ramimbo/mergework/pull/9",
+                "body": "Summary: focused fix\n\n/claim #3\n\nTests: pytest passed",
+                "user": {"login": "contributor"},
+            },
+            "repository": {"full_name": "ramimbo/mergework"},
+            "sender": {"login": "maintainer"},
+        },
+        separators=(",", ":"),
+    ).encode()
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=3,
+            issue_url="https://github.com/ramimbo/mergework/issues/3",
+            title="Claim reference payout",
+            reward_mrwk="50",
+            acceptance="Accepted PRs can cite the bounty with /claim.",
+        )
+
+    result = handle_github_webhook(
+        sqlite_url,
+        {
+            "X-GitHub-Delivery": "delivery-pr-claim-reference",
+            "X-GitHub-Event": "pull_request",
+            "X-Hub-Signature-256": _signature("secret", body),
+        },
+        body,
+        "secret",
+    )
+
+    assert result["status"] == "paid"
+    with session_scope(sqlite_url) as session:
+        assert get_balance(session, "github:contributor") == 50_000_000
+        event = session.get(WebhookEvent, "delivery-pr-claim-reference")
+        assert event is not None
+        assert event.processed_status == "paid"
+
+
 def test_accepted_issue_event_for_pull_request_does_not_pay_matching_bounty(
     sqlite_url: str,
 ) -> None:
