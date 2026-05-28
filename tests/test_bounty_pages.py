@@ -173,6 +173,16 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
     assert issue_search.status_code == 200
     assert [row["issue_number"] for row in issue_search.json()] == [65]
 
+    hash_issue_search = client.get("/api/v1/bounties?q=%2365")
+    assert hash_issue_search.status_code == 200
+    assert [row["issue_number"] for row in hash_issue_search.json()] == [65]
+
+    hash_issue_page = client.get("/bounties?q=%2365")
+    assert hash_issue_page.status_code == 200
+    assert "Showing matches for “#65”." in hash_issue_page.text
+    assert "Internal admin cleanup" in hash_issue_page.text
+    assert "Improve public bounty discovery" not in hash_issue_page.text
+
     oversized_issue_search = client.get("/api/v1/bounties", params={"q": "9" * 40})
     assert oversized_issue_search.status_code == 200
     assert oversized_issue_search.json() == []
