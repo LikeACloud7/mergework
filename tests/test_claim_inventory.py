@@ -21,7 +21,11 @@ def _fixture() -> dict[str, object]:
             {
                 "source_url": "https://github.com/ramimbo/mergework/pull/452#pullrequestreview-1",
                 "proof_url": "/proofs/abc123",
-            }
+            },
+            {
+                "source_url": "https://github.com/ramimbo/mergework/pull/581#discussion_r1",
+                "proof_url": "/proofs/discussion-r1",
+            },
         ],
         "recent": [
             {
@@ -168,6 +172,10 @@ def test_claim_inventory_classifies_required_statuses(tmp_path, capsys) -> None:
         == "pull_request_review_comment"
     )
     assert (
+        rows["https://github.com/ramimbo/mergework/pull/581#discussion_r1"]["proof_url"]
+        == "https://api.example.test/proofs/discussion-r1"
+    )
+    assert (
         rows["https://github.com/ramimbo/mergework/pull/582"]["likely_status"] == "unpaid_candidate"
     )
     assert (
@@ -187,7 +195,7 @@ def test_claim_inventory_classifies_required_statuses(tmp_path, capsys) -> None:
     input_path.write_text(json.dumps(_fixture()), encoding="utf-8")
     assert main(["--input", str(input_path), "--format", "json"]) == 0
     output = json.loads(capsys.readouterr().out)
-    assert output["summary"]["already_paid"] == 2
+    assert output["summary"]["already_paid"] == 3
 
 
 def test_claim_inventory_markdown_report_is_pasteable() -> None:

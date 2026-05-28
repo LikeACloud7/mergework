@@ -22,7 +22,7 @@ GH_TIMEOUT_SECONDS = 30
 GH_LIMIT = 200
 GITHUB_URL_RE = re.compile(
     r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/"
-    r"(?:issues|pull)/\d+(?:#[A-Za-z0-9_.-]+-\d+)?"
+    r"(?:issues|pull)/\d+(?:#[A-Za-z0-9_.-]+)?"
 )
 CLAIM_WORD_RE = re.compile(
     r"(^|\s)(/claim|/attempt|claim(?:ing)?|reviewed|verification|smoke[- ]check|"
