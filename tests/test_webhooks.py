@@ -5,7 +5,13 @@ import hmac
 import json
 
 from app.db import create_schema, session_scope
-from app.ledger.service import create_bounty, ensure_genesis, get_balance, register_wallet
+from app.ledger.service import (
+    close_bounty,
+    create_bounty,
+    ensure_genesis,
+    get_balance,
+    register_wallet,
+)
 from app.models import WebhookEvent
 from app.webhooks.github import handle_github_webhook, verify_github_signature
 
@@ -838,6 +844,72 @@ def test_accepted_pr_label_pays_full_github_issue_url_reference(sqlite_url: str)
     assert result["status"] == "paid"
     with session_scope(sqlite_url) as session:
         assert get_balance(session, "github:reviewer") == 25_000_000
+
+
+def test_accepted_pr_label_skips_closed_bounty_for_later_open_reference(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    body = json.dumps(
+        {
+            "action": "labeled",
+            "label": {"name": "mrwk:accepted"},
+            "pull_request": {
+                "number": 13,
+                "html_url": "https://github.com/ramimbo/mergework/pull/13",
+                "body": "Fixes #3\n\nBounty #4",
+                "user": {"login": "reviewer"},
+            },
+            "repository": {"full_name": "ramimbo/mergework"},
+            "sender": {"login": "maintainer"},
+        },
+        separators=(",", ":"),
+    ).encode()
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        closed_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=3,
+            issue_url="https://github.com/ramimbo/mergework/issues/3",
+            title="Closed stale bounty",
+            reward_mrwk="40",
+            acceptance="Already closed bounty should not block later open refs.",
+        )
+        close_bounty(
+            session,
+            bounty_id=closed_bounty.id,
+            closed_by="maintainer",
+            reference="https://github.com/ramimbo/mergework/issues/3#close",
+        )
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=4,
+            issue_url="https://github.com/ramimbo/mergework/issues/4",
+            title="Current open bounty",
+            reward_mrwk="25",
+            acceptance="Accepted PR can mention stale refs before the bounty target.",
+        )
+
+    result = handle_github_webhook(
+        sqlite_url,
+        {
+            "X-GitHub-Delivery": "delivery-closed-then-open-pr",
+            "X-GitHub-Event": "pull_request",
+            "X-Hub-Signature-256": _signature("secret", body),
+        },
+        body,
+        "secret",
+    )
+
+    assert result["status"] == "paid"
+    with session_scope(sqlite_url) as session:
+        assert get_balance(session, "github:reviewer") == 25_000_000
+        event = session.get(WebhookEvent, "delivery-closed-then-open-pr")
+        assert event is not None
+        assert event.processed_status == "paid"
 
 
 def test_accepted_maintainer_issue_label_requires_manual_payout(sqlite_url: str) -> None:

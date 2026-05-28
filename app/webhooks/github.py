@@ -13,7 +13,7 @@ from app.ledger.service import (
     pay_bounty,
     resolve_payout_account,
 )
-from app.models import WebhookEvent
+from app.models import Bounty, WebhookEvent
 
 ACCEPTED_LABEL = "mrwk:accepted"
 ISSUE_NUMBER_BOUNDARY = r"(?![A-Za-z0-9_-])"
@@ -116,6 +116,10 @@ def _github_issue_number(value: Any) -> int | None:
     return value
 
 
+def _bounty_accepts_awards(bounty: Bounty) -> bool:
+    return bounty.status == "open" and bounty.awards_paid < bounty.max_awards
+
+
 def _handle_accepted_issue_label(
     database_url: str,
     payload: dict[str, Any],
@@ -198,11 +202,22 @@ def _handle_accepted_issue_label(
     with session_scope(database_url) as session:
         bounty = None
         bounty_issue_number = None
+        first_found_bounty = None
+        first_found_issue_number = None
         for candidate in bounty_issue_numbers:
-            bounty = find_bounty_by_issue(session, repo, candidate)
-            if bounty is not None:
+            candidate_bounty = find_bounty_by_issue(session, repo, candidate)
+            if candidate_bounty is None:
+                continue
+            if first_found_bounty is None:
+                first_found_bounty = candidate_bounty
+                first_found_issue_number = candidate
+            if _bounty_accepts_awards(candidate_bounty):
+                bounty = candidate_bounty
                 bounty_issue_number = candidate
                 break
+        if bounty is None:
+            bounty = first_found_bounty
+            bounty_issue_number = first_found_issue_number
         if bounty is None:
             session.add(
                 WebhookEvent(
