@@ -6,9 +6,14 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
-BOUNTY_REF_RE = re.compile(r"\b(?:bounty|refs?|fixes|closes|claims?)\s+`?#(\d+)`?", re.IGNORECASE)
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts.bounty_refs import BOUNTY_REF_RE
+
 NOISY_TITLE_PREFIX_RE = re.compile(r"^\s*(?:\[[^\]]+\]\s*)+")
 UNSTABLE_MERGE_STATES = {"blocked", "conflicting", "dirty", "unknown", "unstable"}
 GH_TIMEOUT_SECONDS = 30
@@ -125,7 +130,8 @@ def analyze_queue(data: dict[str, Any]) -> dict[str, Any]:
                 _issue(
                     pr,
                     "missing_bounty_reference",
-                    "No Bounty #<issue>, Refs #<issue>, or /claim #<issue> found",
+                    "No bounty reference such as Bounty #<issue>, Refs #<issue>, "
+                    "Fixes #<issue>, or /claim #<issue> found",
                 )
             )
         for ref in pr["refs"]:

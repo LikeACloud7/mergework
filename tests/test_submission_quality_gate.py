@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
+from pathlib import Path
+
+import pytest
 
 from scripts import submission_quality_gate
 from scripts.submission_quality_gate import evaluate_submission, main
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_submission_quality_gate_passes_open_bounty_with_evidence(capsys, tmp_path) -> None:
@@ -38,6 +44,19 @@ def test_submission_quality_gate_passes_open_bounty_with_evidence(capsys, tmp_pa
     input_path.write_text(json.dumps(fixture), encoding="utf-8")
     assert main(["--input", str(input_path), "--format", "json"]) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "pass"
+
+
+def test_submission_quality_gate_script_entrypoint_loads_shared_parser() -> None:
+    result = subprocess.run(
+        [sys.executable, "scripts/submission_quality_gate.py", "--help"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "usage:" in result.stdout
 
 
 def test_submission_quality_gate_accepts_claim_command_reference() -> None:
@@ -89,6 +108,62 @@ def test_submission_quality_gate_ignores_oversized_numeric_bounty_refs() -> None
     } in result["checks"]
 
 
+def test_submission_quality_gate_accepts_github_linking_keywords() -> None:
+    references = (
+        "Bounty #319",
+        "Claim #319",
+        "Claims #319",
+        "Ref #319",
+        "Refs #319",
+        "Reference #319",
+        "References #319",
+        "Fix #319",
+        "Fixes #319",
+        "Fixed #319",
+        "Close #319",
+        "Closes #319",
+        "Closed #319",
+        "Resolve #319",
+        "Resolves #319",
+        "Resolved #319",
+    )
+    for reference in references:
+        result = evaluate_submission(
+            {
+                "submission_text": f"""
+                Summary:
+                Harden the bounty reference parser.
+
+                {reference}
+
+                Validation:
+                - pytest passed.
+                """,
+                "bounties": [{"number": 319, "state": "OPEN", "awards_remaining": 1}],
+                "pull_requests": [],
+            }
+        )
+
+        assert result["status"] == "pass", reference
+        assert result["bounty_reference"] == 319
+
+
+@pytest.mark.parametrize("reference", ("Fixes #319abc", "Fixes #319_abc", "Fixes #319-abc"))
+def test_submission_quality_gate_rejects_linking_keyword_issue_suffix(reference: str) -> None:
+    result = evaluate_submission(
+        {
+            "submission_text": (
+                f"Summary: add validation\n\n{reference}\n\nValidation: pytest passed"
+            ),
+            "bounties": [{"number": 319, "state": "OPEN", "awards_remaining": 1}],
+            "pull_requests": [],
+        }
+    )
+
+    assert result["status"] == "fail"
+    assert result["bounty_reference"] is None
+
+
 def test_submission_quality_gate_fails_missing_reference() -> None:
     result = evaluate_submission(
         {
@@ -103,7 +178,8 @@ def test_submission_quality_gate_fails_missing_reference() -> None:
         "name": "bounty_reference",
         "status": "fail",
         "message": (
-            "submission text must include Bounty #<issue>, Refs #<issue>, or /claim #<issue>"
+            "submission text must include a bounty reference such as "
+            "Bounty #<issue>, Refs #<issue>, Fixes #<issue>, or /claim #<issue>"
         ),
     }
 
