@@ -173,7 +173,7 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
 
     tools = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).json()
     assert tools["result"]["tools"][0]["name"] == "list_bounties"
-    assert "status, q, and limit filters" in tools["result"]["tools"][0]["description"]
+    assert "status, q, sort, and limit filters" in tools["result"]["tools"][0]["description"]
     submit_tool = next(
         tool for tool in tools["result"]["tools"] if tool["name"] == "submit_work_proof"
     )
@@ -458,6 +458,56 @@ def test_mcp_list_bounties_filters_status_query_and_limit(sqlite_url: str) -> No
     assert digit_limit_payload == []
 
 
+def test_mcp_list_bounties_honors_sort_argument(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        large_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=301,
+            issue_url="https://github.com/ramimbo/mergework/issues/301",
+            title="Large MCP bounty",
+            reward_mrwk="100",
+            acceptance="Agents can sort this higher reward bounty first.",
+        )
+        small_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=302,
+            issue_url="https://github.com/ramimbo/mergework/issues/302",
+            title="Small MCP bounty",
+            reward_mrwk="25",
+            acceptance="Agents can list this lower reward bounty.",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "tools/call",
+            "params": {"name": "list_bounties", "arguments": {"sort": "reward"}},
+        },
+    ).json()
+
+    payload = json.loads(result["result"]["content"][0]["text"])
+    assert [item["id"] for item in payload] == [large_bounty.id, small_bounty.id]
+
+    limited = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {"name": "list_bounties", "arguments": {"sort": "reward", "limit": 1}},
+        },
+    ).json()
+    limited_payload = json.loads(limited["result"]["content"][0]["text"])
+    assert [item["id"] for item in limited_payload] == [large_bounty.id]
+
+
 @pytest.mark.parametrize(
     ("arguments", "request_id"),
     [
@@ -466,6 +516,7 @@ def test_mcp_list_bounties_filters_status_query_and_limit(sqlite_url: str) -> No
         ({"q": 284}, 33),
         ({"limit": 0}, 34),
         ({"limit": 101}, 35),
+        ({"sort": "invalid"}, 36),
     ],
 )
 def test_mcp_list_bounties_rejects_invalid_filters(
