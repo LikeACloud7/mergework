@@ -53,6 +53,8 @@ def test_public_urls_reject_malformed_hosts_and_ports() -> None:
         "https://example.com:bad/path",
         "https://example.com:/path",
         "https://:443/path",
+        "https://999.999.999.999/path",
+        "https://01.02.03.04/path",
         "https://api..example/path",
         "https://bad_host.example/path",
         "https://-bad.example/path",
@@ -63,6 +65,7 @@ def test_public_urls_reject_malformed_hosts_and_ports() -> None:
 
     assert public_url_or_none("https://[bad") is None
     assert public_url_or_none("https://:443/path") is None
+    assert public_url_or_none("https://999.999.999.999/path") is None
     assert public_url_or_none("https://bad_host.example/path") is None
 
 

@@ -41,6 +41,7 @@ GITHUB_LOGIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$")
 CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 MRWK_AMOUNT_RE = re.compile(r"^-?\d+(?:\.\d+)?$")
 PUBLIC_DNS_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$", re.I)
+IPV4_DOTTED_QUAD_RE = re.compile(r"^\d+\.\d+\.\d+\.\d+$")
 
 
 class LedgerError(RuntimeError):
@@ -111,6 +112,8 @@ def validate_public_url(url: str) -> str:
     try:
         ip = ipaddress.ip_address(hostname)
     except ValueError:
+        if IPV4_DOTTED_QUAD_RE.fullmatch(hostname):
+            raise LedgerError("URL must include a valid host") from None
         try:
             ascii_hostname = hostname.encode("idna").decode("ascii").rstrip(".")
         except UnicodeError as exc:
