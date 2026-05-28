@@ -310,15 +310,23 @@ def analyze_inventory(data: dict[str, Any], *, api_host: str = DEFAULT_API_HOST)
     bounties = _bounty_index(data)
     proof_by_source = _proof_sources(data, api_host)
     surfaces = _raw_surfaces(data)
-    keys = [
-        _duplicate_key(
-            str(surface.get("text") or ""),
-            _normalize_url(str(surface.get("source_url") or "")),
-            _first_bounty_ref(str(surface.get("text") or ""), surface.get("fallback_bounty_issue")),
+    keys: list[str] = []
+    for surface in surfaces:
+        text = str(surface.get("text") or "")
+        source_url = _normalize_url(str(surface.get("source_url") or ""))
+        fallback_bounty_issue = surface.get("fallback_bounty_issue")
+        if not source_url or not _is_candidate(
+            text,
+            parent_is_bounty=fallback_bounty_issue is not None,
+        ):
+            continue
+        keys.append(
+            _duplicate_key(
+                text,
+                source_url,
+                _first_bounty_ref(text, fallback_bounty_issue),
+            )
         )
-        for surface in surfaces
-        if _normalize_url(str(surface.get("source_url") or ""))
-    ]
     duplicate_counts = Counter(keys)
     rows: list[ClaimRow] = []
     seen_sources: set[tuple[str, str]] = set()
@@ -384,6 +392,13 @@ def format_markdown_report(report: dict[str, Any]) -> str:
 
 
 def _run_gh_json(args: list[str]) -> Any:
+    if args[:2] == ["gh", "api"]:
+        for flag in ("--method", "-X"):
+            if flag not in args:
+                continue
+            index = args.index(flag)
+            if index + 1 >= len(args) or args[index + 1].upper() not in {"GET", "HEAD"}:
+                raise RuntimeError(f"refusing non-read-only gh api command: {' '.join(args)}")
     if any(arg in {"issue", "pr"} for arg in args) and any(
         arg in {"comment", "edit", "close", "reopen", "merge", "review"} for arg in args
     ):
@@ -405,6 +420,30 @@ def _run_gh_json(args: list[str]) -> Any:
             f"gh command failed with exit {exc.returncode}: {' '.join(args)}\n{exc.stderr}"
         ) from exc
     return json.loads(completed.stdout)
+
+
+def _load_pr_review_comments(repo: str, pr_number: int) -> list[dict[str, Any]]:
+    raw_comments = _run_gh_json(
+        [
+            "gh",
+            "api",
+            f"repos/{repo}/pulls/{pr_number}/comments?per_page=100",
+        ]
+    )
+    comments: list[dict[str, Any]] = []
+    if not isinstance(raw_comments, list):
+        return comments
+    for item in raw_comments:
+        if not isinstance(item, dict):
+            continue
+        comments.append(
+            {
+                "url": item.get("html_url") or item.get("url"),
+                "author": item.get("user"),
+                "body": item.get("body"),
+            }
+        )
+    return comments
 
 
 def _get_json(url: str) -> Any:
@@ -501,6 +540,8 @@ def load_live_inventory(repo: str, api_host: str) -> dict[str, Any]:
                 "number,title,url,body,author,labels,comments,reviews",
             ]
         )
+        if isinstance(pr_view, dict):
+            pr_view["review_comments"] = _load_pr_review_comments(repo, pr["number"])
         pull_requests.append(pr_view)
     public_state = load_public_api_state(api_host)
     public_state.update({"issues": issues, "pull_requests": pull_requests})

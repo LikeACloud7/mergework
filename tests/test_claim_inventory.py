@@ -96,6 +96,26 @@ def _fixture() -> dict[str, object]:
                         "body": "Reviewed the fixture mode and markdown output.",
                     }
                 ],
+                "review_comments": [
+                    {
+                        "url": "https://github.com/ramimbo/mergework/pull/581#discussion_r1",
+                        "author": {"login": "inline-reviewer"},
+                        "body": "The markdown claim row still looks traceable.",
+                    }
+                ],
+            },
+            {
+                "number": 582,
+                "title": "Refs #581: Add another inventory report",
+                "url": "https://github.com/ramimbo/mergework/pull/582",
+                "author": {"login": "jakerated-r"},
+                "body": "Claiming another read-only report.",
+                "comments": [
+                    {
+                        "author": {"login": "maintainer"},
+                        "body": "Looks fine.",
+                    }
+                ],
             },
             {
                 "number": 999,
@@ -143,6 +163,13 @@ def test_claim_inventory_classifies_required_statuses(tmp_path, capsys) -> None:
         rows["https://github.com/ramimbo/mergework/pull/1000"]["likely_status"] == "unknown_bounty"
     )
     assert rows["https://github.com/ramimbo/mergework/pull/581"]["bounty_id"] == 87
+    assert (
+        rows["https://github.com/ramimbo/mergework/pull/581#discussion_r1"]["source_type"]
+        == "pull_request_review_comment"
+    )
+    assert (
+        rows["https://github.com/ramimbo/mergework/pull/582"]["likely_status"] == "unpaid_candidate"
+    )
     assert (
         rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-3"]["source_type"]
         == "bounty_issue_comment"
@@ -219,6 +246,14 @@ def test_claim_inventory_live_mode_uses_read_only_calls(monkeypatch) -> None:
                 "comments": [],
                 "reviews": [],
             }
+        if args[:2] == ["gh", "api"]:
+            return [
+                {
+                    "html_url": "https://github.com/ramimbo/mergework/pull/582#discussion_r123",
+                    "user": {"login": "reviewer"},
+                    "body": "Inline review claim evidence for #581.",
+                }
+            ]
         raise AssertionError(args)
 
     monkeypatch.setattr(claim_inventory, "_run_gh_json", fake_run_gh_json)
@@ -235,14 +270,24 @@ def test_claim_inventory_live_mode_uses_read_only_calls(monkeypatch) -> None:
     data = claim_inventory.load_live_inventory("ramimbo/mergework", "https://api.example.test")
 
     assert data["bounties"][0]["id"] == 87
+    assert data["pull_requests"][0]["review_comments"] == [
+        {
+            "url": "https://github.com/ramimbo/mergework/pull/582#discussion_r123",
+            "author": {"login": "reviewer"},
+            "body": "Inline review claim evidence for #581.",
+        }
+    ]
     allowed_prefixes = {
         ("gh", "issue", "list"),
         ("gh", "issue", "view"),
         ("gh", "pr", "list"),
         ("gh", "pr", "view"),
+        ("gh", "api"),
     }
     assert calls, "expected at least one gh invocation"
-    assert all(tuple(call[:3]) in allowed_prefixes for call in calls), calls
+    assert all(
+        tuple(call[:3]) in allowed_prefixes or tuple(call[:2]) in allowed_prefixes for call in calls
+    ), calls
 
 
 def test_claim_inventory_script_entrypoint_loads_shared_parser() -> None:
