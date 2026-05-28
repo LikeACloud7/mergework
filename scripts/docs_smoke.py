@@ -76,6 +76,20 @@ def _squash(text: str) -> str:
     return " ".join(text.split())
 
 
+def _template_field_block(template: str, field_id: str) -> str:
+    marker = f"id: {field_id}"
+    if marker not in template:
+        return ""
+    block = template.split(marker, 1)[1]
+    next_field = block.find("\n    id: ")
+    return block if next_field == -1 else block[:next_field]
+
+
+def _template_field_is_required(template: str, field_id: str) -> bool:
+    block = _template_field_block(template, field_id)
+    return "validations:" in block and "required: true" in block
+
+
 def main() -> int:
     ok = True
     for relative in REQUIRED:
@@ -134,10 +148,10 @@ def main() -> int:
             if phrase not in bounty_template:
                 print(f"bounty issue template missing required phrase: {phrase}")
                 ok = False
-        required_tail = bounty_template.split("id: out_of_scope", 1)[-1]
-        if "required: true" not in required_tail.split("id: duplicate_stale_rules", 1)[0]:
-            print("bounty issue template out_of_scope field must be required")
-            ok = False
+        for field_id in ("evidence", "out_of_scope", "duplicate_stale_rules"):
+            if not _template_field_is_required(bounty_template, field_id):
+                print(f"bounty issue template {field_id} field must be required")
+                ok = False
     if ok:
         print("docs smoke ok")
         return 0

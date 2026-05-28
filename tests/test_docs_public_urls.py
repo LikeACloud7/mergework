@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts.docs_smoke import REQUIRED
+from scripts.docs_smoke import REQUIRED, _template_field_is_required
 
 
 def test_readme_lists_live_ltclab_urls() -> None:
@@ -284,6 +284,20 @@ def test_agent_guide_explains_internal_bounty_ids() -> None:
 
 def test_docs_smoke_covers_public_api_examples() -> None:
     assert "docs/api-examples.md" in REQUIRED
+
+
+def test_docs_smoke_requires_bounty_evidence_exclusion_and_duplicate_fields() -> None:
+    template = Path(".github/ISSUE_TEMPLATE/bounty.yml").read_text(encoding="utf-8").lower()
+
+    assert _template_field_is_required(template, "evidence")
+    assert _template_field_is_required(template, "out_of_scope")
+    assert _template_field_is_required(template, "duplicate_stale_rules")
+    assert not _template_field_is_required(
+        template.replace("id: evidence", "id: optional_evidence", 1), "evidence"
+    )
+    assert not _template_field_is_required(
+        template.replace("required: true", "required: false", 1), "work"
+    )
 
 
 def test_contributing_names_docs_smoke_for_public_docs_changes() -> None:
