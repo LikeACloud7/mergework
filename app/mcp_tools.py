@@ -207,9 +207,12 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
             proof = session.get(Proof, proof_hash_from_path(str_arg("hash")))
             if proof is None:
                 return "proof not found"
-            public_payload = json.loads(proof.public_json)
+            try:
+                public_payload = json.loads(proof.public_json)
+            except (TypeError, json.JSONDecodeError):
+                return "invalid proof payload"
             if not isinstance(public_payload, dict):
-                raise ValueError("invalid proof payload")
+                return "invalid proof payload"
             return json.dumps(
                 {
                     "hash": proof.hash,
