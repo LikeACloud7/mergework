@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block title %}MRWK Bounty #{{ bounty.id }}{% endblock %}
 {% block content %}
+<nav class="back-nav" aria-label="Bounty navigation">
+  <a href="/bounties">&larr; Back to bounties</a>
+</nav>
 <section class="detail">
   <p class="eyebrow">Bounty #{{ bounty.id }}</p>
   <h1>{{ bounty.title }}</h1>
@@ -10,7 +13,7 @@
   <div class="bounty-summary" aria-label="Bounty summary">
     <article>
       <span>Status</span>
-      <strong class="status-pill">{{ bounty.status }}</strong>
+      <strong class="status-pill status-{{ bounty.status }}">{{ bounty.status }}</strong>
     </article>
     <article>
       <span>Reward per award</span>

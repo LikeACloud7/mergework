@@ -632,3 +632,96 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert missing_proof.status_code == 404
     assert client.get("/api/v1/proofs/not-a-proof-hash").status_code == 400
     assert client.get("/proofs/not-a-proof-hash").status_code == 400
+
+
+def test_bounties_list_cards_have_status_pills(sqlite_url: str) -> None:
+    """Bounty list cards should include a status pill for quick scanning."""
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=90,
+            issue_url="https://github.com/ramimbo/mergework/issues/90",
+            title="Open bounty for status pill test",
+            reward_mrwk="75",
+            acceptance="Should show a green status pill.",
+        )
+        paid_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=91,
+            issue_url="https://github.com/ramimbo/mergework/issues/91",
+            title="Paid bounty for status pill test",
+            reward_mrwk="75",
+            acceptance="Should show a blue status pill.",
+        )
+        pay_bounty(
+            session,
+            bounty_id=paid_bounty.id,
+            to_account="github:tester",
+            submission_url="https://github.com/ramimbo/mergework/pull/91",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    page = client.get("/bounties")
+    assert page.status_code == 200
+
+    # Status pills should appear for each card
+    assert "status-pill status-open" in page.text
+    assert "status-pill status-paid" in page.text
+
+    # Cards should have status-specific class for visual distinction
+    assert "bounty-card bounty-card--open" in page.text
+    assert "bounty-card bounty-card--paid" in page.text
+
+    # Reward should be highlighted
+    assert "<strong>75 MRWK</strong> per award" in page.text
+
+    # Also verify a closed bounty gets the right pill
+    with session_scope(sqlite_url) as session:
+        closed_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=93,
+            issue_url="https://github.com/ramimbo/mergework/issues/93",
+            title="Closed bounty for status pill test",
+            reward_mrwk="30",
+            acceptance="Should show a muted status pill.",
+        )
+        close_bounty(session, bounty_id=closed_bounty.id, closed_by="maintainer")
+
+    page = client.get("/bounties")
+    assert page.status_code == 200
+    assert "status-pill status-closed" in page.text
+    assert "bounty-card bounty-card--closed" in page.text
+
+
+def test_bounty_detail_page_has_back_navigation(sqlite_url: str) -> None:
+    """Bounty detail page should have a back link to the bounties list."""
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=92,
+            issue_url="https://github.com/ramimbo/mergework/issues/92",
+            title="Back nav test bounty",
+            reward_mrwk="50",
+            acceptance="Should have a back navigation link.",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    page = client.get(f"/bounties/{bounty.id}")
+    assert page.status_code == 200
+    assert "Back to bounties" in page.text
+    assert 'href="/bounties"' in page.text
+
+    # Detail page should also have a status pill with status-specific class
+    assert "status-pill status-open" in page.text
