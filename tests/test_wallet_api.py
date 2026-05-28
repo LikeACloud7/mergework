@@ -618,6 +618,19 @@ def test_github_wallet_actions_clear_private_key_after_submit_attempt() -> None:
     assert idx_set_result < idx_refresh_nonce < idx_set_error < idx_finally < idx_clear_private_key
 
 
+def test_transfer_action_clears_private_key_after_submit_attempt() -> None:
+    wallet_js = Path("app/static/wallet.js").read_text(encoding="utf-8")
+    transfer_start = wallet_js.find("function setupTransfer()")
+    github_actions_start = wallet_js.find("function setupGithubActions()")
+    transfer_block = wallet_js[transfer_start:github_actions_start]
+
+    assert 'form[data-action="submit-transfer"]' in transfer_block
+    assert 'setText("[data-transfer-result]", transfer);' in transfer_block
+    assert 'setText("[data-transfer-result]", error.message);' in transfer_block
+    assert "} finally {" in transfer_block
+    assert "clearPrivateKeyField(form);" in transfer_block
+
+
 def test_reject_self_transfer(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
