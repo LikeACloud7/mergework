@@ -161,6 +161,9 @@ python scripts/claim_inventory.py --input claim-inventory.json --format markdown
 Each output row includes `source_url`, `bounty_issue`, internal `bounty_id`
 when known, `claimant`, `source_type`, `duplicate_key`, `likely_status`, and a
 `proof_url` when the public activity/proof data already paid that source. The
+report uses the parent PR URL when GitHub returns a review/comment object
+without its own item URL, so use `source_type` and `claimant` to disambiguate
+those rare rows. The
 `likely_status` enum is:
 
 - `already_paid`: public proof data maps the source URL to an existing proof.

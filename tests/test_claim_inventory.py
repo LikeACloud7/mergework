@@ -235,9 +235,14 @@ def test_claim_inventory_live_mode_uses_read_only_calls(monkeypatch) -> None:
     data = claim_inventory.load_live_inventory("ramimbo/mergework", "https://api.example.test")
 
     assert data["bounties"][0]["id"] == 87
-    flat_calls = " ".join(" ".join(call) for call in calls)
-    forbidden = (" comment ", " edit ", " close ", " reopen ", " merge ", " review ")
-    assert not any(word in f" {flat_calls} " for word in forbidden)
+    allowed_prefixes = {
+        ("gh", "issue", "list"),
+        ("gh", "issue", "view"),
+        ("gh", "pr", "list"),
+        ("gh", "pr", "view"),
+    }
+    assert calls, "expected at least one gh invocation"
+    assert all(tuple(call[:3]) in allowed_prefixes for call in calls), calls
 
 
 def test_claim_inventory_script_entrypoint_loads_shared_parser() -> None:

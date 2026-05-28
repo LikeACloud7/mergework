@@ -447,7 +447,11 @@ def load_live_inventory(repo: str, api_host: str) -> dict[str, Any]:
     )
     issues: list[dict[str, Any]] = []
     for issue in issue_list:
-        if not isinstance(issue, dict) or not _is_bounty_issue(issue):
+        if (
+            not isinstance(issue, dict)
+            or not isinstance(issue.get("number"), int)
+            or not _is_bounty_issue(issue)
+        ):
             continue
         issue_view = _run_gh_json(
             [
@@ -479,7 +483,7 @@ def load_live_inventory(repo: str, api_host: str) -> dict[str, Any]:
     )
     pull_requests: list[dict[str, Any]] = []
     for pr in prs:
-        if not isinstance(pr, dict):
+        if not isinstance(pr, dict) or not isinstance(pr.get("number"), int):
             continue
         pr_view = _run_gh_json(
             [
