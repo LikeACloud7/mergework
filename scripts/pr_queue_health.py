@@ -6,7 +6,11 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.bounty_refs import BOUNTY_REF_RE
 

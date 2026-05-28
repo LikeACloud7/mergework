@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
 from scripts import pr_queue_health
 from scripts.pr_queue_health import analyze_queue, format_markdown_report, format_text_report, main
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_pr_queue_health_flags_required_queue_cases(tmp_path, capsys) -> None:
@@ -82,6 +86,19 @@ def test_pr_queue_health_flags_required_queue_cases(tmp_path, capsys) -> None:
     assert exit_code == 1
     output = json.loads(capsys.readouterr().out)
     assert output["summary"]["pull_requests"] == 4
+
+
+def test_pr_queue_health_script_entrypoint_loads_shared_parser() -> None:
+    result = subprocess.run(
+        [sys.executable, "scripts/pr_queue_health.py", "--help"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "usage:" in result.stdout
 
 
 def test_pr_queue_health_text_report_is_pasteable() -> None:

@@ -7,9 +7,13 @@ import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
 from difflib import SequenceMatcher
+from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.bounty_refs import BOUNTY_REF_RE
 

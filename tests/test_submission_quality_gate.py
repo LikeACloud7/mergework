@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
 from scripts import submission_quality_gate
 from scripts.submission_quality_gate import evaluate_submission, main
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_submission_quality_gate_passes_open_bounty_with_evidence(capsys, tmp_path) -> None:
@@ -40,6 +44,19 @@ def test_submission_quality_gate_passes_open_bounty_with_evidence(capsys, tmp_pa
     input_path.write_text(json.dumps(fixture), encoding="utf-8")
     assert main(["--input", str(input_path), "--format", "json"]) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "pass"
+
+
+def test_submission_quality_gate_script_entrypoint_loads_shared_parser() -> None:
+    result = subprocess.run(
+        [sys.executable, "scripts/submission_quality_gate.py", "--help"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "usage:" in result.stdout
 
 
 def test_submission_quality_gate_accepts_claim_command_reference() -> None:
