@@ -618,6 +618,96 @@ def test_submission_quality_gate_live_mode_warns_when_github_unavailable(
     assert "load_warning" in output
 
 
+def test_submission_quality_gate_warns_when_live_collections_hit_safety_caps(
+    monkeypatch,
+) -> None:
+    def fake_run(args, **kwargs):
+        if args[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout=json.dumps(
+                    [
+                        {
+                            "number": number,
+                            "title": "Open PR",
+                            "body": "Refs #319",
+                            "state": "OPEN",
+                            "url": f"https://github.com/ramimbo/mergework/pull/{number}",
+                        }
+                        for number in range(1, submission_quality_gate.GH_PR_SAFETY_CAP + 1)
+                    ]
+                ),
+                stderr="",
+            )
+        if args[:3] == ["gh", "issue", "list"]:
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout=json.dumps(
+                    [
+                        {
+                            "number": number,
+                            "title": f"MRWK bounty: cap test {number}",
+                            "state": "OPEN",
+                        }
+                        for number in range(
+                            319,
+                            319 + submission_quality_gate.GH_ISSUE_SAFETY_CAP,
+                        )
+                    ]
+                ),
+                stderr="",
+            )
+        if args[:3] == ["gh", "issue", "view"]:
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "author": {"login": "ramimbo"},
+                        "createdAt": "2026-05-25T12:00:00Z",
+                        "comments": [],
+                    }
+                ),
+                stderr="",
+            )
+        raise AssertionError(args)
+
+    monkeypatch.setattr(submission_quality_gate.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        submission_quality_gate,
+        "_load_api_bounties",
+        lambda repo, api_host: {
+            319: {"id": 66, "number": 319, "state": "open", "awards_remaining": 1}
+        },
+    )
+    monkeypatch.setattr(
+        submission_quality_gate, "_load_api_attempts", lambda api_host, bounty_id: []
+    )
+
+    data = submission_quality_gate._load_live_context(
+        "ramimbo/mergework",
+        "Summary: work\n\nRefs #319\n\nValidation: pytest passed",
+        "https://api.example.test",
+    )
+    result = evaluate_submission(data)
+
+    assert result["status"] == "warn"
+    assert (
+        f"gh pr list reached the {submission_quality_gate.GH_PR_SAFETY_CAP}" in data["load_warning"]
+    )
+    assert (
+        f"gh issue list reached the {submission_quality_gate.GH_ISSUE_SAFETY_CAP}"
+        in data["load_warning"]
+    )
+    assert {
+        "name": "source_completeness",
+        "status": "warn",
+        "message": data["load_warning"],
+    } in result["checks"]
+
+
 def test_submission_quality_gate_live_bounties_use_api_award_capacity(monkeypatch) -> None:
     def fake_run(args, **kwargs):
         if args[:3] == ["gh", "pr", "list"]:

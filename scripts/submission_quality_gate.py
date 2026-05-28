@@ -25,6 +25,8 @@ SUMMARY_RE = re.compile(r"\b(summary|what changed|changes?)\b", re.IGNORECASE)
 GH_TIMEOUT_SECONDS = 30
 DEFAULT_API_HOST = "https://api.mrwk.ltclab.site"
 DEFAULT_MAX_MAINTAINER_AGE_DAYS = 14
+GH_PR_SAFETY_CAP = 101
+GH_ISSUE_SAFETY_CAP = 201
 MAINTAINER_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 MAX_BOUNTY_REF = 2**63 - 1
 
@@ -234,6 +236,9 @@ def evaluate_submission(data: dict[str, Any]) -> dict[str, Any]:
     }
     pull_requests = [item for item in data.get("pull_requests", []) if isinstance(item, dict)]
     checks: list[dict[str, str]] = []
+    load_warning = str(data.get("load_warning") or "").strip()
+    if load_warning:
+        checks.append(_check("source_completeness", "warn", load_warning))
     refs = _bounty_refs(text)
     bounty_ref = refs[0] if refs else None
     if bounty_ref is None:
@@ -487,7 +492,7 @@ def _load_live_context(
                 "--state",
                 "open",
                 "--limit",
-                "100",
+                str(GH_PR_SAFETY_CAP),
                 "--json",
                 "number,title,url,body,state",
             ]
@@ -502,7 +507,7 @@ def _load_live_context(
                 "--state",
                 "all",
                 "--limit",
-                "200",
+                str(GH_ISSUE_SAFETY_CAP),
                 "--json",
                 "number,title,state",
             ]
@@ -514,6 +519,16 @@ def _load_live_context(
             "pull_requests": [],
             "load_warning": f"live GitHub data unavailable: {exc}",
         }
+    if len(prs) >= GH_PR_SAFETY_CAP:
+        load_warnings.append(
+            f"gh pr list reached the {GH_PR_SAFETY_CAP} item safety cap; "
+            "similar-open-PR checks may be incomplete"
+        )
+    if len(issues) >= GH_ISSUE_SAFETY_CAP:
+        load_warnings.append(
+            f"gh issue list reached the {GH_ISSUE_SAFETY_CAP} item safety cap; "
+            "bounty discovery may be incomplete"
+        )
     try:
         api_bounties = _load_api_bounties(repo, api_host)
     except RuntimeError as exc:
