@@ -11,7 +11,11 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
-BOUNTY_REF_RE = re.compile(r"\b(?:bounty|refs?|fixes|closes|claims?)\s+#(\d+)", re.IGNORECASE)
+LINKED_BOUNTY_VERBS = r"bounty|claims?|close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs?|references?"
+BOUNTY_REF_RE = re.compile(
+    rf"\b(?:{LINKED_BOUNTY_VERBS})\s+#(\d+)(?![A-Za-z0-9_-])",
+    re.IGNORECASE,
+)
 EVIDENCE_RE = re.compile(
     r"\b(pytest|ruff|mypy|validation|verified|test evidence|checks? passed)\b",
     re.IGNORECASE,
@@ -220,7 +224,8 @@ def evaluate_submission(data: dict[str, Any]) -> dict[str, Any]:
             _check(
                 "bounty_reference",
                 "fail",
-                "submission text must include Bounty #<issue>, Refs #<issue>, or /claim #<issue>",
+                "submission text must include a bounty reference such as "
+                "Bounty #<issue>, Refs #<issue>, Fixes #<issue>, or /claim #<issue>",
             )
         )
     else:

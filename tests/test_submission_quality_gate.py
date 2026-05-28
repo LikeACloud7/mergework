@@ -66,6 +66,59 @@ def test_submission_quality_gate_accepts_claim_command_reference() -> None:
     } in result["checks"]
 
 
+def test_submission_quality_gate_accepts_github_linking_keywords() -> None:
+    references = (
+        "Bounty #319",
+        "Ref #319",
+        "Refs #319",
+        "Reference #319",
+        "References #319",
+        "Fix #319",
+        "Fixes #319",
+        "Fixed #319",
+        "Close #319",
+        "Closes #319",
+        "Closed #319",
+        "Resolve #319",
+        "Resolves #319",
+        "Resolved #319",
+    )
+    for reference in references:
+        result = evaluate_submission(
+            {
+                "submission_text": f"""
+                Summary:
+                Harden the bounty reference parser.
+
+                {reference}
+
+                Validation:
+                - pytest passed.
+                """,
+                "bounties": [{"number": 319, "state": "OPEN", "awards_remaining": 1}],
+                "pull_requests": [],
+            }
+        )
+
+        assert result["status"] == "pass", reference
+        assert result["bounty_reference"] == 319
+
+
+def test_submission_quality_gate_rejects_linking_keyword_issue_suffix() -> None:
+    result = evaluate_submission(
+        {
+            "submission_text": (
+                "Summary: add validation\n\nFixes #319abc\n\nValidation: pytest passed"
+            ),
+            "bounties": [{"number": 319, "state": "OPEN", "awards_remaining": 1}],
+            "pull_requests": [],
+        }
+    )
+
+    assert result["status"] == "fail"
+    assert result["bounty_reference"] is None
+
+
 def test_submission_quality_gate_fails_missing_reference() -> None:
     result = evaluate_submission(
         {
@@ -80,7 +133,8 @@ def test_submission_quality_gate_fails_missing_reference() -> None:
         "name": "bounty_reference",
         "status": "fail",
         "message": (
-            "submission text must include Bounty #<issue>, Refs #<issue>, or /claim #<issue>"
+            "submission text must include a bounty reference such as "
+            "Bounty #<issue>, Refs #<issue>, Fixes #<issue>, or /claim #<issue>"
         ),
     }
 

@@ -127,6 +127,63 @@ def test_pr_queue_health_accepts_claim_command_reference() -> None:
     assert report["missing_bounty_references"] == []
 
 
+def test_pr_queue_health_accepts_github_linking_keywords() -> None:
+    references = (
+        "Bounty #310",
+        "Ref #310",
+        "Refs #310",
+        "Reference #310",
+        "References #310",
+        "Fix #310",
+        "Fixes #310",
+        "Fixed #310",
+        "Close #310",
+        "Closes #310",
+        "Closed #310",
+        "Resolve #310",
+        "Resolves #310",
+        "Resolved #310",
+    )
+    report = analyze_queue(
+        {
+            "bounties": [{"number": 310, "state": "OPEN", "awards_remaining": 1}],
+            "pull_requests": [
+                {
+                    "number": index,
+                    "title": f"Harden bounty queue checks {index}",
+                    "body": reference,
+                    "merge_state": "clean",
+                    "labels": [],
+                }
+                for index, reference in enumerate(references, start=1)
+            ],
+        }
+    )
+
+    assert report["summary"]["missing_bounty_references"] == 0
+    assert report["missing_bounty_references"] == []
+
+
+def test_pr_queue_health_rejects_linking_keyword_issue_suffix() -> None:
+    report = analyze_queue(
+        {
+            "bounties": [{"number": 310, "state": "OPEN", "awards_remaining": 1}],
+            "pull_requests": [
+                {
+                    "number": 8,
+                    "title": "Harden bounty queue checks",
+                    "body": "Fixes #310abc",
+                    "merge_state": "clean",
+                    "labels": [],
+                }
+            ],
+        }
+    )
+
+    assert report["summary"]["missing_bounty_references"] == 1
+    assert report["missing_bounty_references"][0]["pull_request"] == 8
+
+
 def test_pr_queue_health_markdown_report_includes_required_sections() -> None:
     report = analyze_queue(
         {
@@ -183,7 +240,8 @@ def test_pr_queue_health_markdown_report_includes_required_sections() -> None:
     assert "### Missing bounty references" in markdown
     assert (
         "- [PR #2](https://github.com/ramimbo/mergework/pull/2): "
-        "Improve bounty filters (No Bounty #<issue>, Refs #<issue>, or /claim #<issue> found)"
+        "Improve bounty filters (No bounty reference such as Bounty #<issue>, "
+        "Refs #<issue>, Fixes #<issue>, or /claim #<issue> found)"
     ) in markdown
     assert "### Dirty or unstable merge state" in markdown
     assert "Merge state is dirty" in markdown
