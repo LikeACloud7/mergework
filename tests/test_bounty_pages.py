@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
+
 from fastapi.testclient import TestClient
 
 from app.db import create_schema, session_scope
 from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
-from app.models import Proof
+from app.models import LedgerEntry, Proof
 
 
 def test_bounties_page_renders_and_filters_by_status(sqlite_url: str) -> None:
@@ -562,8 +564,34 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
             closed_by="maintainer",
             reference="https://github.com/ramimbo/mergework/issues/23",
         )
+        unsafe_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=24,
+            issue_url="https://github.com/ramimbo/mergework/issues/24",
+            title="Keep rejected public URLs inert",
+            reward_mrwk="25",
+            acceptance="Rejected external URLs render as text, not links.",
+        )
+        unsafe_proof = pay_bounty(
+            session,
+            bounty_id=unsafe_bounty.id,
+            to_account="github:contributor",
+            submission_url="https://github.com/ramimbo/mergework/pull/100",
+            accepted_by="maintainer",
+            verifier_result={"result": "accepted"},
+        )
+        unsafe_payload = json.loads(unsafe_proof.public_json)
+        unsafe_payload["submission_url"] = "javascript:alert(1)"
+        unsafe_proof.public_json = json.dumps(
+            unsafe_payload,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
         proof_hash = proof.hash
         payment_sequence = proof.ledger_sequence
+        unsafe_proof_hash = unsafe_proof.hash
 
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 
@@ -576,7 +604,10 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert "Award paid" in ledger_page.text
     assert "Unused reserve released" in ledger_page.text
     assert 'class="ledger-row ledger-row--bounty-payment"' in ledger_page.text
-    assert 'href="https://github.com/ramimbo/mergework/pull/99"' in ledger_page.text
+    assert (
+        'href="https://github.com/ramimbo/mergework/pull/99" rel="nofollow noopener"'
+        in ledger_page.text
+    )
     assert f'href="/proofs/{proof_hash}">Payment proof</a>' in ledger_page.text
 
     ledger_entry_page = client.get(f"/ledger/{payment_sequence}")
@@ -589,6 +620,10 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert f'href="/ledger/{payment_sequence - 1}">Previous entry</a>' in ledger_entry_page.text
     assert f'href="/api/v1/ledger/{payment_sequence}">Entry JSON</a>' in ledger_entry_page.text
     assert f'href="/ledger/{payment_sequence + 1}">Next entry</a>' in ledger_entry_page.text
+    assert (
+        'href="https://github.com/ramimbo/mergework/pull/99" rel="nofollow noopener"'
+        in ledger_entry_page.text
+    )
     genesis_page = client.get("/ledger/1")
     assert genesis_page.status_code == 200
     assert 'href="/ledger">All ledger entries</a>' in genesis_page.text
@@ -617,6 +652,18 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert "MergeWork bounty" in proof_page.text
     assert f'href="/bounties/{bounty.id}"' in proof_page.text
     assert f'href="/ledger/{payment_sequence}"' in proof_page.text
+    assert (
+        'href="https://github.com/ramimbo/mergework/issues/23" rel="nofollow noopener"'
+        in proof_page.text
+    )
+    assert (
+        'href="https://github.com/ramimbo/mergework/pull/99" rel="nofollow noopener"'
+        in proof_page.text
+    )
+    unsafe_proof_page = client.get(f"/proofs/{unsafe_proof_hash}")
+    assert unsafe_proof_page.status_code == 200
+    assert "javascript:alert(1)" in unsafe_proof_page.text
+    assert 'href="javascript:alert(1)"' not in unsafe_proof_page.text
     assert "Related activity" in proof_page.text
     assert 'href="/activity?q=github%3Acontributor"' in proof_page.text
     assert f'href="/activity?q={proof_hash}"' in proof_page.text
@@ -632,6 +679,56 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert missing_proof.status_code == 404
     assert client.get("/api/v1/proofs/not-a-proof-hash").status_code == 400
     assert client.get("/proofs/not-a-proof-hash").status_code == 400
+
+
+def test_ledger_entry_reference_fallbacks(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=24,
+            issue_url="https://github.com/ramimbo/mergework/issues/24",
+            title="Render ledger references safely",
+            reward_mrwk="50",
+            max_awards=2,
+            acceptance="Ledger detail pages should not link unsafe references.",
+        )
+        empty_reference_proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:empty-reference",
+            submission_url="https://github.com/ramimbo/mergework/pull/100",
+            accepted_by="maintainer",
+            verifier_result={"result": "accepted"},
+        )
+        unsafe_reference_proof = pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:unsafe-reference",
+            submission_url="https://github.com/ramimbo/mergework/pull/101",
+            accepted_by="maintainer",
+            verifier_result={"result": "accepted"},
+        )
+        empty_reference_entry = session.get(LedgerEntry, empty_reference_proof.ledger_sequence)
+        unsafe_reference_entry = session.get(LedgerEntry, unsafe_reference_proof.ledger_sequence)
+        assert empty_reference_entry is not None
+        assert unsafe_reference_entry is not None
+        empty_reference_entry.reference = ""
+        unsafe_reference_entry.reference = "javascript:alert(1)"
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    empty_reference_page = client.get(f"/ledger/{empty_reference_proof.ledger_sequence}")
+    assert empty_reference_page.status_code == 200
+    assert "<dt>Reference</dt>" in empty_reference_page.text
+    assert "<dd>-</dd>" in empty_reference_page.text
+
+    unsafe_reference_page = client.get(f"/ledger/{unsafe_reference_proof.ledger_sequence}")
+    assert unsafe_reference_page.status_code == 200
+    assert "javascript:alert(1)" in unsafe_reference_page.text
+    assert 'href="javascript:alert(1)"' not in unsafe_reference_page.text
 
 
 def test_bounties_list_cards_have_status_pills(sqlite_url: str) -> None:
