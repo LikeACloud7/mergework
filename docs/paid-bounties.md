@@ -6,6 +6,7 @@ the source of truth; this page mirrors the GitHub discussion at
 
 | Date UTC | Bounty | Accepted work | Recipient | Amount | Proof |
 | --- | --- | --- | --- | --- | --- |
+| 2026-05-28 | [#456 document agent-friendly bounty post template](https://github.com/ramimbo/mergework/issues/456) | [PR #558](https://github.com/ramimbo/mergework/pull/558) | `github:xingxi0614-cpu` | 150 MRWK | [0db2548a](https://mrwk.ltclab.site/proofs/0db2548ae23af32e1a086f9aa2f868d9fb60ac5cc608a1dc9f7c6f955fdc5df4) |
 | 2026-05-26 | [#426 documentation updates and improvements](https://github.com/ramimbo/mergework/issues/426) | [PR #446](https://github.com/ramimbo/mergework/pull/446) | `github:campersurfer` | 50 MRWK | [bba27216](https://mrwk.ltclab.site/proofs/bba272164648c1bca33710226173a350d002a22f23aa1bf24c46ec594cf2cc9c) |
 | 2026-05-26 | [#411 public API and MCP examples accuracy, round 3](https://github.com/ramimbo/mergework/issues/411) | [PR #445](https://github.com/ramimbo/mergework/pull/445) | `github:campersurfer` | 75 MRWK | [f5b9b286](https://mrwk.ltclab.site/proofs/f5b9b286c4cfefe6de73198dd7be5b8d5e1013264623573b7e49488dd6efaecb) |
 | 2026-05-26 | [#411 public API and MCP examples accuracy, round 3](https://github.com/ramimbo/mergework/issues/411) | [PR #412](https://github.com/ramimbo/mergework/pull/412) | `github:carpedkm` | 75 MRWK | [fe000166](https://mrwk.ltclab.site/proofs/fe00016678d3a0dd408ba165b0e04516f16e09cc5c4b512df3c28e60f6f72015) |
