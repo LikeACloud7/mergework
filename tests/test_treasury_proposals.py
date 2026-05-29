@@ -133,6 +133,28 @@ def test_treasury_proposals_list_newest_first(
     assert [proposal["id"] for proposal in listed.json()] == [second["id"], first["id"]]
 
 
+def test_treasury_proposals_list_honors_limit(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    first = client.post(
+        "/api/v1/bounties", headers=ADMIN_HEADERS, json=_bounty_payload(issue_number=72)
+    ).json()
+    second = client.post(
+        "/api/v1/bounties", headers=ADMIN_HEADERS, json=_bounty_payload(issue_number=73)
+    ).json()
+
+    limited = client.get("/api/v1/treasury/proposals?limit=1")
+    too_small = client.get("/api/v1/treasury/proposals?limit=0")
+    too_large = client.get("/api/v1/treasury/proposals?limit=201")
+
+    assert limited.status_code == 200
+    assert [proposal["id"] for proposal in limited.json()] == [second["id"]]
+    assert first["id"] not in [proposal["id"] for proposal in limited.json()]
+    assert too_small.status_code == 422
+    assert too_large.status_code == 422
+
+
 def test_direct_proposal_creation_requires_admin_token(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
