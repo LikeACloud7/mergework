@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import session_scope
-from app.ledger.service import LedgerError, validate_public_url
+from app.ledger.service import CONTROL_CHAR_RE, LedgerError, validate_public_url
 from app.models import Bounty, BountyAttempt
 
 DEFAULT_ATTEMPT_TTL_SECONDS = 24 * 60 * 60
@@ -183,6 +183,10 @@ def register_bounty_attempt_routes(
             source = ""
         if not isinstance(source, str):
             raise HTTPException(status_code=400, detail="source_url must be a string")
+        if CONTROL_CHAR_RE.search(source):
+            raise HTTPException(
+                status_code=400, detail="source_url must not contain control characters"
+            )
         source = source.strip()
         try:
             source_url = validate_public_url(source) if source else None
