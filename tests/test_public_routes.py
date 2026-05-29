@@ -53,6 +53,10 @@ def test_docs_page_marks_static_github_links_as_untrusted(sqlite_url: str) -> No
 
     assert page.status_code == 200
     for url in (
+        "https://ltclab.site",
+        "https://mrwk.ltclab.site",
+        "https://api.mrwk.ltclab.site",
+        "https://mcp.mrwk.ltclab.site",
         "https://github.com/ramimbo/mergework/discussions/16",
         "https://github.com/ramimbo/mergework/blob/main/docs/bounty-rules.md",
         "https://github.com/ramimbo/mergework/blob/main/docs/paid-bounties.md",
@@ -69,4 +73,33 @@ def test_ltc_lab_header_marks_github_nav_link_as_untrusted(sqlite_url: str) -> N
     page = client.get("/", headers={"host": "ltclab.site"})
 
     assert page.status_code == 200
+    assert ('href="https://mrwk.ltclab.site" rel="nofollow noopener"') in page.text
     assert ('href="https://github.com/ramimbo/mergework" rel="nofollow noopener"') in page.text
+
+
+def test_hub_marks_static_service_links_as_untrusted(sqlite_url: str) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    page = client.get("/")
+
+    assert page.status_code == 200
+    for url in (
+        "https://ltclab.site",
+        "https://api.mrwk.ltclab.site",
+        "https://mcp.mrwk.ltclab.site",
+    ):
+        assert f'href="{url}" rel="nofollow noopener"' in page.text
+
+
+def test_ltc_lab_project_links_are_marked_untrusted(sqlite_url: str) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    page = client.get("/", headers={"host": "ltclab.site"})
+
+    assert page.status_code == 200
+    for url in (
+        "https://mrwk.ltclab.site",
+        "https://api.mrwk.ltclab.site",
+        "https://mcp.mrwk.ltclab.site",
+    ):
+        assert f'href="{url}" rel="nofollow noopener"' in page.text
