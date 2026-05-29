@@ -204,6 +204,50 @@ def test_treasury_status_reports_reserve_capacity_and_pending_create_proposals(
     ]
 
 
+def test_treasury_status_includes_reserve_at_exact_24h_boundary(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    fixed_now = utc_now().replace(microsecond=0)
+    boundary_time = fixed_now - timedelta(hours=24)
+    monkeypatch.setattr("app.treasury.utc_now", lambda: fixed_now)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=42,
+            issue_url="https://github.com/ramimbo/mergework/issues/42",
+            title="Boundary reserve",
+            reward_mrwk="1",
+            acceptance="Accepted work.",
+        )
+        entry = session.scalar(
+            select(LedgerEntry).where(
+                LedgerEntry.entry_type == "bounty_reserve",
+                LedgerEntry.reference == "https://github.com/ramimbo/mergework/issues/42",
+            )
+        )
+        assert entry is not None
+        entry.created_at = boundary_time
+
+    response = client.get("/api/v1/treasury/status")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["executed_reserve_24h_mrwk"] == "1"
+    assert body["recent_reserves"] == [
+        {
+            "ledger_sequence": entry.sequence,
+            "amount_mrwk": "1",
+            "reference": "https://github.com/ramimbo/mergework/issues/42",
+            "created_at": boundary_time.replace(tzinfo=None).isoformat(),
+            "expires_at": fixed_now.replace(tzinfo=None).isoformat(),
+        }
+    ]
+    assert body["next_capacity_release_at"] is None
+
+
 def test_direct_proposal_creation_requires_admin_token(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
