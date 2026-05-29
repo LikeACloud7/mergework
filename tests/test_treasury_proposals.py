@@ -102,6 +102,20 @@ def test_admin_bounty_creation_creates_public_delayed_proposal(
     assert detail.json()["payload_hash"] == body["payload_hash"]
 
 
+def test_admin_bounty_creation_rejects_control_character_reward_amount(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    payload = _bounty_payload(issue_number=79, reward_mrwk="\t25")
+
+    response = client.post("/api/v1/bounties", headers=ADMIN_HEADERS, json=payload)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "invalid MRWK amount"
+    with session_scope(sqlite_url) as session:
+        assert session.scalar(select(func.count(TreasuryProposal.id))) == 0
+
+
 def test_treasury_proposals_list_newest_first(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

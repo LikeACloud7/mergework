@@ -38,7 +38,7 @@ MICRO_UNITS = 1_000_000
 GENESIS_SUPPLY_MICRO = 100_000_000 * MICRO_UNITS
 SQLITE_INTEGER_MAX = 2**63 - 1
 GITHUB_LOGIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$")
-CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
+CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 MRWK_AMOUNT_RE = re.compile(r"^-?\d+(?:\.\d+)?$")
 PUBLIC_DNS_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$", re.I)
 IPV4_DOTTED_QUAD_RE = re.compile(r"^\d+\.\d+\.\d+\.\d+$")
@@ -49,7 +49,10 @@ class LedgerError(RuntimeError):
 
 
 def parse_mrwk_amount(amount: str | int | Decimal) -> int:
-    amount_text = str(amount).strip()
+    raw_amount_text = str(amount)
+    if CONTROL_CHAR_RE.search(raw_amount_text):
+        raise LedgerError("invalid MRWK amount")
+    amount_text = raw_amount_text.strip()
     if not MRWK_AMOUNT_RE.fullmatch(amount_text):
         raise LedgerError("invalid MRWK amount")
     if "." in amount_text and len(amount_text.rsplit(".", 1)[1]) > 6:

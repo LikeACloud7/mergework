@@ -965,6 +965,12 @@ def test_amount_parser_rejects_non_decimal_notation() -> None:
         parse_mrwk_amount("-1")
 
 
+@pytest.mark.parametrize("amount", ("\t1", "1\n", "1\r", "1\x85"))
+def test_amount_parser_rejects_control_characters(amount: str) -> None:
+    with pytest.raises(LedgerError, match="invalid MRWK amount"):
+        parse_mrwk_amount(amount)
+
+
 @pytest.mark.parametrize("amount", ("1.0000000", "0.0000010", "0.1000000"))
 def test_amount_parser_rejects_more_than_six_decimal_places(amount: str) -> None:
     with pytest.raises(LedgerError, match="MRWK supports at most 6 decimal places"):
