@@ -215,6 +215,8 @@ def test_admin_page_renders_safe_webhook_events_for_cookie_admin(
     assert unauthenticated.status_code == 302
     assert unauthenticated.headers["location"] == "/auth/github/login?next=/admin"
     assert all_events.status_code == 200
+    assert "Treasury reserve capacity" in all_events.text
+    assert "Available create reserve" in all_events.text
     assert "missing_submitter" in all_events.text
     assert "bounty_not_found" in all_events.text
     assert "exhausted_bounty" in all_events.text
@@ -222,7 +224,10 @@ def test_admin_page_renders_safe_webhook_events_for_cookie_admin(
         r"<code>missing_submitter</code>\s*</span>\s*<strong>2</strong>", all_events.text
     )
     summary_match = re.search(
-        r'<div class="bounty-list-summary"[^>]*>.*?</div>', all_events.text, flags=re.S
+        r'<div class="bounty-list-summary" aria-label="Webhook processed status summary">'
+        r".*?</div>",
+        all_events.text,
+        flags=re.S,
     )
     assert summary_match is not None
     summary_html = summary_match.group(0)

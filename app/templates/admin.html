@@ -22,6 +22,57 @@
 </section>
 
 <section class="detail">
+  <p class="eyebrow">Treasury</p>
+  <h2>Treasury reserve capacity</h2>
+  <div class="bounty-list-summary" aria-label="Treasury reserve capacity summary">
+    <article>
+      <span>24h cap</span>
+      <strong>{{ treasury_status.reserve_cap_mrwk }} MRWK</strong>
+    </article>
+    <article>
+      <span>Reserved in window</span>
+      <strong>{{ treasury_status.executed_reserve_24h_mrwk }} MRWK</strong>
+    </article>
+    <article>
+      <span>Pending creates</span>
+      <strong>{{ treasury_status.pending_create_reserve_mrwk }} MRWK</strong>
+    </article>
+    <article>
+      <span>Available create reserve</span>
+      <strong>{{ treasury_status.available_create_reserve_mrwk }} MRWK</strong>
+    </article>
+  </div>
+  {% if treasury_status.next_capacity_release_at %}
+  <p>Next reserve capacity release: <time datetime="{{ treasury_status.next_capacity_release_at }}">{{ treasury_status.next_capacity_release_at }}</time>.</p>
+  {% else %}
+  <p>No recent reserve entries are currently limiting create-bounty capacity.</p>
+  {% endif %}
+  {% if treasury_status.pending_create_bounties %}
+  <h3>Pending create-bounty proposals</h3>
+  <table class="webhook-table">
+    <thead>
+      <tr>
+        <th>Proposal</th>
+        <th>Issue</th>
+        <th>Reserve</th>
+        <th>Executes after</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for proposal in treasury_status.pending_create_bounties %}
+      <tr>
+        <td data-label="Proposal"><a href="/api/v1/treasury/proposals/{{ proposal.proposal_id }}">#{{ proposal.proposal_id }}</a></td>
+        <td data-label="Issue"><a href="{{ proposal.issue_url }}">{{ proposal.title }}</a></td>
+        <td data-label="Reserve">{{ proposal.reserve_mrwk }} MRWK</td>
+        <td data-label="Executes after">{{ proposal.executes_after }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+<section class="detail">
   <p class="eyebrow">Webhooks</p>
   <h2>Recent delivery outcomes</h2>
   {% if webhook_status_summary %}

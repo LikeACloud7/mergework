@@ -34,6 +34,7 @@ Normal admin treasury actions are proposed before they execute:
 Public reads:
 
 ```bash
+curl -s https://api.mrwk.ltclab.site/api/v1/treasury/status
 curl -s https://api.mrwk.ltclab.site/api/v1/treasury/proposals
 curl -s https://api.mrwk.ltclab.site/api/v1/treasury/proposals/<proposal_id>
 ```
@@ -45,7 +46,10 @@ curl -X POST https://api.mrwk.ltclab.site/api/v1/treasury/proposals/<proposal_id
   -H "x-mergework-admin-token: $MERGEWORK_ADMIN_TOKEN"
 ```
 
-Bounty reserve execution is capped at `10,000 MRWK` per 24-hour epoch. GitHub
+Bounty reserve execution is capped at `10,000 MRWK` per 24-hour epoch. Check
+`/api/v1/treasury/status` or the `/admin` treasury panel before opening fresh
+rounds. It shows executed reserves in the rolling window, pending create-bounty
+reserve, remaining create capacity, and the next capacity release time. GitHub
 users with at least one accepted MRWK award can submit proposal challenges.
 Machine-checkable valid challenges block execution. Subjective challenges are
 public notes and do not block by themselves.

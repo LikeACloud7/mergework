@@ -433,6 +433,72 @@ def _epoch_reserved_microunits(session: Session, now: datetime) -> int:
     return int(amount or 0)
 
 
+def _recent_bounty_reserve_entries(session: Session, now: datetime) -> list[LedgerEntry]:
+    since = now - TREASURY_EPOCH_WINDOW
+    return list(
+        session.scalars(
+            select(LedgerEntry)
+            .where(
+                LedgerEntry.entry_type == "bounty_reserve",
+                LedgerEntry.from_account == TREASURY_ACCOUNT,
+                LedgerEntry.created_at >= since,
+            )
+            .order_by(LedgerEntry.created_at.asc(), LedgerEntry.sequence.asc())
+        ).all()
+    )
+
+
+def treasury_status(session: Session) -> dict[str, Any]:
+    now = _db_now()
+    recent_reserves = _recent_bounty_reserve_entries(session, now)
+    executed_reserve = sum(entry.amount_microunits for entry in recent_reserves)
+    pending_create_bounties: list[dict[str, Any]] = []
+    pending_create_reserve = 0
+    for proposal, payload in _pending_action_payloads(session, "create_bounty"):
+        reserve = parse_mrwk_amount(str(payload["reward_mrwk"])) * int(payload["max_awards"])
+        pending_create_reserve += reserve
+        pending_create_bounties.append(
+            {
+                "proposal_id": proposal.id,
+                "issue_number": int(payload["issue_number"]),
+                "issue_url": str(payload["issue_url"]),
+                "title": str(payload["title"]),
+                "reward_mrwk": str(payload["reward_mrwk"]),
+                "max_awards": int(payload["max_awards"]),
+                "reserve_mrwk": format_mrwk(reserve),
+                "proposed_at": _db_utc(proposal.proposed_at).isoformat(),
+                "executes_after": _db_utc(proposal.executes_after).isoformat(),
+            }
+        )
+    available = max(TREASURY_EPOCH_RESERVE_CAP_MICRO - executed_reserve - pending_create_reserve, 0)
+    release_times = [
+        _db_utc(entry.created_at) + TREASURY_EPOCH_WINDOW
+        for entry in recent_reserves
+        if _db_utc(entry.created_at) + TREASURY_EPOCH_WINDOW > now
+    ]
+    next_capacity_release_at = min(release_times).isoformat() if release_times else None
+    return {
+        "type": "treasury_status",
+        "epoch_window_hours": int(TREASURY_EPOCH_WINDOW.total_seconds() // 3600),
+        "reserve_cap_mrwk": format_mrwk(TREASURY_EPOCH_RESERVE_CAP_MICRO),
+        "executed_reserve_24h_mrwk": format_mrwk(executed_reserve),
+        "pending_create_reserve_mrwk": format_mrwk(pending_create_reserve),
+        "available_create_reserve_mrwk": format_mrwk(available),
+        "next_capacity_release_at": next_capacity_release_at,
+        "pending_create_bounties": pending_create_bounties,
+        "recent_reserves": [
+            {
+                "ledger_sequence": entry.sequence,
+                "amount_mrwk": format_mrwk(entry.amount_microunits),
+                "reference": entry.reference,
+                "created_at": _db_utc(entry.created_at).isoformat(),
+                "expires_at": (_db_utc(entry.created_at) + TREASURY_EPOCH_WINDOW).isoformat(),
+            }
+            for entry in recent_reserves
+        ],
+    }
+
+
 def _payout_response_from_proof(proof: Proof) -> dict[str, Any]:
     data = json.loads(proof.public_json)
     if not isinstance(data, dict) or data.get("kind") != "bounty_payment":

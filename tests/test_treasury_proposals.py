@@ -20,7 +20,7 @@ from app.ledger.service import (
     verify_supply_conservation,
 )
 from app.main import create_app
-from app.models import Bounty, Submission, TreasuryChallenge, TreasuryProposal, utc_now
+from app.models import Bounty, LedgerEntry, Submission, TreasuryChallenge, TreasuryProposal, utc_now
 from app.path_params import SQLITE_INTEGER_MAX
 
 ADMIN_HEADERS = {"x-mergework-admin-token": "admin-token-for-tests"}
@@ -117,6 +117,91 @@ def test_treasury_proposals_list_newest_first(
 
     assert listed.status_code == 200
     assert [proposal["id"] for proposal in listed.json()] == [second["id"], first["id"]]
+
+
+def test_treasury_status_reports_reserve_capacity_and_pending_create_proposals(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    recent_time = utc_now() - timedelta(hours=2)
+    old_time = utc_now() - timedelta(hours=25)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=1,
+            issue_url="https://github.com/ramimbo/mergework/issues/1",
+            title="Recent reserve",
+            reward_mrwk="9000",
+            acceptance="Accepted work.",
+        )
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=2,
+            issue_url="https://github.com/ramimbo/mergework/issues/2",
+            title="Expired reserve",
+            reward_mrwk="500",
+            acceptance="Accepted work.",
+        )
+        recent_entry = session.scalar(
+            select(LedgerEntry).where(
+                LedgerEntry.entry_type == "bounty_reserve",
+                LedgerEntry.reference == "https://github.com/ramimbo/mergework/issues/1",
+            )
+        )
+        old_entry = session.scalar(
+            select(LedgerEntry).where(
+                LedgerEntry.entry_type == "bounty_reserve",
+                LedgerEntry.reference == "https://github.com/ramimbo/mergework/issues/2",
+            )
+        )
+        assert recent_entry is not None
+        assert old_entry is not None
+        recent_entry.created_at = recent_time
+        old_entry.created_at = old_time
+
+    proposal = client.post(
+        "/api/v1/bounties",
+        headers=ADMIN_HEADERS,
+        json={**_bounty_payload(issue_number=3, reward_mrwk="500"), "max_awards": 1},
+    )
+    response = client.get("/api/v1/treasury/status")
+
+    assert proposal.status_code == 200
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reserve_cap_mrwk"] == "10000"
+    assert body["executed_reserve_24h_mrwk"] == "9000"
+    assert body["pending_create_reserve_mrwk"] == "500"
+    assert body["available_create_reserve_mrwk"] == "500"
+    assert (
+        body["next_capacity_release_at"]
+        == (recent_time.replace(tzinfo=None) + timedelta(hours=24)).isoformat()
+    )
+    assert body["pending_create_bounties"] == [
+        {
+            "proposal_id": proposal.json()["id"],
+            "issue_number": 3,
+            "issue_url": "https://github.com/ramimbo/mergework/issues/3",
+            "title": "Governance proposal test 3",
+            "reward_mrwk": "500",
+            "max_awards": 1,
+            "reserve_mrwk": "500",
+            "proposed_at": proposal.json()["proposed_at"],
+            "executes_after": proposal.json()["executes_after"],
+        }
+    ]
+    assert body["recent_reserves"] == [
+        {
+            "ledger_sequence": recent_entry.sequence,
+            "amount_mrwk": "9000",
+            "reference": "https://github.com/ramimbo/mergework/issues/1",
+            "created_at": recent_time.replace(tzinfo=None).isoformat(),
+            "expires_at": (recent_time.replace(tzinfo=None) + timedelta(hours=24)).isoformat(),
+        }
+    ]
 
 
 def test_direct_proposal_creation_requires_admin_token(
