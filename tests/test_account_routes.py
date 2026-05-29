@@ -161,6 +161,24 @@ def test_account_page_filters_transactions_by_type(sqlite_url: str) -> None:
     assert "transaction type must be one of" in invalid.text
 
 
+def test_account_api_does_not_advertise_wallet_transfers_for_plain_accounts(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get("/api/v1/accounts/plain-account")
+
+    assert response.status_code == 200
+    assert response.json()["account"] == "plain-account"
+    assert response.json()["transfer_status"] == (
+        "MRWK wallet transfers require a registered mrwk1 address."
+    )
+
+
 def test_normalized_account_keeps_existing_account_validation_boundaries() -> None:
     assert normalized_account(" Reserve:Bounty:001 ") == "reserve:bounty:1"
     assert normalized_account("MRWK1" + ("A" * 40)) == "mrwk1" + ("a" * 40)

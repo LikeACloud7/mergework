@@ -97,7 +97,9 @@ def account_transfer_status(account: str) -> str:
             "Internal ledger account. MRWK wallet transfers are only available "
             "for registered mrwk1 addresses."
         )
-    return "MRWK wallet transfers are enabled for registered mrwk1 addresses."
+    if account.startswith("mrwk1"):
+        return "MRWK wallet transfers are enabled for registered mrwk1 addresses."
+    return "MRWK wallet transfers require a registered mrwk1 address."
 
 
 def account_api_context(session: Session, account: str) -> dict[str, Any]:
