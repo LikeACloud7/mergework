@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
+from app.db import create_schema, session_scope
 from app.main import create_app
+from app.models import WebhookEvent, utc_now
 
 
 def test_admin_login_callback_and_logout_routes_remain_registered(sqlite_url: str) -> None:
@@ -35,3 +38,39 @@ def test_admin_page_requires_oauth_config_before_redirect(sqlite_url: str) -> No
 
     assert response.status_code == 503
     assert response.json()["detail"] == "GitHub OAuth is not configured"
+
+
+def test_admin_webhook_page_allows_api_limit_cap(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "test-cookie-secret")
+
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        for index in range(120):
+            session.add(
+                WebhookEvent(
+                    delivery_id=f"delivery-{index:03d}",
+                    event_type="pull_request",
+                    processed_status="missing_submitter",
+                    payload_hash=f"hash-{index:03d}",
+                    created_at=utc_now(),
+                )
+            )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get(
+        "/admin?webhook_status=missing_submitter&webhook_limit=200",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+    )
+    too_large = client.get(
+        "/admin?webhook_status=missing_submitter&webhook_limit=201",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+    )
+
+    assert response.status_code == 200
+    assert response.text.count('data-label="Delivery"') == 120
+    assert '<option value="200" selected>200</option>' in response.text
+    assert too_large.status_code == 422

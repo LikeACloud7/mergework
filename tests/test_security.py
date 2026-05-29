@@ -210,7 +210,7 @@ def test_admin_page_renders_safe_webhook_events_for_cookie_admin(
     all_events = client.get("/admin?webhook_limit=10")
     filtered = client.get("/admin?webhook_status= missing_submitter &webhook_limit=10")
     limited = client.get("/admin?webhook_limit=1")
-    too_large = client.get("/admin?webhook_limit=101")
+    too_large = client.get("/admin?webhook_limit=201")
 
     assert unauthenticated.status_code == 302
     assert unauthenticated.headers["location"] == "/auth/github/login?next=/admin"
