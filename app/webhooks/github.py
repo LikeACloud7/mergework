@@ -18,6 +18,7 @@ from app.models import Bounty, WebhookEvent
 ACCEPTED_LABEL = "mrwk:accepted"
 ISSUE_NUMBER_BOUNDARY = r"(?![A-Za-z0-9_-])"
 MAX_SQLITE_INTEGER = 2**63 - 1
+CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 LINKED_ISSUE_RE = re.compile(
     r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs?|references?|bounty|claims?)"
     r"(?:\s+|\s*:\s*)"
@@ -96,6 +97,15 @@ def _payload_object(payload: dict[str, Any], key: str) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _clean_webhook_string(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    if CONTROL_CHAR_RE.search(value):
+        return None
+    clean = value.strip()
+    return clean or None
+
+
 def _github_issue_number_from_text(value: str) -> int | None:
     normalized = value.lstrip("0") or "0"
     if len(normalized) > len(str(MAX_SQLITE_INTEGER)):
@@ -133,13 +143,21 @@ def _handle_accepted_issue_label(
     pull_request = _payload_object(payload, "pull_request")
     labeled_item = pull_request or issue
     repo_name = _payload_object(payload, "repository").get("full_name")
-    repo = repo_name.strip() if isinstance(repo_name, str) else ""
+    repo = _clean_webhook_string(repo_name)
     issue_number = issue.get("number")
     label_name = _payload_object(payload, "label").get("name")
     label = label_name if isinstance(label_name, str) else ""
     if payload.get("action") != "labeled" or label.lower() != ACCEPTED_LABEL:
         _record_event(database_url, delivery_id, event_type, payload_hash, "ignored")
         return {"status": "ignored"}
+    if isinstance(repo_name, str) and CONTROL_CHAR_RE.search(repo_name):
+        return _record_status(
+            database_url,
+            delivery_id,
+            event_type,
+            payload_hash,
+            "malformed_repository",
+        )
     if not repo or not labeled_item:
         return _record_status(database_url, delivery_id, event_type, payload_hash, "missing_issue")
     if event_type == "issues" and "pull_request" in issue:
@@ -152,17 +170,16 @@ def _handle_accepted_issue_label(
         )
 
     user = labeled_item.get("user") or {}
-    submitter_login = user.get("login") if isinstance(user, dict) else None
-    if not isinstance(submitter_login, str) or not submitter_login.strip():
+    submitter = _clean_webhook_string(user.get("login") if isinstance(user, dict) else None)
+    if submitter is None:
         return _record_status(
             database_url, delivery_id, event_type, payload_hash, "missing_submitter"
         )
-    submitter = submitter_login.strip()
     sender = payload.get("sender") or {}
-    sender_login = sender.get("login") if isinstance(sender, dict) else None
-    if not isinstance(sender_login, str) or not sender_login.strip():
+    sender_login = _clean_webhook_string(sender.get("login") if isinstance(sender, dict) else None)
+    if sender_login is None:
         return _record_status(database_url, delivery_id, event_type, payload_hash, "missing_sender")
-    accepted_by = sender_login.strip().lower()
+    accepted_by = sender_login.lower()
     if accepted_labelers and accepted_by not in accepted_labelers:
         return _record_status(
             database_url, delivery_id, event_type, payload_hash, "unauthorized_labeler"

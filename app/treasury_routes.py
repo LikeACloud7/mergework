@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from sqlalchemy import select
 
 from app.db import session_scope
@@ -45,10 +45,12 @@ def register_treasury_routes(
     json_object: Any,
 ) -> None:
     @app.get("/api/v1/treasury/proposals")
-    def api_treasury_proposals() -> list[dict[str, Any]]:
+    def api_treasury_proposals(
+        limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    ) -> list[dict[str, Any]]:
         with session_scope(db_url) as session:
             proposals = session.scalars(
-                select(TreasuryProposal).order_by(TreasuryProposal.id.desc()).limit(100)
+                select(TreasuryProposal).order_by(TreasuryProposal.id.desc()).limit(limit)
             ).all()
             return [proposal_to_dict(proposal) for proposal in proposals]
 

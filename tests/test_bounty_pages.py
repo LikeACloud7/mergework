@@ -498,7 +498,9 @@ def test_bounty_detail_shows_accepted_award_history(sqlite_url: str) -> None:
     assert "Accepted work" in page.text
     assert "2/3 awards paid" in page.text
     assert "1 still open" in page.text
-    assert 'href="https://github.com/ramimbo/mergework/pull/202"' in page.text
+    assert (
+        'href="https://github.com/ramimbo/mergework/pull/202" rel="nofollow noopener"' in page.text
+    )
     assert f'href="/proofs/{second_proof.hash}"' in page.text
     assert f'href="/ledger/{second_proof.ledger_sequence}"' in page.text
     assert "/accounts/github:bob" in page.text

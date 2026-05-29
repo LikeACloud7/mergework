@@ -7,7 +7,11 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app.admin import admin_page_context, create_admin_bounty_from_form
+from app.admin import (
+    ADMIN_WEBHOOK_LIMIT_OPTIONS,
+    admin_page_context,
+    create_admin_bounty_from_form,
+)
 from app.config import Settings
 from app.db import session_scope
 from app.ledger.service import LedgerError
@@ -45,7 +49,7 @@ def register_admin_routes(
     def admin_page(
         request: Request,
         webhook_status: str | None = Query(None),
-        webhook_limit: Annotated[int, Query(ge=1, le=100)] = 25,
+        webhook_limit: Annotated[int, Query(ge=1, le=max(ADMIN_WEBHOOK_LIMIT_OPTIONS))] = 25,
         proposal_id: Annotated[int | None, Query(ge=1)] = None,
     ) -> Any:
         login = admin_login_from_request(request)

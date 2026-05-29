@@ -172,6 +172,41 @@ def test_bounty_attempts_accept_empty_body_defaults_to_login(sqlite_url: str, mo
     assert released.json()["attempt"]["status"] == "released"
 
 
+def test_bounty_attempt_source_url_rejects_raw_control_characters(
+    sqlite_url: str, monkeypatch
+) -> None:
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", COOKIE_SECRET)
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=328,
+            issue_url="https://github.com/ramimbo/mergework/issues/328",
+            title="Attempt source URL validation",
+            reward_mrwk="50",
+            max_awards=1,
+            acceptance="Attempt source URLs should be validated before normalization.",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    _set_login(client, "alice")
+
+    response = client.post(
+        f"/api/v1/bounties/{bounty.id}/attempts",
+        json={
+            "source_url": "\thttps://github.com/ramimbo/mergework/pull/616",
+            "ttl_seconds": 3600,
+        },
+    )
+
+    assert response.status_code == 400
+    assert "control character" in response.json()["detail"].lower()
+    with session_scope(sqlite_url) as session:
+        assert session.scalars(select(BountyAttempt)).all() == []
+
+
 def test_single_award_bounty_warns_when_active_attempt_uses_available_slot(
     sqlite_url: str, monkeypatch
 ) -> None:

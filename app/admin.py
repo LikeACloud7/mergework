@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.models import WebhookEvent
 from app.treasury import propose_treasury_action, treasury_status
 
-ADMIN_WEBHOOK_LIMIT_OPTIONS = [10, 25, 50, 100]
+ADMIN_WEBHOOK_LIMIT_OPTIONS = [10, 25, 50, 100, 200]
 WEBHOOK_OUTCOME_SCAN_ORDER = {
     "missing_submitter": 0,
     "bounty_not_found": 1,

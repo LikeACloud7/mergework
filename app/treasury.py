@@ -69,16 +69,20 @@ def _required_payload_value(payload: dict[str, Any], field: str) -> Any:
     return value
 
 
+def _contains_control_character(value: str) -> bool:
+    return any(ord(char) < 32 or ord(char) == 127 or 0x80 <= ord(char) <= 0x9F for char in value)
+
+
 def _clean_string(value: Any, field: str, max_length: int = 500) -> str:
     if not isinstance(value, str):
         raise LedgerError(f"{field} must be a string")
+    if _contains_control_character(value):
+        raise LedgerError(f"{field} must not contain control characters")
     clean = value.strip()
     if not clean:
         raise LedgerError(f"{field} is required")
     if len(clean) > max_length:
         raise LedgerError(f"{field} is too long")
-    if any(ord(char) < 32 or ord(char) == 127 for char in clean):
-        raise LedgerError(f"{field} must not contain control characters")
     return clean
 
 
@@ -94,6 +98,8 @@ def _payload_int(value: Any, field: str) -> int:
     if isinstance(value, int):
         return value
     if isinstance(value, str):
+        if _contains_control_character(value):
+            raise LedgerError(f"{field} must not contain control characters")
         clean = value.strip()
         if clean and clean.lstrip("+-").isdigit():
             try:
@@ -117,8 +123,9 @@ def _canonical_payload(action: str, payload: dict[str, Any]) -> dict[str, Any]:
             raise LedgerError("issue_number is too large")
         if max_awards > 1_000:
             raise LedgerError("max_awards is too large")
-        reward_mrwk = str(_required_payload_value(payload, "reward_mrwk")).strip()
-        parse_mrwk_amount(reward_mrwk)
+        raw_reward_mrwk = str(_required_payload_value(payload, "reward_mrwk"))
+        parse_mrwk_amount(raw_reward_mrwk)
+        reward_mrwk = raw_reward_mrwk.strip()
         return {
             "repo": _clean_string(_required_payload_value(payload, "repo"), "repo", 200).lower(),
             "issue_number": issue_number,

@@ -102,6 +102,20 @@ def test_admin_bounty_creation_creates_public_delayed_proposal(
     assert detail.json()["payload_hash"] == body["payload_hash"]
 
 
+def test_admin_bounty_creation_rejects_control_character_reward_amount(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    payload = _bounty_payload(issue_number=79, reward_mrwk="\t25")
+
+    response = client.post("/api/v1/bounties", headers=ADMIN_HEADERS, json=payload)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "invalid MRWK amount"
+    with session_scope(sqlite_url) as session:
+        assert session.scalar(select(func.count(TreasuryProposal.id))) == 0
+
+
 def test_treasury_proposals_list_newest_first(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -248,6 +262,28 @@ def test_treasury_status_includes_reserve_at_exact_24h_boundary(
     assert body["next_capacity_release_at"] is None
 
 
+def test_treasury_proposals_list_honors_limit(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    first = client.post(
+        "/api/v1/bounties", headers=ADMIN_HEADERS, json=_bounty_payload(issue_number=72)
+    ).json()
+    second = client.post(
+        "/api/v1/bounties", headers=ADMIN_HEADERS, json=_bounty_payload(issue_number=73)
+    ).json()
+
+    limited = client.get("/api/v1/treasury/proposals?limit=1")
+    too_small = client.get("/api/v1/treasury/proposals?limit=0")
+    too_large = client.get("/api/v1/treasury/proposals?limit=201")
+
+    assert limited.status_code == 200
+    assert [proposal["id"] for proposal in limited.json()] == [second["id"]]
+    assert first["id"] not in [proposal["id"] for proposal in limited.json()]
+    assert too_small.status_code == 422
+    assert too_large.status_code == 422
+
+
 def test_direct_proposal_creation_requires_admin_token(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -263,6 +299,42 @@ def test_direct_proposal_creation_requires_admin_token(
     assert body["action"] == "create_bounty"
     assert body["status"] == "pending"
     assert body["payload"]["issue_number"] == 78
+
+
+@pytest.mark.parametrize(
+    ("body", "expected_detail"),
+    [
+        (
+            {"action": "\tcreate_bounty", "payload": _bounty_payload(issue_number=179)},
+            "action must not contain control characters",
+        ),
+        (
+            {
+                "action": "create_bounty",
+                "payload": {**_bounty_payload(issue_number=180), "issue_number": "\t180"},
+            },
+            "issue_number must not contain control characters",
+        ),
+        (
+            {
+                "action": "create_bounty",
+                "payload": {**_bounty_payload(issue_number=181), "title": "Proposal\x85Title"},
+            },
+            "title must not contain control characters",
+        ),
+    ],
+)
+def test_treasury_proposal_creation_rejects_raw_control_characters(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch, body: dict[str, object], expected_detail: str
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+
+    response = client.post("/api/v1/treasury/proposals", headers=ADMIN_HEADERS, json=body)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == expected_detail
+    with session_scope(sqlite_url) as session:
+        assert session.scalar(select(func.count(TreasuryProposal.id))) == 0
 
 
 def test_proposal_execution_requires_admin_delay_and_is_idempotent(
@@ -762,6 +834,47 @@ def test_machine_challenge_after_execution_is_rejected_without_mutating_status(
     assert detail.status_code == 200
     assert detail.json()["status"] == "executed"
     assert detail.json()["executed_at"] is not None
+
+
+@pytest.mark.parametrize(
+    ("challenge_body", "expected_detail"),
+    [
+        (
+            {"challenge_type": "\tsubjective_note", "reason": "Needs more explanation."},
+            "challenge_type must not contain control characters",
+        ),
+        (
+            {"challenge_type": "subjective_note", "reason": "\x85Needs more explanation."},
+            "reason must not contain control characters",
+        ),
+    ],
+)
+def test_treasury_challenges_reject_raw_control_characters(
+    sqlite_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    challenge_body: dict[str, str],
+    expected_detail: str,
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        _seed_accepted_work(session, "alice")
+    proposal = client.post(
+        "/api/v1/bounties",
+        headers=ADMIN_HEADERS,
+        json=_bounty_payload(issue_number=81, reward_mrwk="2"),
+    ).json()
+    client.cookies.set("mrwk_user", signed_value("alice", "test-cookie-secret"))
+
+    response = client.post(
+        f"/api/v1/treasury/proposals/{proposal['id']}/challenges",
+        json=challenge_body,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == expected_detail
+    with session_scope(sqlite_url) as session:
+        assert session.scalar(select(func.count(TreasuryChallenge.id))) == 0
 
 
 def test_close_bounty_rejects_missing_bounty_before_proposal_creation(

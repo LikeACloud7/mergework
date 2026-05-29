@@ -210,7 +210,7 @@ def test_admin_page_renders_safe_webhook_events_for_cookie_admin(
     all_events = client.get("/admin?webhook_limit=10")
     filtered = client.get("/admin?webhook_status= missing_submitter &webhook_limit=10")
     limited = client.get("/admin?webhook_limit=1")
-    too_large = client.get("/admin?webhook_limit=101")
+    too_large = client.get("/admin?webhook_limit=201")
 
     assert unauthenticated.status_code == 302
     assert unauthenticated.headers["location"] == "/auth/github/login?next=/admin"
@@ -968,6 +968,12 @@ def test_amount_parser_rejects_non_decimal_notation() -> None:
     assert parse_mrwk_amount("1.5") == 1_500_000
     with pytest.raises(LedgerError, match="amount must be positive"):
         parse_mrwk_amount("-1")
+
+
+@pytest.mark.parametrize("amount", ("\t1", "1\n", "1\r", "1\x85"))
+def test_amount_parser_rejects_control_characters(amount: str) -> None:
+    with pytest.raises(LedgerError, match="invalid MRWK amount"):
+        parse_mrwk_amount(amount)
 
 
 @pytest.mark.parametrize("amount", ("1.0000000", "0.0000010", "0.1000000"))
