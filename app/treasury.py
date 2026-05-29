@@ -117,8 +117,9 @@ def _canonical_payload(action: str, payload: dict[str, Any]) -> dict[str, Any]:
             raise LedgerError("issue_number is too large")
         if max_awards > 1_000:
             raise LedgerError("max_awards is too large")
-        reward_mrwk = str(_required_payload_value(payload, "reward_mrwk")).strip()
-        parse_mrwk_amount(reward_mrwk)
+        raw_reward_mrwk = str(_required_payload_value(payload, "reward_mrwk"))
+        parse_mrwk_amount(raw_reward_mrwk)
+        reward_mrwk = raw_reward_mrwk.strip()
         return {
             "repo": _clean_string(_required_payload_value(payload, "repo"), "repo", 200).lower(),
             "issue_number": issue_number,
