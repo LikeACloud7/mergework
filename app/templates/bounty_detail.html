@@ -35,7 +35,7 @@
       <span>Issue</span>
       <strong>
         {% if issue_url %}
-          <a href="{{ issue_url }}">{{ bounty.repo }} #{{ bounty.issue_number }}</a>
+          <a href="{{ issue_url }}" rel="nofollow noopener">{{ bounty.repo }} #{{ bounty.issue_number }}</a>
         {% else %}
           {{ bounty.repo }} #{{ bounty.issue_number }}
         {% endif %}
@@ -95,7 +95,7 @@
           <div class="ledger-field ledger-field--reference reference-cell">
             <dt>Submission</dt>
             {% set submission_url = safe_public_url(award.submission_url) %}
-            <dd>{% if submission_url %}<a href="{{ submission_url }}">{{ award.submission_url | replace("https://github.com/", "") }}</a>{% elif award.submission_url %}<code>{{ award.submission_url }}</code>{% else %}-{% endif %}</dd>
+            <dd>{% if submission_url %}<a href="{{ submission_url }}" rel="nofollow noopener">{{ award.submission_url | replace("https://github.com/", "") }}</a>{% elif award.submission_url %}<code>{{ award.submission_url }}</code>{% else %}-{% endif %}</dd>
           </div>
           <div class="ledger-field ledger-field--proof">
             <dt>Proof</dt>
