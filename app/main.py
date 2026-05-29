@@ -274,6 +274,8 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
     register_treasury_routes(
         app,
         db_url=db_url,
+        github_issue_token=settings.github_issue_token,
+        public_base_url=settings.public_base_url,
         require_admin_token=auth.require_admin_token,
         require_github_login=auth.require_github_login,
         json_object=_json_object,

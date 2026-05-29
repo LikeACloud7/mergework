@@ -12,6 +12,7 @@ class Settings:
     database_url: str
     public_base_url: str
     github_webhook_secret: str
+    github_issue_token: str
     github_oauth_client_id: str
     github_oauth_client_secret: str
     admin_logins: tuple[str, ...]
@@ -252,6 +253,7 @@ def get_settings() -> Settings:
         database_url=os.environ.get("MERGEWORK_DATABASE_URL", "sqlite:///./mergework.sqlite3"),
         public_base_url=os.environ.get("MERGEWORK_PUBLIC_BASE_URL", "https://mrwk.ltclab.site"),
         github_webhook_secret=os.environ.get("MERGEWORK_GITHUB_WEBHOOK_SECRET", ""),
+        github_issue_token=os.environ.get("MERGEWORK_GITHUB_ISSUE_TOKEN", ""),
         github_oauth_client_id=os.environ.get("MERGEWORK_GITHUB_OAUTH_CLIENT_ID", ""),
         github_oauth_client_secret=os.environ.get("MERGEWORK_GITHUB_OAUTH_CLIENT_SECRET", ""),
         admin_logins=_csv_env("MERGEWORK_ADMIN_LOGINS"),

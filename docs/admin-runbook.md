@@ -21,7 +21,10 @@
    a public treasury proposal.
 8. Execute the proposal after the 24-hour delay. Multi-award bounties reserve
    `reward_mrwk * max_awards` when the proposal executes.
-9. Add `mrwk:bounty` to the GitHub issue.
+9. If `MERGEWORK_GITHUB_ISSUE_TOKEN` is configured, execution adds
+   `mrwk:bounty` and posts the `Reserved on MergeWork` claims-open comment. If
+   the finalization result is skipped or failed, add the label/comment manually
+   after confirming the public bounty row exists.
 
 ## Treasury Proposals
 
@@ -58,6 +61,12 @@ Proposal creation rejects known impossible or conflicting actions before they
 enter the public queue, including mismatched GitHub issue URLs, missing or
 non-open bounties, duplicate pending proposals, and pending reserve-cap
 overcommit.
+
+When `MERGEWORK_GITHUB_ISSUE_TOKEN` is set, successful `create_bounty`
+execution also finalizes the GitHub issue. The token needs permission to add
+labels and comments on `ramimbo/mergework` issues. Treasury execution still
+succeeds if GitHub finalization is skipped or fails; check the proposal
+`result.github_issue_finalization` field before posting any manual fallback.
 
 This governance surface makes normal app-path treasury movement public,
 delayed, capped, and challengeable. It does not prevent direct server or
@@ -263,8 +272,9 @@ the repository and restart Docker Compose.
 ## Pre-Bounty Readiness
 
 Generate `MERGEWORK_GITHUB_WEBHOOK_SECRET`, `MERGEWORK_ADMIN_TOKEN`, and
-`MERGEWORK_COOKIE_SECRET` with at least 32 random characters. Keep them outside
-the repository.
+`MERGEWORK_COOKIE_SECRET` with at least 32 random characters. Set
+`MERGEWORK_GITHUB_ISSUE_TOKEN` if the app should finalize live bounty issues on
+GitHub after proposal execution. Keep secrets outside the repository.
 
 Run the deploy gate before posting a bounty:
 

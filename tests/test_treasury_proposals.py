@@ -365,6 +365,101 @@ def test_proposal_execution_requires_admin_delay_and_is_idempotent(
     assert duplicate.json()["detail"] == "proposal already executed"
 
 
+def test_create_bounty_execution_records_github_issue_finalization(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_finalize_created_bounty_issue(
+        *,
+        github_token: str,
+        public_base_url: str,
+        bounty: dict[str, object],
+    ) -> dict[str, object]:
+        calls.append(
+            {
+                "github_token": github_token,
+                "public_base_url": public_base_url,
+                "bounty": bounty,
+            }
+        )
+        return {
+            "status": "updated",
+            "label": "mrwk:bounty",
+            "comment_url": "https://github.com/ramimbo/mergework/issues/77#issuecomment-1",
+        }
+
+    monkeypatch.setenv("MERGEWORK_GITHUB_ISSUE_TOKEN", "github-issue-token-for-tests")
+    monkeypatch.setenv("MERGEWORK_PUBLIC_BASE_URL", "https://mrwk.example")
+    monkeypatch.setattr(
+        "app.treasury_routes.finalize_created_bounty_issue",
+        fake_finalize_created_bounty_issue,
+        raising=False,
+    )
+    client = _client(sqlite_url, monkeypatch)
+    proposal = client.post("/api/v1/bounties", headers=ADMIN_HEADERS, json=_bounty_payload()).json()
+    _make_executable(sqlite_url, proposal["id"])
+
+    executed = client.post(
+        f"/api/v1/treasury/proposals/{proposal['id']}/execute", headers=ADMIN_HEADERS
+    )
+
+    assert executed.status_code == 200
+    finalization = executed.json()["result"]["github_issue_finalization"]
+    assert finalization["status"] == "updated"
+    assert finalization["label"] == "mrwk:bounty"
+    assert len(calls) == 1
+    assert calls[0]["github_token"] == "github-issue-token-for-tests"
+    assert calls[0]["public_base_url"] == "https://mrwk.example"
+    bounty = calls[0]["bounty"]
+    assert isinstance(bounty, dict)
+    assert bounty["issue_url"] == "https://github.com/ramimbo/mergework/issues/77"
+    with session_scope(sqlite_url) as session:
+        stored = session.get(TreasuryProposal, proposal["id"])
+        assert stored is not None
+        stored_result = stored.result_json
+
+    assert "github_issue_finalization" in stored_result
+    assert "issuecomment-1" in stored_result
+
+
+def test_create_bounty_execution_does_not_block_on_github_issue_finalization_error(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken_finalize_created_bounty_issue(
+        *,
+        github_token: str,
+        public_base_url: str,
+        bounty: dict[str, object],
+    ) -> dict[str, object]:
+        raise RuntimeError("github unavailable")
+
+    monkeypatch.setenv("MERGEWORK_GITHUB_ISSUE_TOKEN", "github-issue-token-for-tests")
+    monkeypatch.setattr(
+        "app.treasury_routes.finalize_created_bounty_issue",
+        broken_finalize_created_bounty_issue,
+        raising=False,
+    )
+    client = _client(sqlite_url, monkeypatch)
+    proposal = client.post(
+        "/api/v1/bounties", headers=ADMIN_HEADERS, json=_bounty_payload(issue_number=76)
+    ).json()
+    _make_executable(sqlite_url, proposal["id"])
+
+    executed = client.post(
+        f"/api/v1/treasury/proposals/{proposal['id']}/execute", headers=ADMIN_HEADERS
+    )
+
+    assert executed.status_code == 200
+    body = executed.json()
+    assert body["status"] == "executed"
+    assert body["result"]["bounty"]["issue_number"] == 76
+    assert body["result"]["github_issue_finalization"] == {
+        "status": "failed",
+        "reason": "github issue finalization failed: RuntimeError",
+    }
+
+
 def test_proposal_execution_rejects_payload_hash_mismatch(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
