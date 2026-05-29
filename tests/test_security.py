@@ -280,8 +280,10 @@ def test_admin_page_calls_out_pending_create_proposals_when_they_limit_capacity(
 
     assert proposal.status_code == 200
     assert response.status_code == 200
-    assert "Available create reserve" in response.text
-    assert "0 MRWK" in response.text
+    assert re.search(
+        r"<span>Available create reserve</span>\s*<strong>0 MRWK</strong>",
+        response.text,
+    )
     assert "Pending create-bounty proposals are using current create-bounty capacity." in (
         response.text
     )
