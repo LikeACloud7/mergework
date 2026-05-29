@@ -145,7 +145,7 @@ missing submitters, exhausted bounties, and already-paid submissions without
 guessing from GitHub labels alone.
 Use `limit` to control the number of delivery rows returned (`1` to `200`,
 default `50`), for example:
-`/api/v1/admin/webhook-events?status=missing_submitter&limit=100`.
+`/api/v1/admin/webhook-events?status=missing_submitter&limit=200`.
 
 ### PR Queue Health
 

@@ -106,6 +106,14 @@ def test_api_examples_document_auth_me_response_shape() -> None:
     assert "Unauthenticated requests return" in examples
 
 
+def test_admin_runbook_documents_webhook_event_limit_cap() -> None:
+    runbook = Path("docs/admin-runbook.md").read_text(encoding="utf-8")
+
+    assert "Use `limit` to control the number of delivery rows returned (`1` to `200`" in runbook
+    assert "/api/v1/admin/webhook-events?status=missing_submitter&limit=200" in runbook
+    assert "/api/v1/admin/webhook-events?status=missing_submitter&limit=100" not in runbook
+
+
 def test_api_examples_document_bounty_list_response_shape() -> None:
     examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
 
