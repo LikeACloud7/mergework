@@ -220,6 +220,23 @@ def test_wallet_register_api_rejects_label_control_characters(sqlite_url: str) -
     assert response.json()["detail"] == "wallet label must not contain control characters"
 
 
+@pytest.mark.parametrize("public_key_hex", ["\t{public}", "{public}\n", "\x85{public}"])
+def test_wallet_register_api_rejects_public_key_control_characters(
+    sqlite_url: str, public_key_hex: str
+) -> None:
+    create_schema(sqlite_url)
+    _, public_hex, _ = _keypair()
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/api/v1/wallets/register",
+        json={"public_key_hex": public_key_hex.format(public=public_hex)},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "public key must not contain control characters"
+
+
 def test_wallet_transfer_api_rejects_memo_control_characters(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     sender_key, sender_public, sender_address = _keypair()
@@ -252,6 +269,75 @@ def test_wallet_transfer_api_rejects_memo_control_characters(sqlite_url: str) ->
 
     assert response.status_code == 400
     assert response.json()["detail"] == "memo must not contain control characters"
+
+
+@pytest.mark.parametrize("pad", ["\t", "\n", "\x85"])
+def test_wallet_transfer_api_rejects_address_and_signature_control_characters(
+    sqlite_url: str, pad: str
+) -> None:
+    create_schema(sqlite_url)
+    sender_key, sender_public, sender_address = _keypair()
+    _, receiver_public, receiver_address = _keypair()
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    _register_wallet(client, sender_public)
+    _register_wallet(client, receiver_public)
+    _fund_wallet(sqlite_url, sender_address)
+    payload = {
+        "type": "mrwk_transfer_v1",
+        "from_address": sender_address,
+        "to_address": receiver_address,
+        "amount_microunits": 1_000_000,
+        "nonce": 1,
+        "memo": "",
+    }
+    signature = _sign(sender_key, payload)
+
+    control_address = client.post(
+        "/api/v1/transfers",
+        json={
+            "from_address": f"{pad}{sender_address}",
+            "to_address": receiver_address,
+            "amount_mrwk": "1",
+            "nonce": 1,
+            "memo": "",
+            "signature_hex": signature,
+        },
+    )
+    control_to_address = client.post(
+        "/api/v1/transfers",
+        json={
+            "from_address": sender_address,
+            "to_address": f"{pad}{receiver_address}",
+            "amount_mrwk": "1",
+            "nonce": 1,
+            "memo": "",
+            "signature_hex": signature,
+        },
+    )
+    control_signature = client.post(
+        "/api/v1/transfers",
+        json={
+            "from_address": sender_address,
+            "to_address": receiver_address,
+            "amount_mrwk": "1",
+            "nonce": 1,
+            "memo": "",
+            "signature_hex": f"{pad}{signature}",
+        },
+    )
+
+    assert control_address.status_code == 400
+    assert (
+        control_address.json()["detail"]
+        == "MRWK wallet address must not contain control characters"
+    )
+    assert control_to_address.status_code == 400
+    assert (
+        control_to_address.json()["detail"]
+        == "MRWK wallet address must not contain control characters"
+    )
+    assert control_signature.status_code == 400
+    assert control_signature.json()["detail"] == "signature must not contain control characters"
 
 
 def test_wallet_api_malformed_register_requests_return_4xx(sqlite_url: str) -> None:
