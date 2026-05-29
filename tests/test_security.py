@@ -252,6 +252,44 @@ def test_admin_page_renders_safe_webhook_events_for_cookie_admin(
     assert too_large.status_code == 422
 
 
+def test_admin_page_calls_out_pending_create_proposals_when_they_limit_capacity(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create_schema(sqlite_url)
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "test-cookie-secret")
+    monkeypatch.setenv("MERGEWORK_GITHUB_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setenv("MERGEWORK_GITHUB_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("MERGEWORK_ADMIN_LOGINS", "alice")
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    proposal = client.post(
+        "/api/v1/bounties",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json={
+            **_admin_bounty_form_data(),
+            "reward_mrwk": "10000",
+            "max_awards": 1,
+        },
+    )
+    client.cookies.set("mrwk_admin", _signed_value("alice", "test-cookie-secret"))
+
+    response = client.get("/admin")
+
+    assert proposal.status_code == 200
+    assert response.status_code == 200
+    assert "Available create reserve" in response.text
+    assert "0 MRWK" in response.text
+    assert "Pending create-bounty proposals are using current create-bounty capacity." in (
+        response.text
+    )
+    assert "No recent reserve entries are currently limiting create-bounty capacity." not in (
+        response.text
+    )
+
+
 def test_admin_bounty_api_requires_admin_token_not_cookie_auth(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
