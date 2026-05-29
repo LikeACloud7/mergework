@@ -634,6 +634,81 @@ def test_accepted_label_requires_sender_login(sqlite_url: str) -> None:
         assert event.processed_status == "missing_sender"
 
 
+def test_accepted_label_rejects_control_characters_before_trimming_webhook_identity(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    cases = [
+        (
+            "delivery-control-repo",
+            {"repository": {"full_name": "\tramimbo/mergework"}},
+            "malformed_repository",
+            (),
+        ),
+        (
+            "delivery-control-submitter",
+            {"issue": {"user": {"login": "\talice"}}},
+            "missing_submitter",
+            (),
+        ),
+        (
+            "delivery-c1-sender",
+            {"sender": {"login": "\x85maintainer"}},
+            "missing_sender",
+            ("maintainer",),
+        ),
+    ]
+
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=44,
+            issue_url="https://github.com/ramimbo/mergework/issues/44",
+            title="Accepted issue",
+            reward_mrwk="25",
+            acceptance="Maintainer applies mrwk:accepted.",
+        )
+
+    for delivery_id, overrides, expected_status, accepted_labelers in cases:
+        payload = {
+            "action": "labeled",
+            "label": {"name": "mrwk:accepted"},
+            "issue": {
+                "number": 44,
+                "html_url": "https://github.com/ramimbo/mergework/issues/44",
+                "user": {"login": "alice"},
+            },
+            "repository": {"full_name": "ramimbo/mergework"},
+            "sender": {"login": "maintainer"},
+        }
+        for key, value in overrides.items():
+            payload[key].update(value)
+        body = json.dumps(payload, separators=(",", ":")).encode()
+
+        result = handle_github_webhook(
+            sqlite_url,
+            {
+                "X-GitHub-Delivery": delivery_id,
+                "X-GitHub-Event": "issues",
+                "X-Hub-Signature-256": _signature("secret", body),
+            },
+            body,
+            "secret",
+            accepted_labelers=accepted_labelers,
+        )
+
+        assert result == {"status": expected_status}
+
+    with session_scope(sqlite_url) as session:
+        assert get_balance(session, "github:alice") == 0
+        for delivery_id, _overrides, expected_status, _accepted_labelers in cases:
+            event = session.get(WebhookEvent, delivery_id)
+            assert event is not None
+            assert event.processed_status == expected_status
+
+
 def test_accepted_label_handles_malformed_object_fields(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     cases = [
