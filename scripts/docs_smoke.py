@@ -44,6 +44,8 @@ REQUIRED_PUBLIC_PHRASES = {
     "docs/agent-guide.md": [
         ("Public reads such as `GET /api/v1/bounties/{id}/attempts` do not require login"),
         ("creating or releasing an attempt requires the GitHub-authenticated browser session"),
+        "Proposed work requests are intake issues, not live bounties",
+        "wait for `mrwk:bounty`",
     ],
     "docs/paid-bounties.md": [
         "This page is not manually updated for every payout.",
@@ -65,6 +67,9 @@ REQUIRED_PUBLIC_PHRASES = {
         "Smoke-check or bug-report claim:",
         "Discussion or decision-support claim:",
         "Do not describe work as accepted, merged, or paid until the public GitHub label",
+        "## Proposed Work Requests",
+        "proposed issue -> maintainer review -> optional create_bounty proposal",
+        "Reference tiers are guidance, not entitlement",
     ],
     "docs/api-examples.md": [
         "Internal ledger accounts use the same account response shape",
@@ -151,6 +156,7 @@ def main() -> int:
         bounty_template = bounty_issue_template.read_text(encoding="utf-8").lower()
         for phrase in [
             "mrwk bounty: <amount> mrwk - <short scope>",
+            "do not add the live bounty label from this template",
             "id: evidence",
             "evidence or tests required",
             "id: out_of_scope",
@@ -159,10 +165,32 @@ def main() -> int:
             if phrase not in bounty_template:
                 print(f"bounty issue template missing required phrase: {phrase}")
                 ok = False
+        if 'labels: ["mrwk:bounty"]' in bounty_template:
+            print("bounty issue template must not auto-apply mrwk:bounty")
+            ok = False
         for field_id in ("evidence", "out_of_scope", "duplicate_stale_rules"):
             if not _template_field_is_required(bounty_template, field_id):
                 print(f"bounty issue template {field_id} field must be required")
                 ok = False
+    proposed_work_template = ROOT / ".github/ISSUE_TEMPLATE/proposed-work.yml"
+    if not proposed_work_template.exists():
+        print("missing proposed work issue template: .github/ISSUE_TEMPLATE/proposed-work.yml")
+        ok = False
+    else:
+        proposed_template = proposed_work_template.read_text(encoding="utf-8").lower()
+        for phrase in [
+            'title: "proposed work: <short scope>"',
+            'labels: ["proposed-work"]',
+            "not a live mrwk bounty",
+            "do not submit `/claim`",
+            "id: duplicate_search",
+        ]:
+            if phrase not in proposed_template:
+                print(f"proposed work issue template missing required phrase: {phrase}")
+                ok = False
+        if "mrwk:bounty" in proposed_template:
+            print("proposed work issue template must not mention or apply mrwk:bounty")
+            ok = False
     if ok:
         print("docs smoke ok")
         return 0

@@ -114,6 +114,46 @@ def test_admin_runbook_documents_webhook_event_limit_cap() -> None:
     assert "/api/v1/admin/webhook-events?status=missing_submitter&limit=100" not in runbook
 
 
+def test_proposed_work_template_is_not_a_live_bounty_template() -> None:
+    template = Path(".github/ISSUE_TEMPLATE/proposed-work.yml").read_text(encoding="utf-8")
+    lowered = template.lower()
+
+    assert 'title: "proposed work: <short scope>"' in lowered
+    assert 'labels: ["proposed-work"]' in lowered
+    assert "mrwk:bounty" not in lowered
+    assert "not a live mrwk bounty" in lowered
+    assert "do not submit `/claim`" in lowered
+    assert "reference tier" in lowered
+
+
+def test_bounty_issue_template_does_not_auto_mark_issue_live() -> None:
+    template = Path(".github/ISSUE_TEMPLATE/bounty.yml").read_text(encoding="utf-8")
+
+    assert 'labels: ["mrwk:bounty"]' not in template
+    assert "Do not add the live bounty label from this template" in template
+
+
+def test_bounty_rules_document_proposed_work_lifecycle() -> None:
+    rules = Path("docs/bounty-rules.md").read_text(encoding="utf-8")
+    squashed = " ".join(rules.split())
+
+    assert "## Proposed Work Requests" in rules
+    assert "proposed work request is not a live MRWK bounty" in rules
+    assert (
+        "proposed issue -> maintainer review -> optional create_bounty proposal -> "
+        "24-hour delay -> execution -> mrwk:bounty"
+    ) in squashed
+    assert "Reference tiers are guidance, not entitlement" in rules
+
+
+def test_agent_guide_tells_agents_not_to_claim_proposed_work() -> None:
+    guide = Path("docs/agent-guide.md").read_text(encoding="utf-8")
+
+    assert "Proposed work requests are intake issues, not live bounties" in guide
+    assert "Do not submit `/claim`" in guide
+    assert "wait for `mrwk:bounty`" in guide
+
+
 def test_api_examples_document_bounty_list_response_shape() -> None:
     examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
 

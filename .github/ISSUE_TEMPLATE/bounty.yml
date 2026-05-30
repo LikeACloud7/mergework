@@ -1,11 +1,12 @@
 name: MRWK bounty
-description: Propose work that may receive an MRWK bounty.
+description: Draft bounty text for maintainer proposal and execution.
 title: "MRWK bounty: <amount> MRWK - <short scope>"
-labels: ["mrwk:bounty"]
 body:
   - type: markdown
     attributes:
       value: |
+        Do not add the live bounty label from this template. A GitHub issue is not claimable until the treasury proposal executes, the public bounty page exists, and maintainers post the reserved bounty comment.
+
         Use the stable bounty shape from `docs/bounty-rules.md` so humans, GitHub search, API clients, and MCP agents can parse the reward, scope, evidence, and exclusions.
         Keep public MRWK wording work-based: no price, investment, exchange, liquidity, bridge, cash-out, or fabricated payout claims.
   - type: textarea

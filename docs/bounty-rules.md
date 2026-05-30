@@ -24,8 +24,30 @@ Accepted work can include:
 
 MRWK uses work-based tiers at launch. The project does not publish a fiat peg.
 
+## Proposed Work Requests
+
+A proposed work request is not a live MRWK bounty. It is an intake issue for
+ideas, bugs, docs gaps, verification needs, and possible future bounty scopes.
+Opening one does not reserve MRWK, create a payout, or make work claimable.
+
+The normal lifecycle is:
+
+```text
+proposed issue -> maintainer review -> optional create_bounty proposal -> 24-hour delay -> execution -> mrwk:bounty + Reserved on MergeWork -> claims open
+```
+
+Reference tiers are guidance, not entitlement. Contributors and agents may
+suggest a tier to help maintainers size the work, but maintainers decide whether
+to reject, ask for more information, point to an existing live bounty, accept
+non-bounty work, or create a public treasury proposal.
+
+Do not submit `/claim` for a proposed work request unless maintainers later make
+the issue live by executing the treasury proposal, adding `mrwk:bounty`, and
+posting the `Reserved on MergeWork` comment with the public bounty URL.
+
 ## Labels
 
+- `proposed-work`: intake issue for possible future work; not a live bounty.
 - `mrwk:bounty`: issue has a posted MRWK reward.
 - `mrwk:claimed`: someone is actively working on the issue.
 - `mrwk:submitted`: work is ready for review.

@@ -1,0 +1,83 @@
+name: Proposed work request
+description: Suggest work for maintainer review before any MRWK bounty exists.
+title: "Proposed work: <short scope>"
+labels: ["proposed-work"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is not a live MRWK bounty. Opening this issue does not reserve MRWK, create a payout, or make work claimable.
+
+        Do not submit `/claim` for this issue unless maintainers later post a live reserved bounty comment and the public bounty page exists.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the bug, missing docs, confusing workflow, UX issue, test gap, or improvement opportunity.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Link the exact page, API route, file, PR, issue, command output, screenshot, or reproduction path.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_work
+    attributes:
+      label: Proposed work
+      description: Describe the smallest useful fix, verification, documentation, or implementation work.
+    validations:
+      required: true
+  - type: textarea
+    id: expected_value
+    attributes:
+      label: Expected value
+      description: Explain who this helps and what gets easier, safer, clearer, or more reliable.
+    validations:
+      required: true
+  - type: dropdown
+    id: reference_tier
+    attributes:
+      label: Reference tier
+      description: Non-binding guidance only. Maintainers decide whether any bounty proposal is opened.
+      options:
+        - "25-100 MRWK: small docs, typo, reproduction, triage"
+        - "100-500 MRWK: useful issue, test, docs page, small bugfix"
+        - "500-2,500 MRWK: normal feature, verified bugfix, agent integration"
+        - "2,500-10,000 MRWK: security fix, major feature, infrastructure work"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Possible acceptance criteria
+      description: List what would need to be true before maintainers could accept the work.
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Evidence or tests required
+      description: List commands, URLs, screenshots, logs, reproduction steps, or review evidence.
+    validations:
+      required: true
+  - type: textarea
+    id: duplicate_search
+    attributes:
+      label: Duplicate search
+      description: Link related issues or PRs and explain why this is not already covered.
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: List work that should not be included.
+      placeholder: |
+        - No broad rewrites.
+        - No speculative price, liquidity, bridge, exchange, cash-out, or payout claims.
+        - No private secrets or security exploit details in public artifacts.
+    validations:
+      required: true
