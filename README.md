@@ -74,6 +74,7 @@ python3.12 -m venv .venv
 - API host: [https://api.mrwk.ltclab.site](https://api.mrwk.ltclab.site)
 - MCP host: [https://mcp.mrwk.ltclab.site](https://mcp.mrwk.ltclab.site)
 - Bounty rules: [docs/bounty-rules.md](docs/bounty-rules.md)
+- Bounty lifecycle: [docs/bounty-lifecycle.md](docs/bounty-lifecycle.md)
 - Accepted work activity: [https://mrwk.ltclab.site/activity](https://mrwk.ltclab.site/activity)
 - Payment proof guide: [docs/paid-bounties.md](docs/paid-bounties.md)
 - Paid bounty discussion: [GitHub Discussions #16](https://github.com/ramimbo/mergework/discussions/16)

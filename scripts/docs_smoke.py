@@ -8,6 +8,7 @@ REQUIRED = [
     "README.md",
     "AGENTS.md",
     "CONTRIBUTING.md",
+    "docs/bounty-lifecycle.md",
     "docs/bounty-rules.md",
     "docs/paid-bounties.md",
     "docs/agent-guide.md",
@@ -46,6 +47,16 @@ REQUIRED_PUBLIC_PHRASES = {
         ("creating or releasing an attempt requires the GitHub-authenticated browser session"),
         "Proposed work requests are intake issues, not live bounties",
         "wait for `mrwk:bounty`",
+        "Use [docs/bounty-lifecycle.md](bounty-lifecycle.md) as the short checklist",
+    ],
+    "docs/bounty-lifecycle.md": [
+        "# Bounty Lifecycle",
+        "A GitHub issue is claimable for MRWK only when",
+        "`mrwk:bounty`",
+        "Reserved on MergeWork",
+        "A pending create_bounty proposal is not a live bounty.",
+        "A pending pay_bounty proposal is not paid work.",
+        "result.github_issue_finalization",
     ],
     "docs/paid-bounties.md": [
         "This page is not manually updated for every payout.",
@@ -70,6 +81,7 @@ REQUIRED_PUBLIC_PHRASES = {
         "## Proposed Work Requests",
         "proposed issue -> maintainer review -> optional create_bounty proposal",
         "Reference tiers are guidance, not entitlement",
+        "For the concise state machine and maintainer checklist",
     ],
     "docs/api-examples.md": [
         "Internal ledger accounts use the same account response shape",

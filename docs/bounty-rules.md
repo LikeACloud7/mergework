@@ -44,6 +44,8 @@ non-bounty work, or create a public treasury proposal.
 Do not submit `/claim` for a proposed work request unless maintainers later make
 the issue live by executing the treasury proposal, adding `mrwk:bounty`, and
 posting the `Reserved on MergeWork` comment with the public bounty URL.
+For the concise state machine and maintainer checklist, see
+[docs/bounty-lifecycle.md](bounty-lifecycle.md).
 
 ## Labels
 
