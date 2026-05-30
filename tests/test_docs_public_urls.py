@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from scripts.docs_smoke import REQUIRED, _template_field_is_required
+from scripts.docs_smoke import REQUIRED, _issue_template_labels, _template_field_is_required
 
 
 def test_readme_lists_live_ltclab_urls() -> None:
@@ -129,8 +129,19 @@ def test_proposed_work_template_is_not_a_live_bounty_template() -> None:
 def test_bounty_issue_template_does_not_auto_mark_issue_live() -> None:
     template = Path(".github/ISSUE_TEMPLATE/bounty.yml").read_text(encoding="utf-8")
 
-    assert 'labels: ["mrwk:bounty"]' not in template
+    assert "mrwk:bounty" not in _issue_template_labels(template)
     assert "Do not add the live bounty label from this template" in template
+
+
+def test_issue_template_labels_parse_inline_and_block_styles() -> None:
+    assert _issue_template_labels('labels: ["proposed-work", "docs"]') == {
+        "proposed-work",
+        "docs",
+    }
+    assert _issue_template_labels("labels:\n  - proposed-work\n  - docs\nbody: []") == {
+        "proposed-work",
+        "docs",
+    }
 
 
 def test_bounty_rules_document_proposed_work_lifecycle() -> None:

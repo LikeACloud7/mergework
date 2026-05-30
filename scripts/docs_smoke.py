@@ -106,6 +106,36 @@ def _template_field_is_required(template: str, field_id: str) -> bool:
     return "validations:" in block and "required: true" in block
 
 
+def _issue_template_labels(template: str) -> set[str]:
+    labels: set[str] = set()
+    lines = template.splitlines()
+
+    def add_labels(raw_value: str) -> None:
+        value = raw_value.split("#", 1)[0].strip()
+        if not value:
+            return
+        value = value.strip("[]")
+        for part in value.split(","):
+            label = part.strip().strip("\"'")
+            if label:
+                labels.add(label.lower())
+
+    for index, line in enumerate(lines):
+        if not line.startswith("labels:"):
+            continue
+        add_labels(line.split(":", 1)[1])
+        for continuation in lines[index + 1 :]:
+            if not continuation.strip():
+                continue
+            if not continuation.startswith((" ", "\t")):
+                break
+            stripped = continuation.strip()
+            if stripped.startswith("- "):
+                add_labels(stripped[2:])
+        break
+    return labels
+
+
 def main() -> int:
     ok = True
     for relative in REQUIRED:
@@ -165,7 +195,7 @@ def main() -> int:
             if phrase not in bounty_template:
                 print(f"bounty issue template missing required phrase: {phrase}")
                 ok = False
-        if 'labels: ["mrwk:bounty"]' in bounty_template:
+        if "mrwk:bounty" in _issue_template_labels(bounty_template):
             print("bounty issue template must not auto-apply mrwk:bounty")
             ok = False
         for field_id in ("evidence", "out_of_scope", "duplicate_stale_rules"):
