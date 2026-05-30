@@ -5,6 +5,7 @@ routed, which caused unhandled-key errors in the label handler.
 This test ensures those events are recorded as 'ignored' while the two
 supported event types continue to work.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -15,7 +16,6 @@ from app.db import create_schema, session_scope
 from app.ledger.service import create_bounty, ensure_genesis, get_balance
 from app.models import WebhookEvent
 from app.webhooks.github import handle_github_webhook
-
 
 SECRET = "test-secret"
 
@@ -72,6 +72,26 @@ def test_push_event_is_ignored(sqlite_url: str) -> None:
     assert result == {"status": "ignored"}
     with session_scope(sqlite_url) as session:
         event = session.get(WebhookEvent, "delivery-push")
+        assert event is not None
+        assert event.processed_status == "ignored"
+
+
+def test_label_event_is_ignored(sqlite_url: str) -> None:
+    """label events must NOT be routed to the label handler."""
+    create_schema(sqlite_url)
+    payload = {
+        "action": "created",
+        "label": {"name": "bug"},
+        "repository": {"full_name": "ramimbo/mergework"},
+        "sender": {"login": "maintainer"},
+    }
+    headers, body = _wrap("label", payload, "delivery-label")
+
+    result = handle_github_webhook(sqlite_url, headers, body, SECRET)
+
+    assert result == {"status": "ignored"}
+    with session_scope(sqlite_url) as session:
+        event = session.get(WebhookEvent, "delivery-label")
         assert event is not None
         assert event.processed_status == "ignored"
 
