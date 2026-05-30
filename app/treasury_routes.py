@@ -6,6 +6,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from sqlalchemy import select
 
 from app.db import session_scope
+from app.github_issue_finalization import finalize_created_bounty_issue
 from app.ledger.service import LedgerError
 from app.models import TreasuryProposal
 from app.path_params import SQLITE_INTEGER_MAX
@@ -15,6 +16,7 @@ from app.treasury import (
     execute_treasury_proposal,
     proposal_to_dict,
     propose_treasury_action,
+    record_proposal_result_field,
     treasury_status,
 )
 
@@ -40,6 +42,8 @@ def register_treasury_routes(
     app: FastAPI,
     *,
     db_url: str,
+    github_issue_token: str,
+    public_base_url: str,
     require_admin_token: Any,
     require_github_login: Any,
     json_object: Any,
@@ -103,9 +107,32 @@ def register_treasury_routes(
                 proposal = execute_treasury_proposal(
                     session, proposal_id=proposal_id, executed_by=admin_login
                 )
-                return proposal_to_dict(proposal)
+                response = proposal_to_dict(proposal)
             except LedgerError as exc:
                 raise _proposal_error(exc) from exc
+        if response["action"] == "create_bounty":
+            bounty = response.get("result", {}).get("bounty")
+            if isinstance(bounty, dict):
+                try:
+                    finalization = finalize_created_bounty_issue(
+                        github_token=github_issue_token,
+                        public_base_url=public_base_url,
+                        bounty=bounty,
+                    )
+                except Exception as exc:
+                    finalization = {
+                        "status": "failed",
+                        "reason": f"github issue finalization failed: {type(exc).__name__}",
+                    }
+                with session_scope(db_url) as session:
+                    proposal = record_proposal_result_field(
+                        session,
+                        proposal_id=proposal_id,
+                        field="github_issue_finalization",
+                        value=finalization,
+                    )
+                    response = proposal_to_dict(proposal)
+        return response
 
     @app.post("/api/v1/treasury/proposals/{proposal_id}/challenges")
     async def api_create_treasury_challenge(

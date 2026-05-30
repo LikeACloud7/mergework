@@ -392,6 +392,19 @@ def proposal_to_dict(proposal: TreasuryProposal) -> dict[str, Any]:
     }
 
 
+def record_proposal_result_field(
+    session: Session, *, proposal_id: int, field: str, value: Any
+) -> TreasuryProposal:
+    proposal = session.get(TreasuryProposal, proposal_id)
+    if proposal is None:
+        raise LedgerError("proposal not found")
+    result = proposal_result(proposal)
+    result[_clean_string(field, "field", 80)] = value
+    proposal.result_json = canonical_json(result)
+    session.flush()
+    return proposal
+
+
 def propose_treasury_action(
     session: Session,
     *,

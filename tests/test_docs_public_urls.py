@@ -165,6 +165,14 @@ def test_agent_guide_tells_agents_not_to_claim_proposed_work() -> None:
     assert "wait for `mrwk:bounty`" in guide
 
 
+def test_admin_runbook_warns_to_validate_production_admin_token() -> None:
+    runbook = Path("docs/admin-runbook.md").read_text(encoding="utf-8")
+
+    assert "Do not execute production treasury proposals from a local `.env`" in runbook
+    assert "/api/v1/admin/webhook-events?limit=1" in runbook
+    assert "A label-only partial update still needs the claims-open comment" in runbook
+
+
 def test_api_examples_document_bounty_list_response_shape() -> None:
     examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
 

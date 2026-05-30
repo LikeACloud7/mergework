@@ -21,7 +21,10 @@
    a public treasury proposal.
 8. Execute the proposal after the 24-hour delay. Multi-award bounties reserve
    `reward_mrwk * max_awards` when the proposal executes.
-9. Add `mrwk:bounty` to the GitHub issue.
+9. If `MERGEWORK_GITHUB_ISSUE_TOKEN` is configured, execution adds
+   `mrwk:bounty` and posts the `Reserved on MergeWork` claims-open comment. If
+   the finalization result is skipped or failed, add the label/comment manually
+   after confirming the public bounty row exists.
 
 ## Treasury Proposals
 
@@ -46,6 +49,19 @@ curl -X POST https://api.mrwk.ltclab.site/api/v1/treasury/proposals/<proposal_id
   -H "x-mergework-admin-token: $MERGEWORK_ADMIN_TOKEN"
 ```
 
+Do not execute production treasury proposals from a local `.env` unless the
+token has just been validated against production. Prefer running execution from
+the production host environment. Before any scripted execution, validate the
+token with a harmless protected read:
+
+```bash
+curl -fsS "https://api.mrwk.ltclab.site/api/v1/admin/webhook-events?limit=1" \
+  -H "x-mergework-admin-token: $MERGEWORK_ADMIN_TOKEN"
+```
+
+If this check returns `401` or another unexpected auth error, stop. Do not keep
+retrying proposal execution with that token.
+
 Bounty reserve execution is capped at `10,000 MRWK` per 24-hour epoch. Check
 `/api/v1/treasury/status` or the `/admin` treasury panel before opening fresh
 rounds. It shows executed reserves in the rolling window, pending create-bounty
@@ -58,6 +74,15 @@ Proposal creation rejects known impossible or conflicting actions before they
 enter the public queue, including mismatched GitHub issue URLs, missing or
 non-open bounties, duplicate pending proposals, and pending reserve-cap
 overcommit.
+
+When `MERGEWORK_GITHUB_ISSUE_TOKEN` is set, successful `create_bounty`
+execution also finalizes the GitHub issue. The token needs permission to add
+labels and comments on `ramimbo/mergework` issues. Treasury execution still
+succeeds if GitHub finalization is skipped or fails; check the proposal
+`result.github_issue_finalization` field before posting any manual fallback.
+A label-only partial update still needs the claims-open comment; a comment-only
+partial update still needs the `mrwk:bounty` label. Confirm both the label and
+the `Reserved on MergeWork` comment before treating the GitHub issue as live.
 
 This governance surface makes normal app-path treasury movement public,
 delayed, capped, and challengeable. It does not prevent direct server or
@@ -263,8 +288,9 @@ the repository and restart Docker Compose.
 ## Pre-Bounty Readiness
 
 Generate `MERGEWORK_GITHUB_WEBHOOK_SECRET`, `MERGEWORK_ADMIN_TOKEN`, and
-`MERGEWORK_COOKIE_SECRET` with at least 32 random characters. Keep them outside
-the repository.
+`MERGEWORK_COOKIE_SECRET` with at least 32 random characters. Set
+`MERGEWORK_GITHUB_ISSUE_TOKEN` if the app should finalize live bounty issues on
+GitHub after proposal execution. Keep secrets outside the repository.
 
 Run the deploy gate before posting a bounty:
 

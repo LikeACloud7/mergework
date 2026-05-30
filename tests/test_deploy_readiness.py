@@ -12,6 +12,7 @@ def _settings(**overrides: object) -> Settings:
         "database_url": "sqlite:////srv/mergework/data/mergework.sqlite3",
         "public_base_url": "https://staging.mrwk.example.test",
         "github_webhook_secret": "webhook-8efc3925bb8746b8a8fd3392c4c48e32",
+        "github_issue_token": "",
         "github_oauth_client_id": "client-id",
         "github_oauth_client_secret": "oauth-7818e79f9d3a4a1d82ff0e1b9f0b8e42",
         "admin_logins": ("alice",),
