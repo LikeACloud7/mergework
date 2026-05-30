@@ -54,6 +54,13 @@ def _make_executable(sqlite_url: str, proposal_id: int) -> None:
         proposal.executes_after = utc_now() - timedelta(seconds=1)
 
 
+def _stored_proposal_result(sqlite_url: str, proposal_id: int) -> str:
+    with session_scope(sqlite_url) as session:
+        stored = session.get(TreasuryProposal, proposal_id)
+        assert stored is not None
+        return stored.result_json
+
+
 def _seed_accepted_work(session, github_login: str, issue_number: int = 20) -> None:
     earned_bounty = create_bounty(
         session,
@@ -414,13 +421,48 @@ def test_create_bounty_execution_records_github_issue_finalization(
     bounty = calls[0]["bounty"]
     assert isinstance(bounty, dict)
     assert bounty["issue_url"] == "https://github.com/ramimbo/mergework/issues/77"
-    with session_scope(sqlite_url) as session:
-        stored = session.get(TreasuryProposal, proposal["id"])
-        assert stored is not None
-        stored_result = stored.result_json
-
+    stored_result = _stored_proposal_result(sqlite_url, proposal["id"])
     assert "github_issue_finalization" in stored_result
     assert "issuecomment-1" in stored_result
+
+
+def test_create_bounty_execution_persists_skipped_github_issue_finalization(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_finalize_created_bounty_issue(
+        *,
+        github_token: str,
+        public_base_url: str,
+        bounty: dict[str, object],
+    ) -> dict[str, object]:
+        assert github_token == ""
+        assert public_base_url == "https://mrwk.example"
+        assert bounty["issue_number"] == 75
+        return {"status": "skipped", "reason": "github issue token not configured"}
+
+    monkeypatch.setattr(
+        "app.treasury_routes.finalize_created_bounty_issue",
+        fake_finalize_created_bounty_issue,
+        raising=False,
+    )
+    monkeypatch.setenv("MERGEWORK_PUBLIC_BASE_URL", "https://mrwk.example")
+    client = _client(sqlite_url, monkeypatch)
+    proposal = client.post(
+        "/api/v1/bounties", headers=ADMIN_HEADERS, json=_bounty_payload(issue_number=75)
+    ).json()
+    _make_executable(sqlite_url, proposal["id"])
+
+    executed = client.post(
+        f"/api/v1/treasury/proposals/{proposal['id']}/execute", headers=ADMIN_HEADERS
+    )
+
+    assert executed.status_code == 200
+    finalization = executed.json()["result"]["github_issue_finalization"]
+    assert finalization == {
+        "status": "skipped",
+        "reason": "github issue token not configured",
+    }
+    assert finalization["status"] in _stored_proposal_result(sqlite_url, proposal["id"])
 
 
 def test_create_bounty_execution_does_not_block_on_github_issue_finalization_error(
@@ -458,6 +500,9 @@ def test_create_bounty_execution_does_not_block_on_github_issue_finalization_err
         "status": "failed",
         "reason": "github issue finalization failed: RuntimeError",
     }
+    stored_result = _stored_proposal_result(sqlite_url, proposal["id"])
+    assert "github_issue_finalization" in stored_result
+    assert "github issue finalization failed: RuntimeError" in stored_result
 
 
 def test_proposal_execution_rejects_payload_hash_mismatch(

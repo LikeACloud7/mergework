@@ -49,6 +49,19 @@ curl -X POST https://api.mrwk.ltclab.site/api/v1/treasury/proposals/<proposal_id
   -H "x-mergework-admin-token: $MERGEWORK_ADMIN_TOKEN"
 ```
 
+Do not execute production treasury proposals from a local `.env` unless the
+token has just been validated against production. Prefer running execution from
+the production host environment. Before any scripted execution, validate the
+token with a harmless protected read:
+
+```bash
+curl -fsS "https://api.mrwk.ltclab.site/api/v1/admin/webhook-events?limit=1" \
+  -H "x-mergework-admin-token: $MERGEWORK_ADMIN_TOKEN"
+```
+
+If this check returns `401` or another unexpected auth error, stop. Do not keep
+retrying proposal execution with that token.
+
 Bounty reserve execution is capped at `10,000 MRWK` per 24-hour epoch. Check
 `/api/v1/treasury/status` or the `/admin` treasury panel before opening fresh
 rounds. It shows executed reserves in the rolling window, pending create-bounty
@@ -67,6 +80,9 @@ execution also finalizes the GitHub issue. The token needs permission to add
 labels and comments on `ramimbo/mergework` issues. Treasury execution still
 succeeds if GitHub finalization is skipped or fails; check the proposal
 `result.github_issue_finalization` field before posting any manual fallback.
+A label-only partial update still needs the claims-open comment; a comment-only
+partial update still needs the `mrwk:bounty` label. Confirm both the label and
+the `Reserved on MergeWork` comment before treating the GitHub issue as live.
 
 This governance surface makes normal app-path treasury movement public,
 delayed, capped, and challengeable. It does not prevent direct server or
