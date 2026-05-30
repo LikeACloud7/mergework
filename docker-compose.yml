@@ -41,6 +41,17 @@ services:
           sleep 86400
         done
 
+  treasury-executor:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - app
+    env_file:
+      - .env
+    volumes:
+      - /srv/mergework/data:/srv/mergework/data
+    command: python -m scripts.treasury_executor
+
 volumes:
   caddy-data:
   caddy-config:

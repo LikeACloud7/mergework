@@ -185,6 +185,15 @@ def test_admin_runbook_warns_to_validate_production_admin_token() -> None:
     assert "A label-only partial update still needs the claims-open comment" in runbook
 
 
+def test_admin_runbook_documents_production_treasury_executor() -> None:
+    runbook = Path("docs/admin-runbook.md").read_text(encoding="utf-8")
+
+    assert "MERGEWORK_TREASURY_EXECUTOR_ENABLED=1" in runbook
+    assert "uses the production `.env`" in runbook
+    assert "docker compose logs -f treasury-executor" in runbook
+    assert "Verify `result.github_issue_finalization`" in runbook
+
+
 def test_api_examples_document_bounty_list_response_shape() -> None:
     examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
 

@@ -87,6 +87,12 @@ REQUIRED_PUBLIC_PHRASES = {
         "Internal ledger accounts use the same account response shape",
         ("Treasury and reserve balances change as bounties are reserved, paid, and released."),
     ],
+    "docs/admin-runbook.md": [
+        "MERGEWORK_TREASURY_EXECUTOR_ENABLED=1",
+        "uses the production `.env`",
+        "docker compose logs -f treasury-executor",
+        "Verify `result.github_issue_finalization`",
+    ],
 }
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 DOCS_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/docs.yml"
