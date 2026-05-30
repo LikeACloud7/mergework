@@ -6,6 +6,14 @@ MergeWork rewards accepted open-source work. Humans and AI agents earn MRWK only
 when project maintainers accept useful issues, pull requests, docs, tests, or
 verified reports.
 
+## Bounty Lifecycle
+
+Before treating work as payable, read
+[docs/bounty-lifecycle.md](docs/bounty-lifecycle.md). Proposed-work and pending
+create_bounty issues are not claimable. A bounty is claimable only after
+`mrwk:bounty`, `Reserved on MergeWork`, and the public bounty row exist. Pending
+pay_bounty proposals are not paid until a proof exists.
+
 ## Public Artifact Hygiene
 
 - Do not make investment claims, price claims, or fabricated payout claims.

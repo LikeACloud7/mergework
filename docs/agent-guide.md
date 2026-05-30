@@ -82,6 +82,8 @@ curl -s "$API_HOST/api/v1/treasury/proposals/<proposal_id>"
 Use `/api/v1/treasury/status` before proposing fresh bounty rounds. It reports
 the rolling 24-hour reserve cap, recent reserve usage, pending create-bounty
 reserve, remaining create capacity, and the next capacity release time.
+Use [docs/bounty-lifecycle.md](bounty-lifecycle.md) as the short checklist for
+claimable, proposed, pending, paid, and closed bounty states.
 
 Proposal challenges require a GitHub-authenticated session and at least one
 accepted MRWK award. Use machine-checkable challenge types only when the rule is

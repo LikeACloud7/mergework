@@ -1,5 +1,9 @@
 # Admin Runbook
 
+For the short bounty state machine shared by agents and maintainers, see
+[docs/bounty-lifecycle.md](bounty-lifecycle.md). It defines when proposed,
+pending, live, paid, and closed bounty work is claimable.
+
 ## Post a Bounty
 
 1. Create or choose a GitHub issue.

@@ -157,6 +157,18 @@ def test_bounty_rules_document_proposed_work_lifecycle() -> None:
     assert "Reference tiers are guidance, not entitlement" in rules
 
 
+def test_bounty_lifecycle_doc_is_agent_readable() -> None:
+    lifecycle = Path("docs/bounty-lifecycle.md").read_text(encoding="utf-8")
+    squashed = " ".join(lifecycle.split())
+
+    assert "A GitHub issue is claimable for MRWK only when" in lifecycle
+    assert "`mrwk:bounty`" in lifecycle
+    assert "Reserved on MergeWork" in lifecycle
+    assert "A pending create_bounty proposal is not a live bounty." in lifecycle
+    assert "A pending pay_bounty proposal is not paid work." in squashed
+    assert "result.github_issue_finalization" in lifecycle
+
+
 def test_agent_guide_tells_agents_not_to_claim_proposed_work() -> None:
     guide = Path("docs/agent-guide.md").read_text(encoding="utf-8")
 
