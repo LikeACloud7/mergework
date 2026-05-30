@@ -93,6 +93,7 @@ def test_executor_executes_due_create_bounty_and_finalizes_issue(sqlite_url: str
     assert len(finalizer_calls) == 1
     assert finalizer_calls[0]["github_token"] == "github-issue-token"
     assert finalizer_calls[0]["public_base_url"] == "https://mrwk.example"
+    assert finalizer_calls[0]["bounty"]["issue_number"] == 90
 
     with session_scope(sqlite_url) as session:
         assert session.scalar(select(func.count(Bounty.id))) == 1

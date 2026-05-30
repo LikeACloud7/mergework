@@ -99,6 +99,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             logging.info("treasury executor report %s", json.dumps(report, sort_keys=True))
         except Exception:
             logging.exception("treasury executor pass failed")
+            if args.once:
+                return 1
         if args.once:
             return 0
         time.sleep(config.interval_seconds)
