@@ -215,6 +215,8 @@ def test_admin_page_renders_safe_webhook_events_for_cookie_admin(
     assert unauthenticated.status_code == 302
     assert unauthenticated.headers["location"] == "/auth/github/login?next=/admin"
     assert all_events.status_code == 200
+    assert "Treasury reserve capacity" in all_events.text
+    assert "Available create reserve" in all_events.text
     assert "missing_submitter" in all_events.text
     assert "bounty_not_found" in all_events.text
     assert "exhausted_bounty" in all_events.text
@@ -222,7 +224,10 @@ def test_admin_page_renders_safe_webhook_events_for_cookie_admin(
         r"<code>missing_submitter</code>\s*</span>\s*<strong>2</strong>", all_events.text
     )
     summary_match = re.search(
-        r'<div class="bounty-list-summary"[^>]*>.*?</div>', all_events.text, flags=re.S
+        r'<div class="bounty-list-summary" aria-label="Webhook processed status summary">'
+        r".*?</div>",
+        all_events.text,
+        flags=re.S,
     )
     assert summary_match is not None
     summary_html = summary_match.group(0)
@@ -245,6 +250,46 @@ def test_admin_page_renders_safe_webhook_events_for_cookie_admin(
     assert limited.status_code == 200
     assert limited.text.count("<tr>") == 2
     assert too_large.status_code == 422
+
+
+def test_admin_page_calls_out_pending_create_proposals_when_they_limit_capacity(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create_schema(sqlite_url)
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "test-cookie-secret")
+    monkeypatch.setenv("MERGEWORK_GITHUB_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setenv("MERGEWORK_GITHUB_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("MERGEWORK_ADMIN_LOGINS", "alice")
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+    proposal = client.post(
+        "/api/v1/bounties",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        json={
+            **_admin_bounty_form_data(),
+            "reward_mrwk": "10000",
+            "max_awards": 1,
+        },
+    )
+    client.cookies.set("mrwk_admin", _signed_value("alice", "test-cookie-secret"))
+
+    response = client.get("/admin")
+
+    assert proposal.status_code == 200
+    assert response.status_code == 200
+    assert re.search(
+        r"<span>Available create reserve</span>\s*<strong>0 MRWK</strong>",
+        response.text,
+    )
+    assert "Pending create-bounty proposals are using current create-bounty capacity." in (
+        response.text
+    )
+    assert "No recent reserve entries are currently limiting create-bounty capacity." not in (
+        response.text
+    )
 
 
 def test_admin_bounty_api_requires_admin_token_not_cookie_auth(

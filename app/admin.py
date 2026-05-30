@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import WebhookEvent
-from app.treasury import propose_treasury_action
+from app.treasury import propose_treasury_action, treasury_status
 
 ADMIN_WEBHOOK_LIMIT_OPTIONS = [10, 25, 50, 100, 200]
 WEBHOOK_OUTCOME_SCAN_ORDER = {
@@ -95,6 +95,7 @@ def admin_page_context(
         "webhook_limit": webhook_limit,
         "webhook_limit_options": ADMIN_WEBHOOK_LIMIT_OPTIONS,
         "webhook_status": normalized_status,
+        "treasury_status": treasury_status(session),
     }
 
 

@@ -15,6 +15,7 @@ from app.treasury import (
     execute_treasury_proposal,
     proposal_to_dict,
     propose_treasury_action,
+    treasury_status,
 )
 
 
@@ -52,6 +53,11 @@ def register_treasury_routes(
                 select(TreasuryProposal).order_by(TreasuryProposal.id.desc()).limit(limit)
             ).all()
             return [proposal_to_dict(proposal) for proposal in proposals]
+
+    @app.get("/api/v1/treasury/status")
+    def api_treasury_status() -> dict[str, Any]:
+        with session_scope(db_url) as session:
+            return treasury_status(session)
 
     @app.get("/api/v1/treasury/proposals/{proposal_id}")
     def api_treasury_proposal(proposal_id: int) -> dict[str, Any]:

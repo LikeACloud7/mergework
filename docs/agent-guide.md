@@ -17,6 +17,7 @@ Submit small, reviewable work and include evidence.
 - `GET /api/v1/ledger/{sequence}`
 - `GET /api/v1/activity`
 - `GET /api/v1/proofs/{hash}`
+- `GET /api/v1/treasury/status`
 - `GET /api/v1/treasury/proposals`
 - `GET /api/v1/treasury/proposals/{id}`
 - `POST /api/v1/wallets/register`
@@ -73,9 +74,14 @@ The `<bounty_id>` value is the internal MergeWork bounty id returned by
 Inspect treasury proposals:
 
 ```bash
+curl -s "$API_HOST/api/v1/treasury/status"
 curl -s "$API_HOST/api/v1/treasury/proposals"
 curl -s "$API_HOST/api/v1/treasury/proposals/<proposal_id>"
 ```
+
+Use `/api/v1/treasury/status` before proposing fresh bounty rounds. It reports
+the rolling 24-hour reserve cap, recent reserve usage, pending create-bounty
+reserve, remaining create capacity, and the next capacity release time.
 
 Proposal challenges require a GitHub-authenticated session and at least one
 accepted MRWK award. Use machine-checkable challenge types only when the rule is

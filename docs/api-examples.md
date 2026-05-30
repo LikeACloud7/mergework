@@ -90,9 +90,16 @@ stored when the proposal is created.
 Read proposals:
 
 ```bash
+curl -s "$API_HOST/api/v1/treasury/status"
 curl -s "$API_HOST/api/v1/treasury/proposals"
 curl -s "$API_HOST/api/v1/treasury/proposals/<proposal_id>"
 ```
+
+The treasury status endpoint reports the 24-hour create-bounty reserve cap,
+recent executed reserves, pending create-bounty proposal reserves, remaining
+create capacity, the next reserve capacity release time, and pending
+create-bounty proposals. Use it before drafting fresh bounty rounds so proposed
+issues do not sit around without a possible reserve proposal.
 
 Create or execute proposals with an admin token:
 
