@@ -19,7 +19,8 @@
    a single-award bounty.
 7. Use `/admin` or `POST /api/v1/bounties` with an admin token. This creates
    a public treasury proposal.
-8. Execute the proposal after the 24-hour delay. Multi-award bounties reserve
+8. Execute the proposal after the 24-hour delay, or let the enabled production
+   treasury executor execute it. Multi-award bounties reserve
    `reward_mrwk * max_awards` when the proposal executes.
 9. If `MERGEWORK_GITHUB_ISSUE_TOKEN` is configured, execution adds
    `mrwk:bounty` and posts the `Reserved on MergeWork` claims-open comment. If
@@ -88,6 +89,42 @@ This governance surface makes normal app-path treasury movement public,
 delayed, capped, and challengeable. It does not prevent direct server or
 database bypass by an operator with production access.
 
+### Production Treasury Executor
+
+Production can run the `treasury-executor` Docker Compose service to execute
+eligible treasury proposals without a maintainer being online at the exact
+`executes_after` time. The service uses the production `.env`, the same
+database volume as the app, and the same execution path as the manual admin
+route.
+
+Enable it only in the production `.env`:
+
+```env
+MERGEWORK_TREASURY_EXECUTOR_ENABLED=1
+MERGEWORK_TREASURY_EXECUTOR_INTERVAL_SECONDS=300
+MERGEWORK_TREASURY_EXECUTOR_BATCH_LIMIT=25
+```
+
+Deploy or restart the service with Docker Compose after editing production
+`.env`. Do not run the executor from a local checkout or local `.env`.
+
+```bash
+docker compose up -d treasury-executor
+docker compose logs -f treasury-executor
+```
+
+Each pass executes due pending proposals oldest-first up to the batch limit. If
+one proposal fails, the executor logs that failure and continues with later due
+proposals. It does not execute proposals before the 24-hour delay, and blocking
+challenges still prevent execution through the normal treasury rules.
+
+For due `create_bounty` proposals, successful execution should also finalize
+the GitHub issue through the #630 path. Verify `result.github_issue_finalization`
+on the proposal and confirm the issue has both `mrwk:bounty` and the
+`Reserved on MergeWork` claims-open comment. If finalization is skipped, failed,
+or partial, use the manual fallback rules above after confirming the public
+bounty row exists.
+
 ## Accept Work
 
 ### PR Bounties
@@ -149,7 +186,8 @@ Manual payout checklist:
 
 1. Verify the public proof and wallet address.
 2. Propose payment through `POST /api/v1/bounties/{id}/pay`.
-3. Confirm the public proposal, wait for the delay, then execute it.
+3. Confirm the public proposal, wait for the delay, then execute it manually or
+   let the enabled production treasury executor execute it.
 4. Confirm the explorer/API shows the proof.
 5. Add `mrwk:paid` to the paid comment or submission when possible.
 6. Add `mrwk:paid` to the bounty issue only after all awards are exhausted or
@@ -283,7 +321,7 @@ the repository and restart Docker Compose.
 - Database: `/srv/mergework/data/mergework.sqlite3`.
 - Backups: `/srv/mergework/backups`.
 - Health check: `GET /health`.
-- Logs: `docker compose logs -f app caddy`.
+- Logs: `docker compose logs -f app caddy treasury-executor`.
 
 ## Pre-Bounty Readiness
 

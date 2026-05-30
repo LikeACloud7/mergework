@@ -403,7 +403,7 @@ def test_create_bounty_execution_records_github_issue_finalization(
     monkeypatch.setenv("MERGEWORK_GITHUB_ISSUE_TOKEN", "github-issue-token-for-tests")
     monkeypatch.setenv("MERGEWORK_PUBLIC_BASE_URL", "https://mrwk.example")
     monkeypatch.setattr(
-        "app.treasury_routes.finalize_created_bounty_issue",
+        "app.treasury_executor.finalize_created_bounty_issue",
         fake_finalize_created_bounty_issue,
     )
     client = _client(sqlite_url, monkeypatch)
@@ -447,7 +447,7 @@ def test_create_bounty_execution_persists_skipped_github_issue_finalization(
         return {"status": "skipped", "reason": "github issue token not configured"}
 
     monkeypatch.setattr(
-        "app.treasury_routes.finalize_created_bounty_issue",
+        "app.treasury_executor.finalize_created_bounty_issue",
         fake_finalize_created_bounty_issue,
     )
     monkeypatch.setenv("MERGEWORK_PUBLIC_BASE_URL", "https://mrwk.example")
@@ -485,7 +485,7 @@ def test_create_bounty_execution_does_not_block_on_github_issue_finalization_err
 
     monkeypatch.setenv("MERGEWORK_GITHUB_ISSUE_TOKEN", "github-issue-token-for-tests")
     monkeypatch.setattr(
-        "app.treasury_routes.finalize_created_bounty_issue",
+        "app.treasury_executor.finalize_created_bounty_issue",
         broken_finalize_created_bounty_issue,
     )
     client = _client(sqlite_url, monkeypatch)
