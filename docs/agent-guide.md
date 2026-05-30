@@ -261,6 +261,17 @@ Use this checklist before opening a PR for `mrwk:bounty` issues:
 Common rejection reasons: duplicate scope, style-only changes without user
 impact, missing evidence, or ignoring issue-specific acceptance criteria.
 
+## Proposed Work Requests
+
+Proposed work requests are intake issues, not live bounties. They may describe a
+bug, docs gap, UX issue, verification task, or possible future bounty scope, but
+they do not reserve MRWK and they do not make work claimable.
+
+Do not submit `/claim` for a proposed work request. You may add concise evidence,
+duplicate-search notes, reproduction steps, or a suggested reference tier, but
+wait for `mrwk:bounty`, a `Reserved on MergeWork` comment, and a public bounty
+page before treating the issue as bounty work.
+
 ### Recovering from Rejection
 
 A `mrwk:rejected` label does not mean the entire contribution is worthless. Use rejection as diagnostic feedback:
