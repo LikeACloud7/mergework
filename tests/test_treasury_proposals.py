@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from datetime import timedelta
+from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -54,11 +56,13 @@ def _make_executable(sqlite_url: str, proposal_id: int) -> None:
         proposal.executes_after = utc_now() - timedelta(seconds=1)
 
 
-def _stored_proposal_result(sqlite_url: str, proposal_id: int) -> str:
+def _stored_proposal_result(sqlite_url: str, proposal_id: int) -> dict[str, object]:
     with session_scope(sqlite_url) as session:
         stored = session.get(TreasuryProposal, proposal_id)
         assert stored is not None
-        return stored.result_json
+        result = json.loads(stored.result_json)
+        assert isinstance(result, dict)
+        return cast(dict[str, object], result)
 
 
 def _seed_accepted_work(session, github_login: str, issue_number: int = 20) -> None:
@@ -412,9 +416,13 @@ def test_create_bounty_execution_records_github_issue_finalization(
     )
 
     assert executed.status_code == 200
+    expected_finalization = {
+        "status": "updated",
+        "label": "mrwk:bounty",
+        "comment_url": "https://github.com/ramimbo/mergework/issues/77#issuecomment-1",
+    }
     finalization = executed.json()["result"]["github_issue_finalization"]
-    assert finalization["status"] == "updated"
-    assert finalization["label"] == "mrwk:bounty"
+    assert finalization == expected_finalization
     assert len(calls) == 1
     assert calls[0]["github_token"] == "github-issue-token-for-tests"
     assert calls[0]["public_base_url"] == "https://mrwk.example"
@@ -422,8 +430,7 @@ def test_create_bounty_execution_records_github_issue_finalization(
     assert isinstance(bounty, dict)
     assert bounty["issue_url"] == "https://github.com/ramimbo/mergework/issues/77"
     stored_result = _stored_proposal_result(sqlite_url, proposal["id"])
-    assert "github_issue_finalization" in stored_result
-    assert "issuecomment-1" in stored_result
+    assert stored_result["github_issue_finalization"] == expected_finalization
 
 
 def test_create_bounty_execution_persists_skipped_github_issue_finalization(
@@ -458,11 +465,13 @@ def test_create_bounty_execution_persists_skipped_github_issue_finalization(
 
     assert executed.status_code == 200
     finalization = executed.json()["result"]["github_issue_finalization"]
-    assert finalization == {
+    expected_finalization = {
         "status": "skipped",
         "reason": "github issue token not configured",
     }
-    assert finalization["status"] in _stored_proposal_result(sqlite_url, proposal["id"])
+    assert finalization == expected_finalization
+    stored_result = _stored_proposal_result(sqlite_url, proposal["id"])
+    assert stored_result["github_issue_finalization"] == expected_finalization
 
 
 def test_create_bounty_execution_does_not_block_on_github_issue_finalization_error(
@@ -496,13 +505,13 @@ def test_create_bounty_execution_does_not_block_on_github_issue_finalization_err
     body = executed.json()
     assert body["status"] == "executed"
     assert body["result"]["bounty"]["issue_number"] == 76
-    assert body["result"]["github_issue_finalization"] == {
+    expected_finalization = {
         "status": "failed",
         "reason": "github issue finalization failed: RuntimeError",
     }
+    assert body["result"]["github_issue_finalization"] == expected_finalization
     stored_result = _stored_proposal_result(sqlite_url, proposal["id"])
-    assert "github_issue_finalization" in stored_result
-    assert "github issue finalization failed: RuntimeError" in stored_result
+    assert stored_result["github_issue_finalization"] == expected_finalization
 
 
 def test_proposal_execution_rejects_payload_hash_mismatch(
