@@ -405,7 +405,6 @@ def test_create_bounty_execution_records_github_issue_finalization(
     monkeypatch.setattr(
         "app.treasury_routes.finalize_created_bounty_issue",
         fake_finalize_created_bounty_issue,
-        raising=False,
     )
     client = _client(sqlite_url, monkeypatch)
     proposal = client.post("/api/v1/bounties", headers=ADMIN_HEADERS, json=_bounty_payload()).json()
@@ -450,7 +449,6 @@ def test_create_bounty_execution_persists_skipped_github_issue_finalization(
     monkeypatch.setattr(
         "app.treasury_routes.finalize_created_bounty_issue",
         fake_finalize_created_bounty_issue,
-        raising=False,
     )
     monkeypatch.setenv("MERGEWORK_PUBLIC_BASE_URL", "https://mrwk.example")
     client = _client(sqlite_url, monkeypatch)
@@ -489,7 +487,6 @@ def test_create_bounty_execution_does_not_block_on_github_issue_finalization_err
     monkeypatch.setattr(
         "app.treasury_routes.finalize_created_bounty_issue",
         broken_finalize_created_bounty_issue,
-        raising=False,
     )
     client = _client(sqlite_url, monkeypatch)
     proposal = client.post(
