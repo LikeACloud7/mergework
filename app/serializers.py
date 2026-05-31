@@ -487,13 +487,29 @@ def pending_activity_rows(session: Session, query: str | None = None) -> list[di
         .where(TreasuryProposal.status == "pending", TreasuryProposal.action == "pay_bounty")
         .order_by(TreasuryProposal.executes_after.asc(), TreasuryProposal.id.asc())
     ).all()
-    pending: list[dict[str, Any]] = []
+    parsed: list[tuple[TreasuryProposal, dict[str, Any], int | None]] = []
+    bounty_ids: set[int] = set()
     for proposal in proposals:
         payload = _proposal_payload(proposal)
         if payload is None:
             continue
         bounty_id = _proposal_bounty_id(payload)
-        bounty = session.get(Bounty, bounty_id) if bounty_id is not None else None
+        if bounty_id is not None:
+            bounty_ids.add(bounty_id)
+        parsed.append((proposal, payload, bounty_id))
+
+    bounty_by_id = (
+        {
+            bounty.id: bounty
+            for bounty in session.scalars(select(Bounty).where(Bounty.id.in_(bounty_ids))).all()
+        }
+        if bounty_ids
+        else {}
+    )
+
+    pending: list[dict[str, Any]] = []
+    for proposal, payload, bounty_id in parsed:
+        bounty = bounty_by_id.get(bounty_id) if bounty_id is not None else None
         row = _pending_activity_row(proposal, payload, bounty)
         if row["account"] is None or not _pending_activity_row_matches(row, search_query):
             continue

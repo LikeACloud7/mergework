@@ -204,6 +204,15 @@ def test_activity_api_exposes_pending_payouts_separately_from_paid_work(
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
         ensure_genesis(session)
+        paid_bounty = create_bounty(
+            session,
+            repo="ramimbo/paidwork",
+            issue_number=268,
+            issue_url="https://github.com/ramimbo/paidwork/issues/268",
+            title="Paid activity bounty",
+            reward_mrwk="25",
+            acceptance="Activity should keep proof-backed totals unchanged.",
+        )
         pending_bounty = create_bounty(
             session,
             repo="ramimbo/mergework",
@@ -212,15 +221,6 @@ def test_activity_api_exposes_pending_payouts_separately_from_paid_work(
             title="Pending activity bounty",
             reward_mrwk="75",
             acceptance="Activity should show queued accepted work separately.",
-        )
-        paid_bounty = create_bounty(
-            session,
-            repo="ramimbo/mergework",
-            issue_number=168,
-            issue_url="https://github.com/ramimbo/mergework/issues/168",
-            title="Paid activity bounty",
-            reward_mrwk="25",
-            acceptance="Activity should keep proof-backed totals unchanged.",
         )
         proposal = propose_treasury_action(
             session,
@@ -237,32 +237,40 @@ def test_activity_api_exposes_pending_payouts_separately_from_paid_work(
             session,
             bounty_id=paid_bounty.id,
             to_account="github:alice",
-            submission_url="https://github.com/ramimbo/mergework/pull/168",
+            submission_url="https://github.com/ramimbo/paidwork/pull/268",
             accepted_by="maintainer",
             verifier_result={"label": "mrwk:accepted"},
         )
+        pending_bounty_id = pending_bounty.id
+        proposal_id = proposal.id
+        proposal_proposed_at = proposal.proposed_at.isoformat()
+        proposal_executes_after = proposal.executes_after.isoformat()
+        proof_hash = proof.hash
 
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 
     payload = client.get("/api/v1/activity").json()
     by_account = client.get("/api/v1/activity?q=alice").json()
-    by_proposal = client.get(f"/api/v1/activity?q=#{proposal.id}").json()
+    by_proposal = client.get(f"/api/v1/activity?q=%23{proposal_id}").json()
     by_submission = client.get("/api/v1/activity?q=pull%2F167").json()
+    by_bounty_id = client.get(f"/api/v1/activity?q=%23{pending_bounty_id}").json()
+    by_repo = client.get("/api/v1/activity?q=ramimbo%2Fmergework").json()
+    by_issue = client.get("/api/v1/activity?q=%23167").json()
 
     assert payload["totals"] == {
         "accepted_awards": 1,
         "accepted_mrwk": "25",
         "contributors": 1,
     }
-    assert payload["recent"][0]["proof_hash"] == proof.hash
+    assert payload["recent"][0]["proof_hash"] == proof_hash
     assert payload["pending_totals"] == {
         "pending_awards": 1,
         "pending_mrwk": "75",
     }
     assert payload["pending_payouts"] == [
         {
-            "proposal_id": proposal.id,
-            "proposal_url": f"/api/v1/treasury/proposals/{proposal.id}",
+            "proposal_id": proposal_id,
+            "proposal_url": f"/api/v1/treasury/proposals/{proposal_id}",
             "status": "pending",
             "account": "github:alice",
             "amount_mrwk": "75",
@@ -270,18 +278,27 @@ def test_activity_api_exposes_pending_payouts_separately_from_paid_work(
             "bounty_repo": "ramimbo/mergework",
             "bounty_issue_number": 167,
             "bounty_issue_url": "https://github.com/ramimbo/mergework/issues/167",
-            "bounty_id": pending_bounty.id,
-            "bounty_url": f"/bounties/{pending_bounty.id}",
+            "bounty_id": pending_bounty_id,
+            "bounty_url": f"/bounties/{pending_bounty_id}",
             "accepted_by": "maintainer",
-            "proposed_at": proposal.proposed_at.isoformat(),
-            "executes_after": proposal.executes_after.isoformat(),
+            "proposed_at": proposal_proposed_at,
+            "executes_after": proposal_executes_after,
         }
     ]
-    assert by_account["pending_payouts"][0]["proposal_id"] == proposal.id
-    assert by_proposal["pending_payouts"][0]["proposal_id"] == proposal.id
-    assert by_submission["pending_payouts"][0]["proposal_id"] == proposal.id
+    assert by_account["pending_payouts"][0]["proposal_id"] == proposal_id
+    assert by_proposal["pending_payouts"][0]["proposal_id"] == proposal_id
+    assert by_submission["pending_payouts"][0]["proposal_id"] == proposal_id
+    assert by_bounty_id["pending_payouts"][0]["proposal_id"] == proposal_id
+    assert by_repo["pending_payouts"][0]["proposal_id"] == proposal_id
+    assert by_issue["pending_payouts"][0]["proposal_id"] == proposal_id
     assert by_submission["recent"] == []
+    assert by_bounty_id["recent"] == []
+    assert by_repo["recent"] == []
+    assert by_issue["recent"] == []
     assert by_submission["totals"]["accepted_awards"] == 0
+    assert by_bounty_id["totals"]["accepted_awards"] == 0
+    assert by_repo["totals"]["accepted_awards"] == 0
+    assert by_issue["totals"]["accepted_awards"] == 0
 
 
 def test_activity_page_renders_empty_and_paid_states(sqlite_url: str) -> None:
