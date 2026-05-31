@@ -32,7 +32,7 @@
 </nav>
 {% if query_text %}<p>Showing matches for “{{ query_text }}”.</p>{% endif %}
 {% if selected_repo or selected_issue_number %}
-<p>Source filter{% if selected_repo %}: {{ selected_repo }}{% endif %}{% if selected_issue_number %}#{{ selected_issue_number }}{% endif %}.</p>
+<p>Source filter:{% if selected_repo %} {{ selected_repo }}{% endif %}{% if selected_issue_number %} #{{ selected_issue_number }}{% endif %}.</p>
 {% endif %}
 <section class="bounty-list-summary" aria-label="Bounty list summary">
   <article>
