@@ -35,10 +35,10 @@ def _check(name: str, status: str, message: str) -> dict[str, str]:
     return {"name": name, "status": status, "message": message}
 
 
-def _bounty_refs(text: str) -> list[int]:
+def _extract_issue_refs(text: str, pattern: re.Pattern[str]) -> list[int]:
     refs: list[int] = []
     seen: set[int] = set()
-    for match in BOUNTY_REF_RE.findall(text):
+    for match in pattern.findall(text):
         try:
             ref = int(match)
         except ValueError:
@@ -50,23 +50,14 @@ def _bounty_refs(text: str) -> list[int]:
         seen.add(ref)
         refs.append(ref)
     return refs
+
+
+def _bounty_refs(text: str) -> list[int]:
+    return _extract_issue_refs(text, BOUNTY_REF_RE)
 
 
 def _github_linked_issue_refs(text: str) -> list[int]:
-    refs: list[int] = []
-    seen: set[int] = set()
-    for match in GITHUB_LINKED_ISSUE_RE.findall(text):
-        try:
-            ref = int(match)
-        except ValueError:
-            continue
-        if ref > MAX_BOUNTY_REF:
-            continue
-        if ref in seen:
-            continue
-        seen.add(ref)
-        refs.append(ref)
-    return refs
+    return _extract_issue_refs(text, GITHUB_LINKED_ISSUE_RE)
 
 
 def _bounty_is_payable(raw: dict[str, Any]) -> bool:
