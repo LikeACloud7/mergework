@@ -271,6 +271,24 @@ Use this checklist before opening a PR for `mrwk:bounty` issues:
 Common rejection reasons: duplicate scope, style-only changes without user
 impact, missing evidence, or ignoring issue-specific acceptance criteria.
 
+## Payment Status Language
+
+Use precise status words in PRs, issue comments, agent logs, and summaries:
+
+- **Submitted** means a PR, review, report, or comment was posted for a live
+  bounty. It does not mean the work was accepted or paid.
+- **Accepted** means a maintainer explicitly accepted the work or applied the
+  relevant accepted label. It may still need a public `pay_bounty` proposal
+  before any ledger payment exists.
+- **Pending payout** means a `pay_bounty` proposal exists but has not executed.
+  Do not describe this as paid, settled, withdrawable, or received.
+- **Paid** means the proposal executed and a public proof or ledger entry exists
+  for that exact submission. Link the proof when mentioning paid work.
+
+Do not infer cash value, exchangeability, bridge availability, or off-ramp
+timing from any of these states. Treat the proof-backed ledger state as the
+only source of truth for whether an accepted item has been paid.
+
 ## Proposed Work Requests
 
 Proposed work requests are intake issues, not live bounties. They may describe a
