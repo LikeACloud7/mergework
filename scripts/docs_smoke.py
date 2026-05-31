@@ -81,6 +81,7 @@ REQUIRED_PUBLIC_PHRASES = {
         "Smoke-check or bug-report claim:",
         "Discussion or decision-support claim:",
         "Non-live or stale bounty reference correction:",
+        "Current public evidence link(s):",
         "Do not describe work as accepted, merged, or paid until the public GitHub label",
         "## Proposed Work Requests",
         "proposed issue -> maintainer review -> optional create_bounty proposal",
