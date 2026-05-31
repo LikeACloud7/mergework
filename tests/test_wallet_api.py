@@ -206,6 +206,26 @@ def test_wallet_transfer_api_returns_validation_error(sqlite_url: str) -> None:
     assert response.json()["detail"] in {"invalid signature", "insufficient balance"}
 
 
+def test_wallet_transfer_api_rejects_c1_nonce_before_integer_parsing(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/api/v1/transfers",
+        json={
+            "from_address": "mrwk1" + ("a" * 40),
+            "to_address": "mrwk1" + ("b" * 40),
+            "amount_mrwk": "1",
+            "nonce": "\u00851",
+            "memo": "",
+            "signature_hex": "00" * 64,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "nonce must not contain control characters"
+
+
 def test_wallet_register_api_rejects_label_control_characters(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     _, public_hex, _ = _keypair()

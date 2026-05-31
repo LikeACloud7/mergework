@@ -74,3 +74,20 @@ def test_admin_webhook_page_allows_api_limit_cap(
     assert response.text.count('data-label="Delivery"') == 120
     assert '<option value="200" selected>200</option>' in response.text
     assert too_large.status_code == 422
+
+
+def test_admin_webhook_page_rejects_c1_control_status_before_normalizing(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "test-cookie-secret")
+    create_schema(sqlite_url)
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get(
+        "/admin?webhook_status=%C2%85missing_submitter",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "webhook_status must not contain control characters"

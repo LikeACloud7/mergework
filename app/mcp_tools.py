@@ -8,6 +8,7 @@ from sqlalchemy import func, or_, select
 from app.accounts import normalized_account, normalized_wallet_address
 from app.bounty_attempts import list_bounty_attempts
 from app.bounty_sorting import normalize_bounty_sort, sort_bounties
+from app.control_chars import contains_control_character
 from app.db import session_scope
 from app.ledger.service import format_mrwk, get_balance, register_wallet, submit_wallet_transfer
 from app.ledger_views import ledger_entry_to_dict
@@ -35,6 +36,8 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
         if isinstance(value, int):
             parsed = value
         elif isinstance(value, str):
+            if contains_control_character(value):
+                raise ValueError(f"{field} must not contain control characters")
             clean = value.strip()
             if clean and clean.lstrip("+-").isdigit():
                 try:
@@ -77,6 +80,8 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
             return None
         if not isinstance(value, str):
             raise ValueError(f"{field} must be a string")
+        if contains_control_character(value):
+            raise ValueError(f"{field} must not contain control characters")
         clean = value.strip()
         return clean or None
 

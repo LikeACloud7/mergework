@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.admin import list_webhook_events, webhook_events_to_dict
 from app.bounty_sorting import BOUNTY_SORT_ERROR, normalize_bounty_sort, sort_bounties
 from app.config import Settings
+from app.control_chars import contains_control_character
 from app.db import session_scope
 from app.ledger.reconciliation import payout_reconciliation_summary, reconcile_accepted_payouts
 from app.ledger.service import (
@@ -105,10 +106,17 @@ def register_bounty_api_routes(
         try:
             normalized_sort = normalize_bounty_sort(sort)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=BOUNTY_SORT_ERROR) from exc
+            detail = str(exc)
+            if "control characters" not in detail:
+                detail = BOUNTY_SORT_ERROR
+            raise HTTPException(status_code=400, detail=detail) from exc
         with session_scope(db_url) as session:
             query = select(Bounty)
             if status is not None:
+                if contains_control_character(status):
+                    raise HTTPException(
+                        status_code=400, detail="status must not contain control characters"
+                    )
                 normalized_status = status.strip().lower()
                 if normalized_status not in {"open", "paid", "closed"}:
                     raise HTTPException(
@@ -169,7 +177,10 @@ def register_bounty_api_routes(
     ) -> list[dict[str, Any]]:
         del admin_login
         with session_scope(db_url) as session:
-            return webhook_events_to_dict(list_webhook_events(session, status, limit))
+            try:
+                return webhook_events_to_dict(list_webhook_events(session, status, limit))
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/api/v1/bounties")
     async def api_create_bounty(

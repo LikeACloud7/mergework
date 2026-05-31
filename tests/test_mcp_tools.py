@@ -72,3 +72,32 @@ def test_call_mcp_tool_preserves_argument_validation_errors(
 
     with pytest.raises(ValueError, match=message):
         call_mcp_tool(sqlite_url, tool_name, arguments)
+
+
+def test_call_mcp_tool_rejects_c1_status_before_normalizing(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    with pytest.raises(ValueError, match="status must not contain control characters"):
+        call_mcp_tool(sqlite_url, "list_bounties", {"status": "\u0085open"})
+
+
+def test_call_mcp_tool_rejects_c1_nonce_before_integer_parsing(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    with pytest.raises(ValueError, match="nonce must not contain control characters"):
+        call_mcp_tool(
+            sqlite_url,
+            "submit_wallet_transfer",
+            {
+                "from_address": "mrwk1" + ("a" * 40),
+                "to_address": "mrwk1" + ("b" * 40),
+                "amount_mrwk": "1",
+                "nonce": "\u00851",
+                "memo": "",
+                "signature_hex": "00" * 64,
+            },
+        )

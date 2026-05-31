@@ -30,6 +30,16 @@ class TestBountyListRoutes:
         assert resp.status_code == 400
         assert "status must be one of" in resp.json()["detail"]
 
+    def test_list_bounties_rejects_c1_control_status_before_normalizing(self, client):
+        resp = client.get("/api/v1/bounties?status=%C2%85open")
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "status must not contain control characters"
+
+    def test_list_bounties_rejects_c1_control_sort_before_normalizing(self, client):
+        resp = client.get("/api/v1/bounties?sort=%C2%85reward")
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "sort must not contain control characters"
+
     def test_list_bounties_with_query(self, client):
         resp = client.get("/api/v1/bounties?q=test")
         assert resp.status_code == 200
@@ -87,6 +97,19 @@ class TestBountyPayRoute:
             },
         )
         assert resp.status_code == 401
+
+
+def test_admin_webhook_events_api_rejects_c1_control_status(monkeypatch):
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(create_app(webhook_secret="secret"))
+
+    resp = client.get(
+        "/api/v1/admin/webhook-events?status=%C2%85paid",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+    )
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "webhook_status must not contain control characters"
 
 
 class TestBountyCloseRoute:

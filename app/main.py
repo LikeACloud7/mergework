@@ -19,6 +19,7 @@ from app.bounty_attempts import (
     register_bounty_attempt_routes,
 )
 from app.config import get_settings
+from app.control_chars import contains_control_character
 from app.db import create_schema, session_scope
 from app.hub import is_ltc_lab_host, ltc_lab_context, mergework_hub_context
 from app.ledger.service import ensure_genesis, public_url_or_none
@@ -146,6 +147,10 @@ def _parse_int(value: Any, field: str) -> int:
     if isinstance(value, int):
         return value
     if isinstance(value, str):
+        if contains_control_character(value):
+            raise HTTPException(
+                status_code=400, detail=f"{field} must not contain control characters"
+            )
         clean = value.strip()
         if clean and clean.lstrip("+-").isdigit():
             try:
