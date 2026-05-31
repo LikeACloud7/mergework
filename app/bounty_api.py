@@ -135,7 +135,8 @@ def register_bounty_api_routes(
                     query = query.where(text_filter)
             bounties = session.scalars(query.order_by(Bounty.id.desc())).all()
             sorted_bounties = sort_bounties(
-                [bounty_to_dict(bounty) for bounty in bounties], normalized_sort
+                [bounty_to_dict(bounty, session=session) for bounty in bounties],
+                normalized_sort,
             )
             if limit is not None:
                 return sorted_bounties[:limit]
@@ -203,7 +204,7 @@ def register_bounty_api_routes(
             bounty = session.get(Bounty, bounty_id)
             if bounty is None:
                 raise HTTPException(status_code=404, detail="bounty not found")
-            result = bounty_to_dict(bounty)
+            result = bounty_to_dict(bounty, session=session)
             result["accepted_awards"] = bounty_awards_to_dict(session, bounty.id)
             return result
 

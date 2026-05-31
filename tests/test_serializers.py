@@ -50,6 +50,8 @@ def test_bounty_serializers_preserve_public_capacity_fields(sqlite_url: str) -> 
         "bounties_shown": 1,
         "open_awards": 4,
         "open_pool_mrwk": "100",
+        "effective_open_awards": 4,
+        "effective_open_pool_mrwk": "100",
     }
 
 

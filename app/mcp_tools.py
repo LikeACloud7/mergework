@@ -142,15 +142,19 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
                 newest_bounties = session.scalars(
                     query.order_by(Bounty.id.desc()).limit(limit)
                 ).all()
-                return json.dumps([bounty_to_dict(bounty) for bounty in newest_bounties])
+                return json.dumps(
+                    [bounty_to_dict(bounty, session=session) for bounty in newest_bounties]
+                )
             bounties = session.scalars(query.order_by(Bounty.id.desc())).all()
-            sorted_bounties = sort_bounties([bounty_to_dict(bounty) for bounty in bounties], sort)
+            sorted_bounties = sort_bounties(
+                [bounty_to_dict(bounty, session=session) for bounty in bounties], sort
+            )
             return json.dumps(sorted_bounties[:limit])
         if name == "get_bounty":
             bounty = session.get(Bounty, positive_int_arg("id"))
             if bounty is None:
                 return "bounty not found"
-            bounty_data = bounty_to_dict(bounty)
+            bounty_data = bounty_to_dict(bounty, session=session)
             if optional_bool_arg("include_awards"):
                 bounty_data["awards"] = bounty_awards_to_dict(session, bounty.id)
             return json.dumps(bounty_data)
@@ -238,9 +242,9 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
                 if bounty is None:
                     return "bounty not found"
                 return (
-                    work_proof_guidance_json(bounty)
+                    work_proof_guidance_json(bounty, session=session)
                     if output_format == "json"
-                    else work_proof_guidance(bounty)
+                    else work_proof_guidance(bounty, session=session)
                 )
             if has_issue_number:
                 issue_query = select(Bounty).where(
@@ -254,9 +258,9 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
                 if len(bounties) > 1:
                     raise ValueError("issue_number matches multiple bounties")
                 return (
-                    work_proof_guidance_json(bounties[0])
+                    work_proof_guidance_json(bounties[0], session=session)
                     if output_format == "json"
-                    else work_proof_guidance(bounties[0])
+                    else work_proof_guidance(bounties[0], session=session)
                 )
             if output_format == "json":
                 return generic_work_proof_guidance_json()

@@ -32,6 +32,14 @@
       <strong>{{ bounty.available_mrwk }} MRWK</strong>
     </article>
     <article>
+      <span>Effective remaining</span>
+      <strong>{{ bounty.effective_awards_remaining }}</strong>
+    </article>
+    <article>
+      <span>Effective available</span>
+      <strong>{{ bounty.effective_available_mrwk }} MRWK</strong>
+    </article>
+    <article>
       <span>Issue</span>
       <strong>
         {% if issue_url %}
@@ -42,6 +50,14 @@
       </strong>
     </article>
   </div>
+  {% if bounty.availability_state != "open" or bounty.effective_awards_remaining != bounty.awards_remaining %}
+  <p class="notice">
+    {{ bounty.availability_note }}
+    {% if bounty.effective_awards_remaining != bounty.awards_remaining %}
+    Visible capacity before pending proposals: {{ bounty.awards_remaining }} award{% if bounty.awards_remaining != 1 %}s{% endif %}, {{ bounty.available_mrwk }} MRWK.
+    {% endif %}
+  </p>
+  {% endif %}
 
   <section class="acceptance-card" aria-labelledby="acceptance-heading">
     <p class="eyebrow">Acceptance</p>
@@ -56,10 +72,16 @@
       <li>Confirm the source issue is still open and your change is not already covered by another PR.</li>
       <li>Keep the PR focused, link the source issue as <strong>Bounty #{{ bounty.issue_number }}</strong>, and include test or smoke-check evidence.</li>
       <li>
-        {% if bounty.awards_remaining %}
-          {{ bounty.awards_remaining }} award{% if bounty.awards_remaining != 1 %}s{% endif %} still open for distinct accepted work.
-        {% else %}
+        {% if bounty.effective_awards_remaining %}
+          {% if bounty.effective_awards_remaining == bounty.awards_remaining %}
+          {{ bounty.effective_awards_remaining }} award{% if bounty.effective_awards_remaining != 1 %}s{% endif %} still open for distinct accepted work.
+          {% else %}
+          {{ bounty.effective_awards_remaining }} award{% if bounty.effective_awards_remaining != 1 %}s{% endif %} still open for distinct accepted work after pending treasury proposals.
+          {% endif %}
+        {% elif bounty.effective_awards_remaining == bounty.awards_remaining %}
           No awards remain; treat new work as unpaid unless maintainers reopen the bounty.
+        {% else %}
+          No awards remain after pending treasury proposals; treat new work as unpaid unless maintainers reopen or free capacity.
         {% endif %}
       </li>
     </ol>
@@ -73,7 +95,7 @@
 <section>
   <div class="section-head">
     <h2>Accepted work</h2>
-    <p>{{ bounty.awards_paid }}/{{ bounty.max_awards }} awards paid{% if bounty.awards_remaining %}; {{ bounty.awards_remaining }} still open{% endif %}.</p>
+    <p>{{ bounty.awards_paid }}/{{ bounty.max_awards }} awards paid{% if bounty.effective_awards_remaining %}; {{ bounty.effective_awards_remaining }} still open{% elif bounty.awards_remaining %}; {{ bounty.awards_remaining }} visibly open before pending proposals{% endif %}.</p>
   </div>
   {% if bounty.accepted_awards %}
   <div class="ledger-list">

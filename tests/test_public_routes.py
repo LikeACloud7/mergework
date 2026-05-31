@@ -24,6 +24,8 @@ def test_public_bounties_context_normalizes_filter_state() -> None:
             "bounties_shown": 1,
             "open_awards": 2,
             "open_pool_mrwk": "50",
+            "effective_open_awards": 2,
+            "effective_open_pool_mrwk": "50",
         },
         "selected_status": "open",
         "query_text": "proof",
