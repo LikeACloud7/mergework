@@ -231,7 +231,9 @@ def test_api_examples_document_bounty_list_response_shape() -> None:
     assert "Award counters can change" in examples
     assert "capacity totals" in examples
     assert "full bounty" in examples
-    assert "same optional `status`, `q`, `sort`, and" in examples
+    assert "same optional `status`, `q`, `sort`," in examples
+    assert "`limit`, and `availability` filters" in examples
+    assert "availability=effectively_open" in examples
     assert "Use `id` for the single-bounty API path" in examples
 
 

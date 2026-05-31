@@ -11,6 +11,11 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.admin import list_webhook_events, webhook_events_to_dict
+from app.bounty_availability import (
+    BOUNTY_AVAILABILITY_ERROR,
+    filter_bounties_by_availability,
+    normalize_bounty_availability_filter,
+)
 from app.bounty_sorting import BOUNTY_SORT_ERROR, normalize_bounty_sort, sort_bounties
 from app.config import Settings
 from app.control_chars import contains_control_character
@@ -102,12 +107,19 @@ def register_bounty_api_routes(
         query_text: str | None = None,
         sort: str | None = None,
         limit: int | None = None,
+        availability: str | None = None,
     ) -> list[dict[str, Any]]:
         try:
             normalized_sort = normalize_bounty_sort(sort)
+            normalized_availability = normalize_bounty_availability_filter(availability)
         except ValueError as exc:
             detail = str(exc)
-            if "control characters" not in detail:
+            if detail not in {
+                BOUNTY_SORT_ERROR,
+                BOUNTY_AVAILABILITY_ERROR,
+                "sort must not contain control characters",
+                "availability must not contain control characters",
+            }:
                 detail = BOUNTY_SORT_ERROR
             raise HTTPException(status_code=400, detail=detail) from exc
         with session_scope(db_url) as session:
@@ -144,7 +156,10 @@ def register_bounty_api_routes(
                     query = query.where(text_filter)
             bounties = session.scalars(query.order_by(Bounty.id.desc())).all()
             sorted_bounties = sort_bounties(
-                bounties_to_dict(bounties, session=session),
+                filter_bounties_by_availability(
+                    bounties_to_dict(bounties, session=session),
+                    normalized_availability,
+                ),
                 normalized_sort,
             )
             if limit is not None:
@@ -157,8 +172,11 @@ def register_bounty_api_routes(
         q: str | None = Query(None),
         limit: Annotated[int | None, Query(ge=1, le=200)] = None,
         sort: str | None = Query(None),
+        availability: str | None = Query(None),
     ) -> list[dict[str, Any]]:
-        return _list_bounties_by_status(status, q, sort=sort, limit=limit)
+        return _list_bounties_by_status(
+            status, q, sort=sort, limit=limit, availability=availability
+        )
 
     @app.get("/api/v1/bounties/summary")
     def api_bounties_summary(
@@ -166,8 +184,11 @@ def register_bounty_api_routes(
         q: str | None = Query(None),
         limit: Annotated[int | None, Query(ge=1, le=200)] = None,
         sort: str | None = Query(None),
+        availability: str | None = Query(None),
     ) -> dict[str, Any]:
-        return bounty_list_summary(_list_bounties_by_status(status, q, sort=sort, limit=limit))
+        return bounty_list_summary(
+            _list_bounties_by_status(status, q, sort=sort, limit=limit, availability=availability)
+        )
 
     @app.get("/api/v1/admin/webhook-events")
     def api_admin_webhook_events(

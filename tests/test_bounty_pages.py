@@ -461,6 +461,85 @@ def test_bounties_page_and_api_sort_public_rows(sqlite_url: str) -> None:
     assert invalid_sort.json()["detail"] == "sort must be one of: newest, reward, available, awards"
 
 
+def test_bounties_page_api_and_summary_filter_effectively_open_rows(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        effectively_open = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=80,
+            issue_url="https://github.com/ramimbo/mergework/issues/80",
+            title="Fresh open bounty",
+            reward_mrwk="100",
+            acceptance="This bounty has no pending payout proposals.",
+        )
+        partially_open = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=81,
+            issue_url="https://github.com/ramimbo/mergework/issues/81",
+            title="Partially open bounty",
+            reward_mrwk="50",
+            max_awards=2,
+            acceptance="This bounty still has one effective award after a pending payout.",
+        )
+        effectively_full = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=82,
+            issue_url="https://github.com/ramimbo/mergework/issues/82",
+            title="Effectively full bounty",
+            reward_mrwk="75",
+            acceptance="This bounty is raw-open but covered by a pending payout.",
+        )
+        propose_treasury_action(
+            session,
+            action="pay_bounty",
+            payload={
+                "bounty_id": partially_open.id,
+                "to_account": "github:alice",
+                "submission_url": "https://github.com/ramimbo/mergework/pull/81",
+                "accepted_by": "maintainer",
+            },
+            proposed_by="maintainer",
+        )
+        propose_treasury_action(
+            session,
+            action="pay_bounty",
+            payload={
+                "bounty_id": effectively_full.id,
+                "to_account": "github:bob",
+                "submission_url": "https://github.com/ramimbo/mergework/pull/82",
+                "accepted_by": "maintainer",
+            },
+            proposed_by="maintainer",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    default_rows = client.get("/api/v1/bounties?status=open")
+    assert default_rows.status_code == 200
+    assert [row["issue_number"] for row in default_rows.json()] == [82, 81, 80]
+
+    filtered_rows = client.get("/api/v1/bounties?status=open&availability=effectively_open")
+    assert filtered_rows.status_code == 200
+    assert [row["issue_number"] for row in filtered_rows.json()] == [81, 80]
+
+    summary = client.get("/api/v1/bounties/summary?status=open&availability=effectively_open")
+    assert summary.status_code == 200
+    assert summary.json()["bounties_shown"] == 2
+    assert summary.json()["open_awards"] == 3
+    assert summary.json()["effective_open_awards"] == 2
+
+    page = client.get("/bounties?status=open&availability=effectively_open")
+    assert page.status_code == 200
+    assert effectively_open.title in page.text
+    assert partially_open.title in page.text
+    assert effectively_full.title not in page.text
+    assert 'href="/api/v1/bounties?status=open&amp;availability=effectively_open">' in page.text
+
+
 def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
