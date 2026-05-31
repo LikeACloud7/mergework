@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -70,7 +70,7 @@ def _active_attempt_conditions(bounty_id: int, now: datetime) -> tuple[Any, ...]
     )
 
 
-def bounty_attempt_warnings(session: Session, bounty: Bounty, now: datetime) -> list[str]:
+def _bounty_attempt_warnings_for_count(bounty: Bounty, active_count: int) -> list[str]:
     warnings: list[str] = []
     awards_remaining = max(0, bounty.max_awards - bounty.awards_paid)
     if bounty.status != "open":
@@ -78,17 +78,61 @@ def bounty_attempt_warnings(session: Session, bounty: Bounty, now: datetime) -> 
         awards_remaining = 0
     if awards_remaining <= 0:
         warnings.append("bounty has no award slots remaining")
-    active_count = session.scalar(
-        select(func.count())
-        .select_from(BountyAttempt)
-        .where(*_active_attempt_conditions(bounty.id, now))
-    )
     if active_count and (
         active_count > 1 or (awards_remaining > 0 and active_count >= awards_remaining)
     ):
         attempt_label = "attempt" if active_count == 1 else "attempts"
         warnings.append(f"bounty has {active_count} active {attempt_label}")
     return warnings
+
+
+def active_bounty_attempt_count(session: Session, bounty_id: int, now: datetime) -> int:
+    active_count = session.scalar(
+        select(func.count())
+        .select_from(BountyAttempt)
+        .where(*_active_attempt_conditions(bounty_id, now))
+    )
+    return int(active_count or 0)
+
+
+def active_bounty_attempt_counts(
+    session: Session, bounty_ids: Sequence[int], now: datetime
+) -> dict[int, int]:
+    if not bounty_ids:
+        return {}
+    rows = session.execute(
+        select(BountyAttempt.bounty_id, func.count())
+        .where(
+            BountyAttempt.bounty_id.in_(bounty_ids),
+            BountyAttempt.status == "active",
+            BountyAttempt.expires_at > now,
+        )
+        .group_by(BountyAttempt.bounty_id)
+    ).all()
+    return {int(bounty_id): int(active_count or 0) for bounty_id, active_count in rows}
+
+
+def bounty_attempt_warnings(session: Session, bounty: Bounty, now: datetime) -> list[str]:
+    return _bounty_attempt_warnings_for_count(
+        bounty, active_bounty_attempt_count(session, bounty.id, now)
+    )
+
+
+def bounty_attempt_summary_from_count(bounty: Bounty, active_count: int) -> dict[str, Any]:
+    return {
+        "active_attempt_count": active_count,
+        "active_attempt_warnings": _bounty_attempt_warnings_for_count(bounty, active_count),
+        "attempt_endpoint": f"/api/v1/bounties/{bounty.id}/attempts",
+    }
+
+
+def bounty_attempt_summary(
+    session: Session, bounty: Bounty, now: datetime | None = None
+) -> dict[str, Any]:
+    now = _as_utc(now or _utc_now())
+    return bounty_attempt_summary_from_count(
+        bounty, active_bounty_attempt_count(session, bounty.id, now)
+    )
 
 
 def list_bounty_attempts(

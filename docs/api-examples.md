@@ -44,6 +44,9 @@ The bounties list returns public bounty rows. `status` can be omitted or set to
   "pending_payout_awards": 0,
   "availability_state": "open",
   "availability_note": "1 award effectively available.",
+  "active_attempt_count": 0,
+  "active_attempt_warnings": [],
+  "attempt_endpoint": "/api/v1/bounties/36/attempts",
   "status": "open",
   "acceptance": "Focused public-facing enhancements that help contributors find bounties, inspect accepted work, or understand proof/account activity, with tests. Duplicate, marketing-only, docs-only, broad redesign, or unrelated changes do not qualify.",
   "created_at": "2026-05-24T20:44:00.015953"
@@ -60,6 +63,10 @@ when deciding whether a bounty still has practical capacity; do not describe
 pending payout proposals as proof-backed paid work until a proof exists. Award counters can change
 as accepted work is paid; refresh concrete examples against the live API before
 relying on available slot counts.
+
+The `active_attempt_count` and `active_attempt_warnings` fields are advisory
+overlap signals. When a warning is present, inspect `attempt_endpoint` before
+opening a PR so you can avoid duplicating another active attempt's scope.
 
 Use `sort` to choose the bounty order: `newest` is the default, `reward` sorts
 by per-award reward, `available` sorts by the remaining MRWK pool, and `awards`

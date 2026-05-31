@@ -272,6 +272,62 @@ def test_multi_award_bounty_still_warns_for_multiple_active_attempts(sqlite_url:
         assert bounty_attempt_warnings(session, bounty, now) == ["bounty has 2 active attempts"]
 
 
+def test_bounty_api_rows_include_active_attempt_summary(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    now = datetime.now(UTC)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=329,
+            issue_url="https://github.com/ramimbo/mergework/issues/329",
+            title="Attempt summary on bounty rows",
+            reward_mrwk="50",
+            max_awards=2,
+            acceptance="Expose active-attempt summary on public bounty rows.",
+        )
+        for submitter, status, expires_at in (
+            ("github:alice", "active", now + timedelta(hours=1)),
+            ("github:bob", "active", now + timedelta(hours=1)),
+            ("github:carol", "active", now - timedelta(minutes=1)),
+            ("github:dana", "released", now + timedelta(hours=1)),
+        ):
+            session.add(
+                BountyAttempt(
+                    bounty_id=bounty.id,
+                    submitter_account=submitter,
+                    status=status,
+                    expires_at=expires_at,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        session.flush()
+        bounty_id = bounty.id
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    detail = client.get(f"/api/v1/bounties/{bounty_id}")
+    assert detail.status_code == 200
+    detail_body = detail.json()
+    assert detail_body["active_attempt_count"] == 2
+    assert detail_body["active_attempt_warnings"] == ["bounty has 2 active attempts"]
+    assert detail_body["attempt_endpoint"] == f"/api/v1/bounties/{bounty_id}/attempts"
+
+    listed = client.get("/api/v1/bounties").json()
+    row = next(item for item in listed if item["id"] == bounty_id)
+    assert row["active_attempt_count"] == 2
+    assert row["active_attempt_warnings"] == ["bounty has 2 active attempts"]
+    assert row["attempt_endpoint"] == f"/api/v1/bounties/{bounty_id}/attempts"
+
+    attempts = client.get(f"/api/v1/bounties/{bounty_id}/attempts").json()
+    assert [attempt["submitter_account"] for attempt in attempts["attempts"]] == [
+        "github:bob",
+        "github:alice",
+    ]
+
+
 def test_expired_bounty_attempt_is_visible_but_no_longer_blocks_submitter(
     sqlite_url: str,
     monkeypatch,
