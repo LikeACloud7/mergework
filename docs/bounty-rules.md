@@ -189,6 +189,25 @@ Maintainer decision this supports:
 Non-goals:
 ```
 
+Non-live or stale bounty reference correction:
+
+```text
+Referenced issue or PR:
+Claim text that needs correction:
+Missing live signal:
+- mrwk:bounty label:
+- Reserved on MergeWork comment:
+- Open public bounty row:
+Current public evidence link(s):
+Correct next action:
+```
+
+Use this correction template when a PR, issue comment, or agent summary treats
+proposed, pending, closed, exhausted, or unsupported work as claimable. Keep the
+comment factual: name the missing signal, link the current public evidence, and
+state whether the author should wait for proposal execution, retarget to a live
+bounty, update the PR body, or drop the MRWK claim.
+
 Do not describe work as accepted, merged, or paid until the public GitHub label,
 maintainer comment, or MRWK proof exists.
 
