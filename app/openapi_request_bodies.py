@@ -33,9 +33,27 @@ def _object_schema(
 
 INTEGER_OR_STRING_SCHEMA = {
     "anyOf": [
-        {"type": "integer"},
-        {"type": "string", "description": "Integer value encoded as a string."},
+        {"type": "integer", "minimum": 1},
+        {
+            "type": "string",
+            "description": "Positive integer value encoded as a string.",
+            "pattern": "^[1-9][0-9]*$",
+        },
     ],
+}
+
+LOWERCASE_HEX_64_SCHEMA = {
+    "type": "string",
+    "minLength": 64,
+    "maxLength": 64,
+    "pattern": "^[0-9a-f]{64}$",
+}
+
+LOWERCASE_HEX_128_SCHEMA = {
+    "type": "string",
+    "minLength": 128,
+    "maxLength": 128,
+    "pattern": "^[0-9a-f]{128}$",
 }
 
 OPTIONAL_ATTEMPT_BODY = {
@@ -54,7 +72,14 @@ OPTIONAL_ATTEMPT_BODY = {
                     "description": "Optional public work branch or pull request URL.",
                 },
                 "ttl_seconds": {
-                    **INTEGER_OR_STRING_SCHEMA,
+                    "anyOf": [
+                        {"type": "integer", "minimum": 60, "maximum": 604800},
+                        {
+                            "type": "string",
+                            "description": "Integer value encoded as a string (60..604800).",
+                            "pattern": "^[0-9]+$",
+                        },
+                    ],
                     "default": 86400,
                     "description": "Attempt lifetime in seconds, from 60 to 604800.",
                 },
@@ -87,7 +112,7 @@ WALLET_REGISTER_BODY = {
         _object_schema(
             {
                 "public_key_hex": {
-                    "type": "string",
+                    **LOWERCASE_HEX_64_SCHEMA,
                     "description": "64-character lowercase hex Ed25519 public key.",
                 },
                 "label": {"type": "string", "description": "Optional wallet display label."},
@@ -101,7 +126,7 @@ SIGNED_WALLET_ACTION_PROPERTIES = {
     "address": {"type": "string", "description": "Registered mrwk1 wallet address."},
     "nonce": INTEGER_OR_STRING_SCHEMA,
     "signature_hex": {
-        "type": "string",
+        **LOWERCASE_HEX_128_SCHEMA,
         "description": "128-character lowercase hex Ed25519 signature.",
     },
 }
@@ -125,7 +150,7 @@ WALLET_TRANSFER_BODY = {
                 "nonce": INTEGER_OR_STRING_SCHEMA,
                 "memo": {"type": "string", "description": "Optional transfer memo."},
                 "signature_hex": {
-                    "type": "string",
+                    **LOWERCASE_HEX_128_SCHEMA,
                     "description": "128-character lowercase hex Ed25519 signature.",
                 },
             },

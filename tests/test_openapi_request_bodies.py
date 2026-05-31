@@ -51,31 +51,60 @@ def test_public_post_openapi_request_bodies_mark_required_fields(sqlite_url: str
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
     openapi = client.get("/openapi.json").json()
 
-    assert _post_schema(openapi, "/api/v1/wallets/register")["required"] == ["public_key_hex"]
-    assert _post_schema(openapi, "/api/v1/wallets/link-github")["required"] == [
+    assert set(_post_schema(openapi, "/api/v1/wallets/register")["required"]) == {"public_key_hex"}
+    assert set(_post_schema(openapi, "/api/v1/wallets/link-github")["required"]) == {
         "address",
         "nonce",
         "signature_hex",
-    ]
-    assert _post_schema(openapi, "/api/v1/github/claim")["required"] == [
+    }
+    assert set(_post_schema(openapi, "/api/v1/github/claim")["required"]) == {
         "address",
         "nonce",
         "signature_hex",
-    ]
-    assert _post_schema(openapi, "/api/v1/transfers")["required"] == [
+    }
+    assert set(_post_schema(openapi, "/api/v1/transfers")["required"]) == {
         "from_address",
         "to_address",
         "amount_mrwk",
         "nonce",
         "signature_hex",
-    ]
-    assert _post_schema(openapi, "/api/v1/treasury/proposals")["required"] == [
+    }
+    assert set(_post_schema(openapi, "/api/v1/treasury/proposals")["required"]) == {
         "action",
         "payload",
-    ]
-    assert _post_schema(openapi, "/api/v1/treasury/proposals/{proposal_id}/challenges")[
-        "required"
-    ] == ["challenge_type", "reason"]
+    }
+    assert set(
+        _post_schema(openapi, "/api/v1/treasury/proposals/{proposal_id}/challenges")["required"]
+    ) == {"challenge_type", "reason"}
+
+
+def test_public_post_openapi_request_bodies_publish_stable_constraints(
+    sqlite_url: str,
+) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    openapi = client.get("/openapi.json").json()
+
+    attempt_props = _post_schema(openapi, "/api/v1/bounties/{bounty_id}/attempts")["properties"]
+    ttl_any_of = attempt_props["ttl_seconds"]["anyOf"]
+    assert {"type": "integer", "minimum": 60, "maximum": 604800} in ttl_any_of
+    assert any(
+        schema.get("type") == "string" and schema.get("pattern") == "^[0-9]+$"
+        for schema in ttl_any_of
+    )
+
+    wallet_props = _post_schema(openapi, "/api/v1/wallets/register")["properties"]
+    assert wallet_props["public_key_hex"]["minLength"] == 64
+    assert wallet_props["public_key_hex"]["maxLength"] == 64
+    assert wallet_props["public_key_hex"]["pattern"] == "^[0-9a-f]{64}$"
+
+    link_props = _post_schema(openapi, "/api/v1/wallets/link-github")["properties"]
+    assert link_props["signature_hex"]["minLength"] == 128
+    assert link_props["signature_hex"]["maxLength"] == 128
+    assert link_props["signature_hex"]["pattern"] == "^[0-9a-f]{128}$"
+    assert {"type": "integer", "minimum": 1} in link_props["nonce"]["anyOf"]
+
+    transfer_props = _post_schema(openapi, "/api/v1/transfers")["properties"]
+    assert transfer_props["signature_hex"]["pattern"] == "^[0-9a-f]{128}$"
 
 
 def test_attempt_openapi_request_bodies_remain_optional(sqlite_url: str) -> None:
