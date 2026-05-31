@@ -326,6 +326,15 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
             reward_mrwk="100",
             acceptance=r"Document C:\work\mergework examples.",
         )
+        create_bounty(
+            session,
+            repo="example/other",
+            issue_number=64,
+            issue_url="https://github.com/example/other/issues/64",
+            title="Other repo same issue",
+            reward_mrwk="25",
+            acceptance="Other repository bounty.",
+        )
 
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 
@@ -376,6 +385,15 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
     underscore_search = client.get("/api/v1/bounties?q=_")
     assert underscore_search.status_code == 200
     assert [row["issue_number"] for row in underscore_search.json()] == [66]
+
+    source_filter_page = client.get("/bounties?repo=ramimbo%2Fmergework&issue_number=64")
+    assert source_filter_page.status_code == 200
+    assert "Source filter: ramimbo/mergework#64." in source_filter_page.text
+    assert "Improve public bounty discovery" in source_filter_page.text
+    assert "Other repo same issue" not in source_filter_page.text
+    assert (
+        'href="/api/v1/bounties?repo=ramimbo%2Fmergework&amp;issue_number=64">View JSON results</a>'
+    ) in source_filter_page.text
 
     backslash_search = client.get("/api/v1/bounties", params={"q": "\\"})
     assert backslash_search.status_code == 200

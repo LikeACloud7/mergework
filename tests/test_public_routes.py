@@ -16,7 +16,14 @@ def test_public_bounties_context_normalizes_filter_state() -> None:
         }
     ]
 
-    context = public_bounties_context(bounties, status=" OPEN ", q=" proof ", sort=" Reward ")
+    context = public_bounties_context(
+        bounties,
+        status=" OPEN ",
+        q=" proof ",
+        sort=" Reward ",
+        repo=" Ramimbo/MergeWork ",
+        issue_number=649,
+    )
 
     assert context == {
         "bounties": bounties,
@@ -29,6 +36,8 @@ def test_public_bounties_context_normalizes_filter_state() -> None:
         },
         "selected_status": "open",
         "query_text": "proof",
+        "selected_repo": "ramimbo/mergework",
+        "selected_issue_number": 649,
         "selected_sort": "reward",
         "sort_options": {
             "newest": "Newest first",
@@ -38,7 +47,10 @@ def test_public_bounties_context_normalizes_filter_state() -> None:
         },
         "selected_limit": None,
         "limit_options": (10, 25, 50, 100, 200),
-        "api_results_url": "/api/v1/bounties?status=open&q=proof&sort=reward",
+        "api_results_url": (
+            "/api/v1/bounties?status=open&q=proof&repo=ramimbo%2Fmergework"
+            "&issue_number=649&sort=reward"
+        ),
     }
 
 
