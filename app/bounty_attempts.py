@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.db import session_scope
 from app.ledger.service import CONTROL_CHAR_RE, LedgerError, validate_public_url
 from app.models import Bounty, BountyAttempt
+from app.serializers import bounty_to_dict
 
 DEFAULT_ATTEMPT_TTL_SECONDS = 24 * 60 * 60
 MIN_ATTEMPT_TTL_SECONDS = 60
@@ -72,12 +73,14 @@ def _active_attempt_conditions(bounty_id: int, now: datetime) -> tuple[Any, ...]
 
 def bounty_attempt_warnings(session: Session, bounty: Bounty, now: datetime) -> list[str]:
     warnings: list[str] = []
-    awards_remaining = max(0, bounty.max_awards - bounty.awards_paid)
-    if bounty.status != "open":
+    bounty_data = bounty_to_dict(bounty, session=session)
+    awards_remaining = int(bounty_data["effective_awards_remaining"])
+    if bounty_data["status"] != "open":
         warnings.append(f"bounty is {bounty.status}")
-        awards_remaining = 0
     if awards_remaining <= 0:
         warnings.append("bounty has no award slots remaining")
+    if bounty_data["availability_state"] not in {"open", "full", bounty_data["status"]}:
+        warnings.append(bounty_data["availability_note"])
     active_count = session.scalar(
         select(func.count())
         .select_from(BountyAttempt)
@@ -198,7 +201,8 @@ def register_bounty_attempt_routes(
             if bounty is None:
                 raise HTTPException(status_code=404, detail="bounty not found")
             expire_stale_bounty_attempts(session, bounty_id, now, submitter_account)
-            awards_remaining = max(0, bounty.max_awards - bounty.awards_paid)
+            bounty_data = bounty_to_dict(bounty, session=session)
+            awards_remaining = int(bounty_data["effective_awards_remaining"])
             if bounty.status != "open" or awards_remaining <= 0:
                 return JSONResponse(
                     status_code=409,
