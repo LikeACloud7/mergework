@@ -589,7 +589,7 @@ curl -s -X POST "$MCP_HOST/mcp" \
   -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_bounty","arguments":{"issue_number":404,"repo":"ramimbo/mergework"}}}'
 ```
 
-Call `list_bounty_attempts` with the same internal bounty `id`, or the GitHub
+Call `list_bounty_attempts` with the same internal `bounty_id`, or the GitHub
 `issue_number` plus `repo`, before opening a PR. Omit `include_expired` to see
 only active attempts:
 
