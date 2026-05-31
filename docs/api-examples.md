@@ -44,6 +44,15 @@ The bounties list returns public bounty rows. `status` can be omitted or set to
   "pending_payout_awards": 0,
   "availability_state": "open",
   "availability_note": "1 award effectively available.",
+  "submission_requirements": {
+    "submission_mode": "pr_or_evidence",
+    "submission_url_kind": "github_pr_or_public_evidence_url",
+    "expected_artifact": "focused PR, issue, report, or evidence URL",
+    "attempt_endpoint_applicability": "recommended_before_submission",
+    "reference_formats": ["Bounty #164", "Refs #164"],
+    "claim_command": "/claim",
+    "attempt_endpoint": "/api/v1/bounties/36/attempts"
+  },
   "status": "open",
   "acceptance": "Focused public-facing enhancements that help contributors find bounties, inspect accepted work, or understand proof/account activity, with tests. Duplicate, marketing-only, docs-only, broad redesign, or unrelated changes do not qualify.",
   "created_at": "2026-05-24T20:44:00.015953"
@@ -60,6 +69,25 @@ when deciding whether a bounty still has practical capacity; do not describe
 pending payout proposals as proof-backed paid work until a proof exists. Award counters can change
 as accepted work is paid; refresh concrete examples against the live API before
 relying on available slot counts.
+
+`submission_requirements` gives agents the structured submission shape without
+parsing the human acceptance text. Most implementation bounties use
+`"submission_mode": "pr_or_evidence"`, while issue-shaped rounds can state the
+expected artifact directly:
+
+```json
+{
+  "submission_requirements": {
+    "submission_mode": "issue",
+    "submission_url_kind": "github_issue",
+    "expected_artifact": "new proposed-work GitHub issue URL",
+    "attempt_endpoint_applicability": "not_required_for_issue_submission",
+    "reference_formats": ["Bounty #649", "Refs #649", "Linked bounty: #649"],
+    "claim_command": "/claim #649",
+    "attempt_endpoint": "/api/v1/bounties/96/attempts"
+  }
+}
+```
 
 Use `sort` to choose the bounty order: `newest` is the default, `reward` sorts
 by per-award reward, `available` sorts by the remaining MRWK pool, and `awards`

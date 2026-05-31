@@ -225,6 +225,9 @@ def test_api_examples_document_bounty_list_response_shape() -> None:
     assert '"reserved_mrwk": "500"' in examples
     assert '"awards_paid": 4' in examples
     assert '"awards_remaining": 1' in examples
+    assert '"submission_mode": "pr_or_evidence"' in examples
+    assert '"submission_mode": "issue"' in examples
+    assert "new proposed-work GitHub issue URL" in examples
     assert '"bounties_shown": 1' in examples
     assert '"open_awards": 2' in examples
     assert '"open_pool_mrwk": "50"' in examples
