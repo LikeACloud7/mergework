@@ -51,6 +51,21 @@ def test_public_bounties_context_normalizes_filter_state() -> None:
             "/api/v1/bounties?status=open&q=proof&repo=ramimbo%2Fmergework"
             "&issue_number=649&sort=reward"
         ),
+        "status_filter_urls": {
+            "all": ("/bounties?q=proof&repo=ramimbo%2Fmergework&issue_number=649&sort=reward"),
+            "open": (
+                "/bounties?status=open&q=proof&repo=ramimbo%2Fmergework"
+                "&issue_number=649&sort=reward"
+            ),
+            "paid": (
+                "/bounties?status=paid&q=proof&repo=ramimbo%2Fmergework"
+                "&issue_number=649&sort=reward"
+            ),
+            "closed": (
+                "/bounties?status=closed&q=proof&repo=ramimbo%2Fmergework"
+                "&issue_number=649&sort=reward"
+            ),
+        },
     }
 
 
@@ -58,6 +73,9 @@ def test_public_bounties_context_preserves_limited_json_results_url() -> None:
     context = public_bounties_context([], status=None, q="issue #580", sort="newest", limit=25)
 
     assert context["api_results_url"] == "/api/v1/bounties?q=issue+%23580&limit=25"
+    assert (
+        context["status_filter_urls"]["open"] == "/bounties?status=open&q=issue%20%23580&limit=25"
+    )
 
 
 def test_docs_page_marks_static_github_links_as_untrusted(sqlite_url: str) -> None:

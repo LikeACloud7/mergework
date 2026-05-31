@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -48,6 +48,30 @@ def _bounties_api_url(
     return f"/api/v1/bounties?{urlencode(params)}" if params else "/api/v1/bounties"
 
 
+def _bounties_page_url(
+    status: str | None,
+    query_text: str,
+    selected_sort: str,
+    limit: int | None,
+    repo: str,
+    issue_number: int | None,
+) -> str:
+    params: list[tuple[str, str]] = []
+    if status:
+        params.append(("status", status))
+    if query_text:
+        params.append(("q", query_text))
+    if repo:
+        params.append(("repo", repo))
+    if issue_number is not None:
+        params.append(("issue_number", str(issue_number)))
+    if selected_sort != "newest":
+        params.append(("sort", selected_sort))
+    if limit is not None:
+        params.append(("limit", str(limit)))
+    return f"/bounties?{urlencode(params, quote_via=quote)}" if params else "/bounties"
+
+
 def public_bounties_context(
     bounties: list[dict[str, Any]],
     status: str | None,
@@ -78,6 +102,20 @@ def public_bounties_context(
         "api_results_url": _bounties_api_url(
             selected_status, query_text, selected_sort, limit, selected_repo, issue_number
         ),
+        "status_filter_urls": {
+            "all": _bounties_page_url(
+                None, query_text, selected_sort, limit, selected_repo, issue_number
+            ),
+            "open": _bounties_page_url(
+                "open", query_text, selected_sort, limit, selected_repo, issue_number
+            ),
+            "paid": _bounties_page_url(
+                "paid", query_text, selected_sort, limit, selected_repo, issue_number
+            ),
+            "closed": _bounties_page_url(
+                "closed", query_text, selected_sort, limit, selected_repo, issue_number
+            ),
+        },
     }
 
 

@@ -392,6 +392,15 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
     assert "Improve public bounty discovery" in source_filter_page.text
     assert "Other repo same issue" not in source_filter_page.text
     assert (
+        'href="/bounties?status=open&repo=ramimbo%2Fmergework&issue_number=64"'
+        in source_filter_page.text
+    )
+    assert (
+        'href="/bounties?status=paid&repo=ramimbo%2Fmergework&issue_number=64"'
+        in source_filter_page.text
+    )
+    assert 'href="/bounties?repo=ramimbo%2Fmergework&issue_number=64"' in source_filter_page.text
+    assert (
         'href="/api/v1/bounties?repo=ramimbo%2Fmergework&amp;issue_number=64">View JSON results</a>'
     ) in source_filter_page.text
 
