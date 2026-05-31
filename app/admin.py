@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.control_chars import contains_control_character
 from app.models import WebhookEvent
 from app.treasury import propose_treasury_action, treasury_status
 
@@ -23,6 +24,8 @@ WEBHOOK_OUTCOME_SCAN_ORDER = {
 def normalize_webhook_status_filter(status: str | None) -> str | None:
     if status is None:
         return None
+    if contains_control_character(status):
+        raise ValueError("webhook_status must not contain control characters")
     normalized = status.strip().lower()
     return normalized or None
 

@@ -58,13 +58,16 @@ def register_admin_routes(
                 return RedirectResponse("/auth/github/login?next=/admin", status_code=302)
             raise HTTPException(status_code=503, detail="GitHub OAuth is not configured")
         with session_scope(db_url) as session:
-            context = admin_page_context(
-                session,
-                login=login,
-                csrf_token=csrf_token("admin-bounty", login, settings.cookie_secret),
-                webhook_status=webhook_status,
-                webhook_limit=webhook_limit,
-            )
+            try:
+                context = admin_page_context(
+                    session,
+                    login=login,
+                    csrf_token=csrf_token("admin-bounty", login, settings.cookie_secret),
+                    webhook_status=webhook_status,
+                    webhook_limit=webhook_limit,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
             context["proposal_id"] = proposal_id
         return templates.TemplateResponse(
             request,

@@ -5,6 +5,8 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
+from app.control_chars import contains_control_character
+
 BOUNTY_SORT_LABELS = {
     "newest": "Newest first",
     "reward": "Highest per-award reward",
@@ -16,7 +18,10 @@ BOUNTY_SORT_ERROR = f"sort must be one of: {', '.join(BOUNTY_SORT_OPTIONS)}"
 
 
 def normalize_bounty_sort(sort: str | None) -> str:
-    normalized_sort = (sort or "").strip().lower()
+    raw_sort = sort or ""
+    if contains_control_character(raw_sort):
+        raise ValueError("sort must not contain control characters")
+    normalized_sort = raw_sort.strip().lower()
     if not normalized_sort:
         return "newest"
     if normalized_sort not in BOUNTY_SORT_OPTIONS:
