@@ -185,6 +185,51 @@ def test_bounties_page_shows_effective_capacity_after_pending_payout(
     )
 
 
+def test_bounties_page_shows_effective_capacity_after_pending_close(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=68,
+            issue_url="https://github.com/ramimbo/mergework/issues/68",
+            title="Pending close public capacity",
+            reward_mrwk="30",
+            max_awards=3,
+            acceptance="Public pages should show no effective capacity after pending close.",
+        )
+        bounty_id = bounty.id
+        propose_treasury_action(
+            session,
+            action="close_bounty",
+            payload={
+                "bounty_id": bounty_id,
+                "closed_by": "maintainer",
+                "reference": "https://github.com/ramimbo/mergework/issues/68#close",
+            },
+            proposed_by="maintainer",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    page = client.get("/bounties")
+    detail = client.get(f"/bounties/{bounty_id}")
+
+    assert page.status_code == 200
+    assert "90 MRWK still available before pending proposals" in page.text
+    assert "0 MRWK effectively available" in page.text
+    assert "A pending close proposal would make this bounty unavailable if executed." in page.text
+    assert detail.status_code == 200
+    assert "Visible capacity before pending proposals: 3 awards, 90 MRWK." in detail.text
+    assert (
+        "No awards remain after pending treasury proposals; treat new work as unpaid unless "
+        "maintainers reopen or free capacity."
+    ) in detail.text
+
+
 def test_bounties_page_honors_limit_filter(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
