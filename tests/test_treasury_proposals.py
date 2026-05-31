@@ -505,15 +505,26 @@ def test_treasury_proposals_list_filters_by_action_status_and_bounty_id(
     assert [proposal["id"] for proposal in limited_after_filter.json()] == [second_payout["id"]]
 
 
-@pytest.mark.parametrize(("field", "value"), (("action", "\tpay_bounty"), ("status", " ")))
+@pytest.mark.parametrize(
+    ("field", "value", "expected_detail"),
+    (
+        ("action", "\tpay_bounty", "action must not contain control characters"),
+        ("status", " ", "status is required"),
+    ),
+)
 def test_treasury_proposals_list_rejects_invalid_filters(
-    sqlite_url: str, monkeypatch: pytest.MonkeyPatch, field: str, value: str
+    sqlite_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    value: str,
+    expected_detail: str,
 ) -> None:
     client = _client(sqlite_url, monkeypatch)
 
     response = client.get("/api/v1/treasury/proposals", params={field: value})
 
     assert response.status_code == 400
+    assert response.json()["detail"] == expected_detail
 
 
 def test_direct_proposal_creation_requires_admin_token(

@@ -80,12 +80,12 @@ def register_treasury_routes(
     @app.get("/api/v1/treasury/proposals")
     def api_treasury_proposals(
         limit: Annotated[int, Query(ge=1, le=200)] = 100,
-        action: Annotated[str | None, Query(max_length=80)] = None,
-        status: Annotated[str | None, Query(max_length=80)] = None,
+        action: Annotated[str | None, Query(max_length=40)] = None,
+        status: Annotated[str | None, Query(max_length=40)] = None,
         bounty_id: Annotated[int | None, Query(ge=1, le=SQLITE_INTEGER_MAX)] = None,
     ) -> list[dict[str, Any]]:
-        action_filter = _optional_query_filter(action, "action")
-        status_filter = _optional_query_filter(status, "status")
+        action_filter = _optional_query_filter(action, "action", max_length=40)
+        status_filter = _optional_query_filter(status, "status", max_length=40)
         with session_scope(db_url) as session:
             query = select(TreasuryProposal)
             if action_filter is not None:
