@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+import app.serializers as serializers_module
 from app.accounts import account_api_context, account_page_context, normalized_account
 from app.db import create_schema, session_scope
 from app.ledger.service import (
@@ -156,13 +157,14 @@ def test_account_routes_expose_pending_payouts_separately_from_paid_work(
         "latest_proof_hash": proof.hash,
         "latest_proof_url": f"/proofs/{proof.hash}",
     }
-    assert account_api["pending_payouts"] == {
+    assert account_api["pending_summary"] == {
         "pending_awards": 1,
         "pending_mrwk": "75",
         "next_executes_after": proposal.executes_after.isoformat(),
     }
     assert accepted_api["summary"] == account_api["accepted_work"]
-    assert accepted_api["pending_summary"] == account_api["pending_payouts"]
+    assert accepted_api["pending_summary"] == account_api["pending_summary"]
+    assert account_api["pending_payouts"] == accepted_api["pending_payouts"]
     assert accepted_api["pending_payouts"] == [
         {
             "proposal_id": proposal.id,
@@ -187,6 +189,32 @@ def test_account_routes_expose_pending_payouts_separately_from_paid_work(
     assert f'href="/api/v1/treasury/proposals/{proposal.id}"' in page
     assert "75 MRWK" in page
     assert "25 MRWK" in page
+    assert "Â" not in page
+    assert "&middot;" in page
+
+
+def test_account_pages_fall_back_when_pending_payouts_fail(sqlite_url: str, monkeypatch) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    def fail_pending_payouts(*_args: object, **_kwargs: object) -> list[dict[str, object]]:
+        raise RuntimeError("pending payout serializer unavailable")
+
+    monkeypatch.setattr(serializers_module, "pending_payouts_for_account", fail_pending_payouts)
+
+    with session_scope(sqlite_url) as session:
+        api_context = account_api_context(session, "github:alice")
+        page_context = account_page_context(session, "github:alice")
+
+    assert api_context["pending_summary"] == {
+        "pending_awards": 0,
+        "pending_mrwk": "0",
+        "next_executes_after": None,
+    }
+    assert api_context["pending_payouts"] == []
+    assert page_context["pending_summary"] == api_context["pending_summary"]
+    assert page_context["pending_payouts"] == []
 
 
 def test_account_page_filters_transactions_by_type(sqlite_url: str) -> None:

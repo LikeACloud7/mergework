@@ -217,6 +217,16 @@ def _payload_bounty_id_filter(bounty_id: int) -> ColumnElement[bool]:
     )
 
 
+def _payload_account_filter(account: str) -> ColumnElement[bool]:
+    """Narrow pending-proposal scans for canonical JSON account fields."""
+    encoded_account = json.dumps(account, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    marker = f'"to_account":{encoded_account}'
+    return or_(
+        TreasuryProposal.payload_json.contains(f"{marker},"),
+        TreasuryProposal.payload_json.contains(f"{marker}}}"),
+    )
+
+
 def _pending_bounty_proposals_by_bounty_id(
     session: Session,
 ) -> dict[int, PendingBountyProposals]:
@@ -574,7 +584,11 @@ def pending_payouts_for_account(session: Session, account: str) -> list[dict[str
     """Return accepted-but-not-yet-executed payout proposals for one account."""
     proposals = session.scalars(
         select(TreasuryProposal)
-        .where(TreasuryProposal.status == "pending", TreasuryProposal.action == "pay_bounty")
+        .where(
+            TreasuryProposal.status == "pending",
+            TreasuryProposal.action == "pay_bounty",
+            _payload_account_filter(account),
+        )
         .order_by(TreasuryProposal.executes_after.asc(), TreasuryProposal.id.asc())
     ).all()
     pending: list[dict[str, Any]] = []
@@ -623,6 +637,15 @@ def pending_payout_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def empty_pending_payout_summary() -> dict[str, Any]:
+    """Return the stable empty shape for pending payout summaries."""
+    return {
+        "pending_awards": 0,
+        "pending_mrwk": "0",
+        "next_executes_after": None,
+    }
+
+
 def empty_accepted_summary() -> dict[str, Any]:
     """Return the stable empty shape for accepted-work summaries."""
     return {
@@ -647,6 +670,14 @@ def safe_accepted_work_for_account(session: Session, account: str) -> list[dict[
     """Return accepted-work rows, falling back to an empty list."""
     try:
         return accepted_work_for_account(session, account)
+    except Exception:
+        return []
+
+
+def safe_pending_payouts_for_account(session: Session, account: str) -> list[dict[str, Any]]:
+    """Return pending payout rows, falling back to an empty list."""
+    try:
+        return pending_payouts_for_account(session, account)
     except Exception:
         return []
 

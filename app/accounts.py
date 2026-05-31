@@ -20,6 +20,7 @@ from app.serializers import (
     pending_payouts_for_account,
     safe_accepted_work_for_account,
     safe_account_accepted_summary,
+    safe_pending_payouts_for_account,
 )
 from app.wallets import WalletError, normalize_wallet_address
 
@@ -107,7 +108,7 @@ def account_transfer_status(account: str) -> str:
 def account_api_context(session: Session, account: str) -> dict[str, Any]:
     account = normalized_account(account)
     account_row = session.get(Account, account)
-    pending_payouts = pending_payouts_for_account(session, account)
+    pending_payouts = safe_pending_payouts_for_account(session, account)
     return {
         "account": account,
         "ledger_address": account,
@@ -116,7 +117,8 @@ def account_api_context(session: Session, account: str) -> dict[str, Any]:
         "balance_mrwk": format_mrwk(get_balance(session, account)),
         "transfer_status": account_transfer_status(account),
         "accepted_work": safe_account_accepted_summary(session, account),
-        "pending_payouts": pending_payout_summary(pending_payouts),
+        "pending_summary": pending_payout_summary(pending_payouts),
+        "pending_payouts": pending_payouts,
     }
 
 
@@ -150,7 +152,7 @@ def account_page_context(
 ) -> dict[str, Any]:
     account = normalized_account(account)
     selected_transaction_type, transaction_filter = _transaction_type_filter(transaction_type)
-    pending_payouts = pending_payouts_for_account(session, account)
+    pending_payouts = safe_pending_payouts_for_account(session, account)
     return {
         "account": account_api_context(session, account),
         "accepted_summary": safe_account_accepted_summary(session, account),

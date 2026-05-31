@@ -95,7 +95,7 @@
             {% set pending_issue_url = safe_public_url(payout.issue_url) %}
             <dd>
               {% if payout.bounty_url %}<a href="{{ payout.bounty_url }}">Bounty #{{ payout.bounty_id }}</a>{% endif %}
-              {% if payout.bounty_url and pending_issue_url %} Â· {% endif %}
+              {% if payout.bounty_url and pending_issue_url %} &middot; {% endif %}
               {% if pending_issue_url %}<a href="{{ pending_issue_url }}">{{ payout.repo }} #{{ payout.issue_number }}</a>{% elif not payout.bounty_url %}-{% endif %}
             </dd>
           </div>
@@ -145,7 +145,7 @@
             {% set issue_url = safe_public_url(work.issue_url) %}
             <dd>
               {% if work.bounty_url %}<a href="{{ work.bounty_url }}">Bounty #{{ work.bounty_id }}</a>{% endif %}
-              {% if work.bounty_url and issue_url %} · {% endif %}
+              {% if work.bounty_url and issue_url %} &middot; {% endif %}
               {% if issue_url %}<a href="{{ issue_url }}">{{ work.repo }} #{{ work.issue_number }}</a>{% elif not work.bounty_url %}-{% endif %}
             </dd>
           </div>
