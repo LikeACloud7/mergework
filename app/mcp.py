@@ -81,6 +81,16 @@ def _jsonrpc_error(response_id: Any, code: int, message: str) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": response_id, "error": {"code": code, "message": message}}
 
 
+def _structured_json_payload(text: str) -> dict[str, Any] | list[Any] | None:
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(payload, (dict, list)):
+        return payload
+    return None
+
+
 def _tool_result_response(response_id: Any, tool_result: str | dict[str, Any]) -> dict[str, Any]:
     if isinstance(tool_result, dict):
         return {
@@ -89,6 +99,16 @@ def _tool_result_response(response_id: Any, tool_result: str | dict[str, Any]) -
             "result": {
                 "content": [{"type": "text", "text": json.dumps(tool_result)}],
                 "structuredContent": tool_result,
+            },
+        }
+    structured_payload = _structured_json_payload(tool_result)
+    if structured_payload is not None:
+        return {
+            "jsonrpc": "2.0",
+            "id": response_id,
+            "result": {
+                "content": [{"type": "text", "text": tool_result}],
+                "structuredContent": structured_payload,
             },
         }
     return {

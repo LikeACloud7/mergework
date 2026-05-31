@@ -225,6 +225,7 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     ).json()
     assert balance["result"]["content"][0]["type"] == "text"
     assert "100000000" in balance["result"]["content"][0]["text"]
+    assert "structuredContent" not in balance["result"]
 
 
 def test_mcp_list_bounty_attempts_reports_active_and_expired(sqlite_url: str) -> None:
@@ -415,6 +416,7 @@ def test_mcp_list_bounties_filters_status_query_and_limit(sqlite_url: str) -> No
         },
     ).json()
     default_payload = json.loads(default_result["result"]["content"][0]["text"])
+    assert default_result["result"]["structuredContent"] == default_payload
     assert [item["id"] for item in default_payload] == [open_bounty.id]
 
     paid_result = client.post(
@@ -430,6 +432,7 @@ def test_mcp_list_bounties_filters_status_query_and_limit(sqlite_url: str) -> No
         },
     ).json()
     paid_payload = json.loads(paid_result["result"]["content"][0]["text"])
+    assert paid_result["result"]["structuredContent"] == paid_payload
     assert [item["id"] for item in paid_payload] == [paid_bounty.id]
     assert paid_payload[0]["status"] == "paid"
 
@@ -690,6 +693,7 @@ def test_mcp_get_bounty_can_include_accepted_awards(sqlite_url: str) -> None:
         },
     ).json()
     default_payload = json.loads(default_result["result"]["content"][0]["text"])
+    assert default_result["result"]["structuredContent"] == default_payload
     assert "awards" not in default_payload
 
     result = client.post(
@@ -705,6 +709,7 @@ def test_mcp_get_bounty_can_include_accepted_awards(sqlite_url: str) -> None:
         },
     ).json()
     payload = json.loads(result["result"]["content"][0]["text"])
+    assert result["result"]["structuredContent"] == payload
     assert payload["id"] == bounty_id
     assert payload["status"] == "paid"
     assert payload["awards_paid"] == 1
@@ -1016,6 +1021,7 @@ def test_mcp_get_ledger_entry_includes_payment_proof_hash(sqlite_url: str) -> No
         },
     ).json()
     payload = json.loads(result["result"]["content"][0]["text"])
+    assert result["result"]["structuredContent"] == payload
 
     assert payload["sequence"] == ledger_sequence
     assert payload["proof_hash"] == proof_hash
@@ -1086,6 +1092,7 @@ def test_mcp_get_proof_returns_public_proof_details(sqlite_url: str) -> None:
     content = result["result"]["content"][0]
     payload = json.loads(content["text"])
     assert content["type"] == "text"
+    assert result["result"]["structuredContent"] == payload
     assert payload["hash"] == proof.hash
     assert payload["kind"] == "bounty_payment"
     assert payload["ledger_sequence"] == proof.ledger_sequence
@@ -2086,6 +2093,7 @@ def test_mcp_can_register_and_fetch_wallet(sqlite_url: str) -> None:
         },
     ).json()
     registered_wallet = json.loads(registered["result"]["content"][0]["text"])
+    assert registered["result"]["structuredContent"] == registered_wallet
     assert registered_wallet["address"].startswith("mrwk1")
 
     fetched = client.post(
@@ -2101,6 +2109,7 @@ def test_mcp_can_register_and_fetch_wallet(sqlite_url: str) -> None:
         },
     ).json()
     fetched_wallet = json.loads(fetched["result"]["content"][0]["text"])
+    assert fetched["result"]["structuredContent"] == fetched_wallet
 
     assert fetched_wallet["address"] == registered_wallet["address"]
     assert fetched_wallet["label"] == "MCP wallet"

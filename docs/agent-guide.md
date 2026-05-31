@@ -241,6 +241,12 @@ Tools:
 - `submit_work_proof` (`format: "json"` returns structuredContent; `tools/list`
   advertises the selector and format schema)
 
+Successful MCP tools that return JSON objects or lists include both the
+backward-compatible JSON string in `result.content[0].text` and parsed
+`result.structuredContent`. Prefer `structuredContent` when present, and fall
+back to text for human-readable responses such as balances or not-found
+messages.
+
 ## Contribution Rules
 
 - Read `AGENTS.md` before starting.
