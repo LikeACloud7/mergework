@@ -79,8 +79,12 @@ Inspect treasury proposals:
 ```bash
 curl -s "$API_HOST/api/v1/treasury/status"
 curl -s "$API_HOST/api/v1/treasury/proposals"
+curl -s "$API_HOST/api/v1/treasury/proposals?status=pending&action=pay_bounty&to_account=github%3Aalice"
 curl -s "$API_HOST/api/v1/treasury/proposals/<proposal_id>"
 ```
+
+Use `to_account` with `status=pending` and `action=pay_bounty` when reconciling
+which delayed payout proposals target one GitHub account or MRWK wallet.
 
 Use `/api/v1/treasury/status` before proposing fresh bounty rounds. It reports
 the rolling 24-hour reserve cap, recent reserve usage, pending create-bounty

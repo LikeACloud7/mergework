@@ -417,6 +417,83 @@ def test_treasury_proposals_list_honors_limit(
     assert too_large.status_code == 422
 
 
+def test_treasury_proposals_list_filters_by_recipient_before_limit(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=74,
+            issue_url="https://github.com/ramimbo/mergework/issues/74",
+            title="Recipient filter proposal",
+            reward_mrwk="5",
+            max_awards=2,
+            acceptance="Contributor comments with proof.",
+        )
+        bounty_id = bounty.id
+
+    alice = client.post(
+        f"/api/v1/bounties/{bounty_id}/pay",
+        headers=ADMIN_HEADERS,
+        json={
+            "to_account": "github:alice",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/7401",
+            "accepted_by": "maintainer",
+        },
+    )
+    bob = client.post(
+        f"/api/v1/bounties/{bounty_id}/pay",
+        headers=ADMIN_HEADERS,
+        json={
+            "to_account": "github:bob",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/7402",
+            "accepted_by": "maintainer",
+        },
+    )
+
+    filtered = client.get(
+        "/api/v1/treasury/proposals"
+        "?status=pending&action=pay_bounty&to_account=github%3Aalice&limit=1"
+    )
+    bob_filtered = client.get(
+        "/api/v1/treasury/proposals"
+        "?status=pending&action=pay_bounty&to_account=github%3Abob&limit=1"
+    )
+
+    assert alice.status_code == 200
+    assert bob.status_code == 200
+    assert filtered.status_code == 200
+    assert [proposal["id"] for proposal in filtered.json()] == [alice.json()["id"]]
+    assert filtered.json()[0]["payload"]["to_account"] == "github:alice"
+    assert bob_filtered.status_code == 200
+    assert [proposal["id"] for proposal in bob_filtered.json()] == [bob.json()["id"]]
+
+
+@pytest.mark.parametrize(
+    ("query", "detail"),
+    [
+        ("to_account=%20%20", "to_account must not be blank"),
+        (
+            "to_account=github%3Aalice%0Abad",
+            "to_account must not contain control characters",
+        ),
+    ],
+)
+def test_treasury_proposals_list_rejects_invalid_recipient_filter(
+    sqlite_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    query: str,
+    detail: str,
+) -> None:
+    response = _client(sqlite_url, monkeypatch).get(f"/api/v1/treasury/proposals?{query}")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == detail
+
+
 def test_direct_proposal_creation_requires_admin_token(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
