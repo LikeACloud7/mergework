@@ -86,6 +86,10 @@ def test_bounty_api_reports_pending_payout_effective_capacity(sqlite_url: str) -
     assert summary["open_pool_mrwk"] == "80"
     assert summary["effective_open_awards"] == 1
     assert summary["effective_open_pool_mrwk"] == "40"
+    assert summary["availability_state_counts"] == {"pending_payouts_partial": 1}
+    assert summary["pending_payout_awards"] == 1
+    assert summary["reduced_capacity_bounties"] == 1
+    assert summary["effectively_unavailable_bounties"] == 0
 
 
 def test_bounty_api_reports_pending_close_as_effectively_unavailable(sqlite_url: str) -> None:

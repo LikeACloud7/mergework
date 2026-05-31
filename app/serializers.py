@@ -138,12 +138,32 @@ def bounty_list_summary(bounties: list[dict[str, Any]]) -> dict[str, Any]:
         * int(bounty.get("effective_awards_remaining", bounty["awards_remaining"]))
         for bounty in bounties
     )
+    availability_state_counts: dict[str, int] = {}
+    pending_payout_awards = 0
+    reduced_capacity_bounties = 0
+    effectively_unavailable_bounties = 0
+    for bounty in bounties:
+        awards_remaining = int(bounty["awards_remaining"])
+        effective_awards_remaining = int(bounty.get("effective_awards_remaining", awards_remaining))
+        availability_state = str(bounty.get("availability_state", bounty.get("status", "unknown")))
+        availability_state_counts[availability_state] = (
+            availability_state_counts.get(availability_state, 0) + 1
+        )
+        pending_payout_awards += int(bounty.get("pending_payout_awards", 0))
+        if effective_awards_remaining < awards_remaining:
+            reduced_capacity_bounties += 1
+        if awards_remaining > 0 and effective_awards_remaining <= 0:
+            effectively_unavailable_bounties += 1
     return {
         "bounties_shown": len(bounties),
         "open_awards": open_awards,
         "open_pool_mrwk": format_mrwk(open_pool_microunits),
         "effective_open_awards": effective_open_awards,
         "effective_open_pool_mrwk": format_mrwk(effective_open_pool_microunits),
+        "availability_state_counts": availability_state_counts,
+        "pending_payout_awards": pending_payout_awards,
+        "reduced_capacity_bounties": reduced_capacity_bounties,
+        "effectively_unavailable_bounties": effectively_unavailable_bounties,
     }
 
 

@@ -55,6 +55,10 @@ curl -s "$API_HOST/api/v1/bounties/summary?status=open"
 curl -s "$API_HOST/api/v1/bounties/summary?q=docs"
 ```
 
+Read `availability_state_counts`, `pending_payout_awards`,
+`reduced_capacity_bounties`, and `effectively_unavailable_bounties` when raw
+summary capacity is higher than effective capacity.
+
 Inspect one bounty, accepted-work activity, a ledger page, and a proof:
 
 ```bash
