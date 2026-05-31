@@ -41,6 +41,10 @@ suggest a tier to help maintainers size the work, but maintainers decide whether
 to reject, ask for more information, point to an existing live bounty, accept
 non-bounty work, or create a public treasury proposal.
 
+When opening a proposed work request, fill the related bounty or source issue
+field with the intake bounty, issue, PR, discussion, route, or docs page that
+prompted the proposal.
+
 Do not submit `/claim` for a proposed work request unless maintainers later make
 the issue live by executing the treasury proposal, adding `mrwk:bounty`, and
 posting the `Reserved on MergeWork` comment with the public bounty URL.
