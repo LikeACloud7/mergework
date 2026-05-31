@@ -5,10 +5,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from scripts.review_bounty_candidates import (
     analyze_candidates,
     format_markdown_report,
     format_text_report,
+    load_live_candidates,
     main,
 )
 
@@ -188,6 +191,15 @@ def test_review_bounty_candidates_ignores_author_and_bot_reviews() -> None:
     assert row["current_head_human_reviews"] == 0
 
 
+def test_analyze_candidates_rejects_invalid_arguments() -> None:
+    data = {"pull_requests": []}
+
+    with pytest.raises(ValueError, match="reviewer"):
+        analyze_candidates(data, reviewer="   ")
+    with pytest.raises(ValueError, match="sufficient_reviews"):
+        analyze_candidates(data, reviewer="reviewer", sufficient_reviews=0)
+
+
 def test_review_bounty_candidate_reports_are_pasteable() -> None:
     report = analyze_candidates(
         {
@@ -228,3 +240,13 @@ def test_review_bounty_candidates_script_entrypoint_loads_parser() -> None:
 
     assert result.returncode == 0
     assert "usage:" in result.stdout
+
+
+def test_live_candidates_reports_missing_github_cli(monkeypatch) -> None:
+    def missing_gh(*args, **kwargs):
+        raise FileNotFoundError("gh")
+
+    monkeypatch.setattr(subprocess, "run", missing_gh)
+
+    with pytest.raises(RuntimeError, match="GitHub CLI executable 'gh' was not found"):
+        load_live_candidates("ramimbo/mergework")
