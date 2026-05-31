@@ -42,6 +42,14 @@
     <span>Open reward pool</span>
     <strong>{{ summary.open_pool_mrwk }} MRWK</strong>
   </article>
+  <article>
+    <span>Effectively open</span>
+    <strong>{{ summary.effective_open_awards }}</strong>
+  </article>
+  <article>
+    <span>Effectively available</span>
+    <strong>{{ summary.effective_open_pool_mrwk }} MRWK</strong>
+  </article>
 </section>
 <p class="notice">
   <a href="{{ api_results_url }}">View JSON results</a>
@@ -61,9 +69,14 @@
       {{ bounty.repo }} #{{ bounty.issue_number }} ·
       {% endif %}
       <strong>{{ bounty.reward_mrwk }} MRWK</strong> per award ·
-      {{ bounty.available_mrwk }} MRWK still available ·
-      {{ bounty.awards_remaining }}/{{ bounty.max_awards }} awards open
+      {{ bounty.available_mrwk }} MRWK still available before pending proposals ·
+      {{ bounty.awards_remaining }}/{{ bounty.max_awards }} awards visibly open ·
+      {{ bounty.effective_available_mrwk }} MRWK effectively available ·
+      {{ bounty.effective_awards_remaining }}/{{ bounty.max_awards }} awards effectively open
     </p>
+    {% if bounty.availability_state != "open" or bounty.effective_awards_remaining != bounty.awards_remaining %}
+    <p class="notice">{{ bounty.availability_note }}</p>
+    {% endif %}
     <p>{{ bounty.acceptance }}</p>
   </article>
   {% else %}

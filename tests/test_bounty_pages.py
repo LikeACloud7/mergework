@@ -8,6 +8,7 @@ from app.db import create_schema, session_scope
 from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
 from app.models import LedgerEntry, Proof
+from app.treasury import propose_treasury_action
 
 
 def test_bounties_page_renders_and_filters_by_status(sqlite_url: str) -> None:
@@ -117,6 +118,8 @@ def test_bounties_summary_api_matches_public_list_filters(sqlite_url: str) -> No
         "bounties_shown": 1,
         "open_awards": 2,
         "open_pool_mrwk": "50",
+        "effective_open_awards": 2,
+        "effective_open_pool_mrwk": "50",
     }
 
     paid_summary = client.get("/api/v1/bounties/summary?status=paid&q=discovery").json()
@@ -124,11 +127,107 @@ def test_bounties_summary_api_matches_public_list_filters(sqlite_url: str) -> No
         "bounties_shown": 0,
         "open_awards": 0,
         "open_pool_mrwk": "0",
+        "effective_open_awards": 0,
+        "effective_open_pool_mrwk": "0",
     }
 
     invalid = client.get("/api/v1/bounties/summary?status=bogus")
     assert invalid.status_code == 400
     assert invalid.json()["detail"] == "status must be one of: open, paid, closed"
+
+
+def test_bounties_page_shows_effective_capacity_after_pending_payout(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=67,
+            issue_url="https://github.com/ramimbo/mergework/issues/67",
+            title="Pending payout public capacity",
+            reward_mrwk="25",
+            max_awards=2,
+            acceptance="Public pages should show effective capacity after pending payouts.",
+        )
+        bounty_id = bounty.id
+        propose_treasury_action(
+            session,
+            action="pay_bounty",
+            payload={
+                "bounty_id": bounty_id,
+                "to_account": "github:alice",
+                "submission_url": "https://github.com/ramimbo/mergework/pull/67",
+                "accepted_by": "maintainer",
+            },
+            proposed_by="maintainer",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    page = client.get("/bounties")
+    detail = client.get(f"/bounties/{bounty_id}")
+
+    assert page.status_code == 200
+    assert "Effectively open" in page.text
+    assert "Effectively available" in page.text
+    assert "50 MRWK still available before pending proposals" in page.text
+    assert "25 MRWK effectively available" in page.text
+    assert "1 award covered by pending payout proposal" in page.text
+    assert detail.status_code == 200
+    assert "<span>Effective remaining</span>" in detail.text
+    assert "<span>Effective available</span>" in detail.text
+    assert "Visible capacity before pending proposals: 2 awards, 50 MRWK." in detail.text
+    assert "1 award still open for distinct accepted work after pending treasury proposals." in (
+        detail.text
+    )
+
+
+def test_bounties_page_shows_effective_capacity_after_pending_close(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=68,
+            issue_url="https://github.com/ramimbo/mergework/issues/68",
+            title="Pending close public capacity",
+            reward_mrwk="30",
+            max_awards=3,
+            acceptance="Public pages should show no effective capacity after pending close.",
+        )
+        bounty_id = bounty.id
+        propose_treasury_action(
+            session,
+            action="close_bounty",
+            payload={
+                "bounty_id": bounty_id,
+                "closed_by": "maintainer",
+                "reference": "https://github.com/ramimbo/mergework/issues/68#close",
+            },
+            proposed_by="maintainer",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    page = client.get("/bounties")
+    detail = client.get(f"/bounties/{bounty_id}")
+
+    assert page.status_code == 200
+    assert "90 MRWK still available before pending proposals" in page.text
+    assert "0 MRWK effectively available" in page.text
+    assert "A pending close proposal would make this bounty unavailable if executed." in page.text
+    assert detail.status_code == 200
+    assert "Visible capacity before pending proposals: 3 awards, 90 MRWK." in detail.text
+    assert (
+        "No awards remain after pending treasury proposals; treat new work as unpaid unless "
+        "maintainers reopen or free capacity."
+    ) in detail.text
 
 
 def test_bounties_page_honors_limit_filter(sqlite_url: str) -> None:
