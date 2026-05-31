@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -12,8 +13,14 @@ from app.ledger.reconciliation import AcceptedPayoutCheck
 from app.ledger.service import format_mrwk, get_balance
 from app.models import Bounty, LedgerEntry, Proof, TreasuryProposal, Wallet, WalletTransfer
 
+PendingBountyProposals = tuple[list[dict[str, Any]], dict[str, Any] | None]
 
-def bounty_to_dict(bounty: Bounty, session: Session | None = None) -> dict[str, Any]:
+
+def bounty_to_dict(
+    bounty: Bounty,
+    session: Session | None = None,
+    pending_proposals: PendingBountyProposals | None = None,
+) -> dict[str, Any]:
     """Serialize a bounty row for public API and page consumers."""
     awards_remaining = max(0, bounty.max_awards - bounty.awards_paid)
     if bounty.status != "open":
@@ -21,7 +28,9 @@ def bounty_to_dict(bounty: Bounty, session: Session | None = None) -> dict[str, 
     available_microunits = bounty.reward_microunits * awards_remaining
     pending_payouts: list[dict[str, Any]] = []
     pending_close: dict[str, Any] | None = None
-    if session is not None:
+    if pending_proposals is not None:
+        pending_payouts, pending_close = pending_proposals
+    elif session is not None:
         pending_payouts, pending_close = _pending_bounty_proposals(session, bounty.id)
     effective_awards_remaining = _effective_awards_remaining(
         awards_remaining, pending_payouts, pending_close
@@ -63,6 +72,23 @@ def bounty_to_dict(bounty: Bounty, session: Session | None = None) -> dict[str, 
         "acceptance": bounty.acceptance,
         "created_at": bounty.created_at.isoformat(),
     }
+
+
+def bounties_to_dict(
+    bounties: Sequence[Bounty], session: Session | None = None
+) -> list[dict[str, Any]]:
+    """Serialize bounty rows, preloading pending proposals once for list views."""
+    if session is None or not bounties:
+        return [bounty_to_dict(bounty) for bounty in bounties]
+
+    pending_by_bounty = _pending_bounty_proposals_by_bounty_id(session)
+    return [
+        bounty_to_dict(
+            bounty,
+            pending_proposals=pending_by_bounty.get(bounty.id, ([], None)),
+        )
+        for bounty in bounties
+    ]
 
 
 def bounty_awards_to_dict(session: Session, bounty_id: int) -> list[dict[str, Any]]:
@@ -153,6 +179,12 @@ def _proposal_summary(
 def _pending_bounty_proposals(
     session: Session, bounty_id: int
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    return _pending_bounty_proposals_by_bounty_id(session).get(bounty_id, ([], None))
+
+
+def _pending_bounty_proposals_by_bounty_id(
+    session: Session,
+) -> dict[int, PendingBountyProposals]:
     proposals = session.scalars(
         select(TreasuryProposal)
         .where(
@@ -161,12 +193,15 @@ def _pending_bounty_proposals(
         )
         .order_by(TreasuryProposal.id.asc())
     ).all()
-    pending_payouts: list[dict[str, Any]] = []
-    pending_close: dict[str, Any] | None = None
+    pending_by_bounty: dict[int, PendingBountyProposals] = {}
     for proposal in proposals:
         payload = _proposal_payload(proposal)
-        if payload is None or _proposal_bounty_id(payload) != bounty_id:
+        if payload is None:
             continue
+        bounty_id = _proposal_bounty_id(payload)
+        if bounty_id is None:
+            continue
+        pending_payouts, pending_close = pending_by_bounty.setdefault(bounty_id, ([], None))
         if proposal.action == "pay_bounty":
             pending_payouts.append(
                 _proposal_summary(
@@ -176,8 +211,11 @@ def _pending_bounty_proposals(
                 )
             )
         elif proposal.action == "close_bounty" and pending_close is None:
-            pending_close = _proposal_summary(proposal, payload, ("closed_by", "reference"))
-    return pending_payouts, pending_close
+            pending_by_bounty[bounty_id] = (
+                pending_payouts,
+                _proposal_summary(proposal, payload, ("closed_by", "reference")),
+            )
+    return pending_by_bounty
 
 
 def _effective_awards_remaining(

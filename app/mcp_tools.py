@@ -19,6 +19,7 @@ from app.mcp_work_proof import (
 from app.models import Bounty, Proof, Wallet
 from app.path_params import SQLITE_INTEGER_MAX, issue_number_search_value, proof_hash_from_path
 from app.serializers import (
+    bounties_to_dict,
     bounty_awards_to_dict,
     bounty_to_dict,
     wallet_to_dict,
@@ -142,13 +143,9 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
                 newest_bounties = session.scalars(
                     query.order_by(Bounty.id.desc()).limit(limit)
                 ).all()
-                return json.dumps(
-                    [bounty_to_dict(bounty, session=session) for bounty in newest_bounties]
-                )
+                return json.dumps(bounties_to_dict(newest_bounties, session=session))
             bounties = session.scalars(query.order_by(Bounty.id.desc())).all()
-            sorted_bounties = sort_bounties(
-                [bounty_to_dict(bounty, session=session) for bounty in bounties], sort
-            )
+            sorted_bounties = sort_bounties(bounties_to_dict(bounties, session=session), sort)
             return json.dumps(sorted_bounties[:limit])
         if name == "get_bounty":
             bounty = session.get(Bounty, positive_int_arg("id"))
