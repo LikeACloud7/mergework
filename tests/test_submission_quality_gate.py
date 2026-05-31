@@ -207,6 +207,25 @@ def test_submission_quality_gate_fails_closed_or_exhausted_bounty() -> None:
     } in result["checks"]
 
 
+def test_submission_quality_gate_fails_api_bounty_with_closed_status_only() -> None:
+    result = evaluate_submission(
+        {
+            "submission_text": (
+                "Summary: add validation\n\nBounty #319\n\nValidation: pytest passed"
+            ),
+            "bounties": [{"number": 319, "status": "closed", "awards_remaining": 2}],
+            "pull_requests": [],
+        }
+    )
+
+    assert result["status"] == "fail"
+    assert {
+        "name": "bounty_payable",
+        "status": "fail",
+        "message": "referenced bounty #319 is closed or exhausted",
+    } in result["checks"]
+
+
 def test_submission_quality_gate_fails_when_effective_capacity_is_exhausted() -> None:
     result = evaluate_submission(
         {

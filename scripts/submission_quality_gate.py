@@ -74,7 +74,7 @@ def _bounty_refs(text: str) -> list[int]:
 
 
 def _bounty_has_open_state(raw: dict[str, Any]) -> bool:
-    return str(raw.get("state") or "").lower() in {"", "open"}
+    return str(_first_present(raw, "state", "status") or "").lower() in {"", "open"}
 
 
 def _effective_awards_remaining(raw: dict[str, Any]) -> int | None:
