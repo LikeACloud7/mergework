@@ -17,6 +17,7 @@ REQUIRED = [
     "docs/admin-runbook.md",
     "SECURITY.md",
     "CODE_OF_CONDUCT.md",
+    "docs/AGENTS.md",
 ]
 BANNED_PUBLIC_PHRASES = [
     "guaranteed market value",
@@ -122,6 +123,12 @@ REQUIRED_PUBLIC_PHRASES = {
         ),
         "A security bounty is paid only after a public proof or ledger entry exists.",
         "Public comments should link the redacted proof",
+    ],
+    "docs/AGENTS.md": [
+        "Before documenting a bounty as claimable, confirm `mrwk:bounty`",
+        "remaining effective award capacity",
+        "Do not submit or encourage `/claim`",
+        "pending `pay_bounty` proposals as accepted-for-review",
     ],
 }
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
