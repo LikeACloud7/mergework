@@ -417,6 +417,105 @@ def test_treasury_proposals_list_honors_limit(
     assert too_large.status_code == 422
 
 
+def test_treasury_proposals_list_filters_by_action_status_and_bounty_id(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        first_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=90,
+            issue_url="https://github.com/ramimbo/mergework/issues/90",
+            title="First filtered payout",
+            reward_mrwk="5",
+            acceptance="Contributor comments with proof.",
+        )
+        second_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=91,
+            issue_url="https://github.com/ramimbo/mergework/issues/91",
+            title="Second filtered payout",
+            reward_mrwk="5",
+            acceptance="Contributor comments with proof.",
+        )
+        first_bounty_id = first_bounty.id
+        second_bounty_id = second_bounty.id
+
+    first_payout = client.post(
+        f"/api/v1/bounties/{first_bounty_id}/pay",
+        headers=ADMIN_HEADERS,
+        json={
+            "to_account": "github:alice",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/90",
+            "accepted_by": "maintainer",
+        },
+    ).json()
+    second_payout = client.post(
+        f"/api/v1/bounties/{second_bounty_id}/pay",
+        headers=ADMIN_HEADERS,
+        json={
+            "to_account": "github:bob",
+            "submission_url": "https://github.com/ramimbo/mergework/pull/91",
+            "accepted_by": "maintainer",
+        },
+    ).json()
+    create_bounty_proposal = client.post(
+        "/api/v1/bounties",
+        headers=ADMIN_HEADERS,
+        json=_bounty_payload(issue_number=92),
+    ).json()
+    _make_executable(sqlite_url, first_payout["id"])
+    executed = client.post(
+        f"/api/v1/treasury/proposals/{first_payout['id']}/execute",
+        headers=ADMIN_HEADERS,
+    )
+    assert executed.status_code == 200
+
+    action_filtered = client.get("/api/v1/treasury/proposals?action=pay_bounty")
+    pending_filtered = client.get("/api/v1/treasury/proposals?status=pending")
+    bounty_filtered = client.get(f"/api/v1/treasury/proposals?bounty_id={first_bounty_id}")
+    composed_filtered = client.get(
+        "/api/v1/treasury/proposals",
+        params={
+            "action": "pay_bounty",
+            "status": "pending",
+            "bounty_id": second_bounty_id,
+        },
+    )
+    limited_after_filter = client.get("/api/v1/treasury/proposals?action=pay_bounty&limit=1")
+
+    assert action_filtered.status_code == 200
+    assert [proposal["id"] for proposal in action_filtered.json()] == [
+        second_payout["id"],
+        first_payout["id"],
+    ]
+    assert pending_filtered.status_code == 200
+    assert [proposal["id"] for proposal in pending_filtered.json()] == [
+        create_bounty_proposal["id"],
+        second_payout["id"],
+    ]
+    assert bounty_filtered.status_code == 200
+    assert [proposal["id"] for proposal in bounty_filtered.json()] == [first_payout["id"]]
+    assert composed_filtered.status_code == 200
+    assert [proposal["id"] for proposal in composed_filtered.json()] == [second_payout["id"]]
+    assert limited_after_filter.status_code == 200
+    assert [proposal["id"] for proposal in limited_after_filter.json()] == [second_payout["id"]]
+
+
+@pytest.mark.parametrize(("field", "value"), (("action", "\tpay_bounty"), ("status", " ")))
+def test_treasury_proposals_list_rejects_invalid_filters(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch, field: str, value: str
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+
+    response = client.get("/api/v1/treasury/proposals", params={field: value})
+
+    assert response.status_code == 400
+
+
 def test_direct_proposal_creation_requires_admin_token(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

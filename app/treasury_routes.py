@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -36,6 +37,36 @@ def _proposal_error(exc: LedgerError) -> HTTPException:
     return HTTPException(status_code=400, detail=detail)
 
 
+def _contains_control_character(value: str) -> bool:
+    return any(ord(char) < 32 or ord(char) == 127 or 0x80 <= ord(char) <= 0x9F for char in value)
+
+
+def _optional_query_filter(value: str | None, field: str, max_length: int = 80) -> str | None:
+    if value is None:
+        return None
+    if _contains_control_character(value):
+        raise HTTPException(status_code=400, detail=f"{field} must not contain control characters")
+    clean = value.strip()
+    if not clean:
+        raise HTTPException(status_code=400, detail=f"{field} is required")
+    if len(clean) > max_length:
+        raise HTTPException(status_code=400, detail=f"{field} is too long")
+    return clean
+
+
+def _proposal_payload_bounty_id(proposal: TreasuryProposal) -> int | None:
+    try:
+        payload = json.loads(proposal.payload_json)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    bounty_id = payload.get("bounty_id")
+    if isinstance(bounty_id, bool) or not isinstance(bounty_id, int):
+        return None
+    return bounty_id
+
+
 def register_treasury_routes(
     app: FastAPI,
     *,
@@ -49,11 +80,29 @@ def register_treasury_routes(
     @app.get("/api/v1/treasury/proposals")
     def api_treasury_proposals(
         limit: Annotated[int, Query(ge=1, le=200)] = 100,
+        action: Annotated[str | None, Query(max_length=80)] = None,
+        status: Annotated[str | None, Query(max_length=80)] = None,
+        bounty_id: Annotated[int | None, Query(ge=1, le=SQLITE_INTEGER_MAX)] = None,
     ) -> list[dict[str, Any]]:
+        action_filter = _optional_query_filter(action, "action")
+        status_filter = _optional_query_filter(status, "status")
         with session_scope(db_url) as session:
-            proposals = session.scalars(
-                select(TreasuryProposal).order_by(TreasuryProposal.id.desc()).limit(limit)
-            ).all()
+            query = select(TreasuryProposal)
+            if action_filter is not None:
+                query = query.where(TreasuryProposal.action == action_filter)
+            if status_filter is not None:
+                query = query.where(TreasuryProposal.status == status_filter)
+            query = query.order_by(TreasuryProposal.id.desc())
+            if bounty_id is None:
+                proposals = session.scalars(query.limit(limit)).all()
+            else:
+                proposals = []
+                for proposal in session.scalars(query):
+                    if _proposal_payload_bounty_id(proposal) != bounty_id:
+                        continue
+                    proposals.append(proposal)
+                    if len(proposals) >= limit:
+                        break
             return [proposal_to_dict(proposal) for proposal in proposals]
 
     @app.get("/api/v1/treasury/status")
