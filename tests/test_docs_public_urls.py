@@ -441,4 +441,8 @@ def test_api_examples_document_accepted_work_bounty_context() -> None:
     assert "/api/v1/accounts/github:carpedkm/accepted-work" in examples
     assert '"bounty_id": 67' in examples
     assert '"bounty_url": "/bounties/67"' in examples
+    assert '"bounty_public_url": "https://mrwk.online/bounties/67"' in examples
+    assert '"latest_proof_public_url": "https://mrwk.online/proofs/' in examples
+    assert '"ledger_public_url": "https://mrwk.online/ledger/682"' in examples
     assert "internal bounty id and public bounty URL" in examples
+    assert "Relative URL fields are preserved for existing clients" in examples
