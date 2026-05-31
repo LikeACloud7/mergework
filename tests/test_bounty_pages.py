@@ -539,6 +539,22 @@ def test_bounties_page_api_and_summary_filter_effectively_open_rows(sqlite_url: 
     assert effectively_full.title not in page.text
     assert 'href="/api/v1/bounties?status=open&amp;availability=effectively_open">' in page.text
 
+    filtered_search_page = client.get("/bounties?status=open&q=Fresh&availability=effectively_open")
+    assert filtered_search_page.status_code == 200
+    assert (
+        'href="/bounties?status=open&availability=effectively_open">Clear search</a>'
+        in filtered_search_page.text
+    )
+    assert 'href="/bounties?q=Fresh&availability=effectively_open"' in filtered_search_page.text
+    assert (
+        'href="/bounties?status=paid&q=Fresh&availability=effectively_open"'
+        in filtered_search_page.text
+    )
+
+    empty_effective_page = client.get("/bounties?availability=effectively_open&q=missing")
+    assert empty_effective_page.status_code == 200
+    assert "No bounties match these filters." in empty_effective_page.text
+
 
 def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     create_schema(sqlite_url)
