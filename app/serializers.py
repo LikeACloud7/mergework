@@ -6,8 +6,9 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.ledger.reconciliation import AcceptedPayoutCheck
 from app.ledger.service import format_mrwk, get_balance
@@ -179,7 +180,41 @@ def _proposal_summary(
 def _pending_bounty_proposals(
     session: Session, bounty_id: int
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-    return _pending_bounty_proposals_by_bounty_id(session).get(bounty_id, ([], None))
+    proposals = session.scalars(
+        select(TreasuryProposal)
+        .where(
+            TreasuryProposal.status == "pending",
+            TreasuryProposal.action.in_(("pay_bounty", "close_bounty")),
+            _payload_bounty_id_filter(bounty_id),
+        )
+        .order_by(TreasuryProposal.id.asc())
+    ).all()
+    pending_payouts: list[dict[str, Any]] = []
+    pending_close: dict[str, Any] | None = None
+    for proposal in proposals:
+        payload = _proposal_payload(proposal)
+        if payload is None or _proposal_bounty_id(payload) != bounty_id:
+            continue
+        if proposal.action == "pay_bounty":
+            pending_payouts.append(
+                _proposal_summary(
+                    proposal,
+                    payload,
+                    ("to_account", "submission_url", "accepted_by"),
+                )
+            )
+        elif proposal.action == "close_bounty" and pending_close is None:
+            pending_close = _proposal_summary(proposal, payload, ("closed_by", "reference"))
+    return pending_payouts, pending_close
+
+
+def _payload_bounty_id_filter(bounty_id: int) -> ColumnElement[bool]:
+    """Narrow pending-proposal scans for canonical JSON payloads."""
+    marker = f'"bounty_id":{bounty_id}'
+    return or_(
+        TreasuryProposal.payload_json.contains(f"{marker},"),
+        TreasuryProposal.payload_json.contains(f"{marker}}}"),
+    )
 
 
 def _pending_bounty_proposals_by_bounty_id(
