@@ -10,6 +10,7 @@ from app.db import create_schema, session_scope
 from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
 from app.models import BountyAttempt, Proof
+from app.treasury import propose_treasury_action
 
 
 def test_health_status_and_bounty_api(sqlite_url: str) -> None:
@@ -194,7 +195,10 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
 
     tools = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).json()
     assert tools["result"]["tools"][0]["name"] == "list_bounties"
-    assert "status, q, sort, and limit filters" in tools["result"]["tools"][0]["description"]
+    assert (
+        "status, q, sort, availability, and limit filters"
+        in (tools["result"]["tools"][0]["description"])
+    )
     submit_tool = next(
         tool for tool in tools["result"]["tools"] if tool["name"] == "submit_work_proof"
     )
@@ -479,6 +483,63 @@ def test_mcp_list_bounties_filters_status_query_and_limit(sqlite_url: str) -> No
     assert digit_limit_payload == []
 
 
+def test_mcp_list_bounties_filters_effective_availability(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        effectively_open = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=291,
+            issue_url="https://github.com/ramimbo/mergework/issues/291",
+            title="Effectively open MCP bounty",
+            reward_mrwk="100",
+            acceptance="MCP should keep this bounty visible.",
+        )
+        effectively_full = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=292,
+            issue_url="https://github.com/ramimbo/mergework/issues/292",
+            title="Effectively full MCP bounty",
+            reward_mrwk="100",
+            acceptance="Pending payout should hide this bounty from effective filtering.",
+        )
+        propose_treasury_action(
+            session,
+            action="pay_bounty",
+            payload={
+                "bounty_id": effectively_full.id,
+                "to_account": "github:alice",
+                "submission_url": "https://github.com/ramimbo/mergework/pull/292",
+                "accepted_by": "maintainer",
+            },
+            proposed_by="maintainer",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 8,
+            "method": "tools/call",
+            "params": {
+                "name": "list_bounties",
+                "arguments": {
+                    "status": "open",
+                    "availability": "effectively_open",
+                    "sort": "newest",
+                },
+            },
+        },
+    ).json()
+
+    payload = json.loads(result["result"]["content"][0]["text"])
+    assert [item["id"] for item in payload] == [effectively_open.id]
+
+
 def test_mcp_list_bounties_honors_sort_argument(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
@@ -538,6 +599,7 @@ def test_mcp_list_bounties_honors_sort_argument(sqlite_url: str) -> None:
         ({"limit": 0}, 34),
         ({"limit": 101}, 35),
         ({"sort": "invalid"}, 36),
+        ({"availability": "invalid"}, 37),
     ],
 )
 def test_mcp_list_bounties_rejects_invalid_filters(

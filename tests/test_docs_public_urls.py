@@ -208,8 +208,10 @@ def test_api_examples_document_bounty_list_response_shape() -> None:
     examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
 
     assert "/api/v1/bounties?status=open" in examples
+    assert "/api/v1/bounties?status=open&availability=effectively_open" in examples
     assert "/api/v1/bounties?status=open&sort=available&limit=5" in examples
     assert "/api/v1/bounties/summary?status=open&q=proof" in examples
+    assert "/api/v1/bounties/summary?status=open&availability=effectively_open" in examples
     assert "/api/v1/bounties/summary?status=open&sort=awards&limit=5" in examples
     assert "status` can be omitted or set to" in examples
     assert "`newest` is the default" in examples

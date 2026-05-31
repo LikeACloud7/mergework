@@ -16,7 +16,13 @@ def test_public_bounties_context_normalizes_filter_state() -> None:
         }
     ]
 
-    context = public_bounties_context(bounties, status=" OPEN ", q=" proof ", sort=" Reward ")
+    context = public_bounties_context(
+        bounties,
+        status=" OPEN ",
+        q=" proof ",
+        sort=" Reward ",
+        availability=" effectively_open ",
+    )
 
     assert context == {
         "bounties": bounties,
@@ -36,9 +42,23 @@ def test_public_bounties_context_normalizes_filter_state() -> None:
             "available": "Most MRWK available",
             "awards": "Most award slots",
         },
+        "selected_availability": "effectively_open",
+        "availability_options": {
+            "all": "All availability",
+            "effectively_open": "Effectively open",
+        },
         "selected_limit": None,
         "limit_options": (10, 25, 50, 100, 200),
-        "api_results_url": "/api/v1/bounties?status=open&q=proof&sort=reward",
+        "status_filter_urls": {
+            "all": "/bounties?q=proof&sort=reward&availability=effectively_open",
+            "open": "/bounties?status=open&q=proof&sort=reward&availability=effectively_open",
+            "paid": "/bounties?status=paid&q=proof&sort=reward&availability=effectively_open",
+            "closed": ("/bounties?status=closed&q=proof&sort=reward&availability=effectively_open"),
+        },
+        "clear_search_url": "/bounties?status=open&sort=reward&availability=effectively_open",
+        "api_results_url": (
+            "/api/v1/bounties?status=open&q=proof&sort=reward&availability=effectively_open"
+        ),
     }
 
 

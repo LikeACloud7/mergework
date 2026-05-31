@@ -88,6 +88,59 @@ def test_bounty_api_reports_pending_payout_effective_capacity(sqlite_url: str) -
     assert summary["effective_open_pool_mrwk"] == "40"
 
 
+def test_bounty_api_filters_effectively_open_rows(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        effectively_open = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=121,
+            issue_url="https://github.com/ramimbo/mergework/issues/121",
+            title="Effectively open bounty",
+            reward_mrwk="30",
+            max_awards=2,
+            acceptance="This bounty still has effective capacity.",
+        )
+        effectively_full = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=122,
+            issue_url="https://github.com/ramimbo/mergework/issues/122",
+            title="Effectively full bounty",
+            reward_mrwk="40",
+            acceptance="Pending payout covers the only visible award.",
+        )
+        propose_treasury_action(
+            session,
+            action="pay_bounty",
+            payload={
+                "bounty_id": effectively_full.id,
+                "to_account": "github:alice",
+                "submission_url": "https://github.com/ramimbo/mergework/pull/122",
+                "accepted_by": "maintainer",
+            },
+            proposed_by="maintainer",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    raw_open = client.get("/api/v1/bounties?status=open").json()
+    filtered = client.get("/api/v1/bounties?status=open&availability=effectively_open").json()
+    summary = client.get(
+        "/api/v1/bounties/summary?status=open&availability=effectively_open"
+    ).json()
+    invalid = client.get("/api/v1/bounties?availability=bogus")
+
+    assert [item["id"] for item in raw_open] == [effectively_full.id, effectively_open.id]
+    assert [item["id"] for item in filtered] == [effectively_open.id]
+    assert summary["bounties_shown"] == 1
+    assert summary["open_awards"] == 2
+    assert summary["effective_open_awards"] == 2
+    assert invalid.status_code == 400
+    assert invalid.json()["detail"] == "availability must be one of: all, effectively_open"
+
+
 def test_bounty_api_reports_pending_close_as_effectively_unavailable(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:

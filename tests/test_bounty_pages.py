@@ -271,7 +271,7 @@ def test_bounties_page_honors_limit_filter(sqlite_url: str) -> None:
     assert "<strong>2</strong>" in limited_page.text
     assert '<option value="2" selected>2</option>' in limited_page.text
     assert '<option value=""' in limited_page.text
-    assert 'href="/bounties?status=open&limit=2"' in limited_page.text
+    assert 'href="/bounties?status=open&amp;limit=2"' in limited_page.text
 
     filtered_limited_page = client.get("/bounties?q=public&sort=reward&limit=2")
     assert filtered_limited_page.status_code == 200
@@ -279,7 +279,9 @@ def test_bounties_page_honors_limit_filter(sqlite_url: str) -> None:
         '<option value="reward" selected>Highest per-award reward</option>'
         in filtered_limited_page.text
     )
-    assert 'href="/bounties?sort=reward&limit=2">Clear search</a>' in filtered_limited_page.text
+    assert 'href="/bounties?sort=reward&amp;limit=2">Clear search</a>' in (
+        filtered_limited_page.text
+    )
     assert (
         'href="/api/v1/bounties?q=public&amp;sort=reward&amp;limit=2">View JSON results</a>'
         in filtered_limited_page.text
@@ -293,6 +295,55 @@ def test_bounties_page_honors_limit_filter(sqlite_url: str) -> None:
 
     too_large_limit = client.get("/bounties?limit=201")
     assert too_large_limit.status_code == 422
+
+
+def test_bounties_page_filters_effective_availability(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        visible = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=76,
+            issue_url="https://github.com/ramimbo/mergework/issues/76",
+            title="Visible effective bounty",
+            reward_mrwk="25",
+            acceptance="This bounty should remain visible.",
+        )
+        hidden = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=77,
+            issue_url="https://github.com/ramimbo/mergework/issues/77",
+            title="Hidden effective bounty",
+            reward_mrwk="25",
+            acceptance="Pending payout should hide this row from effective filtering.",
+        )
+        propose_treasury_action(
+            session,
+            action="pay_bounty",
+            payload={
+                "bounty_id": hidden.id,
+                "to_account": "github:alice",
+                "submission_url": "https://github.com/ramimbo/mergework/pull/77",
+                "accepted_by": "maintainer",
+            },
+            proposed_by="maintainer",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    page = client.get("/bounties?status=open&availability=effectively_open")
+
+    assert page.status_code == 200
+    assert visible.title in page.text
+    assert hidden.title not in page.text
+    assert '<option value="effectively_open" selected>Effectively open</option>' in page.text
+    assert 'href="/bounties?availability=effectively_open"' in page.text
+    assert (
+        'href="/api/v1/bounties?status=open&amp;availability=effectively_open">'
+        "View JSON results</a>"
+    ) in page.text
 
 
 def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) -> None:
@@ -335,7 +386,7 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
     assert "Showing matches for “proof inspection”." in text_search.text
     assert "Improve public bounty discovery" in text_search.text
     assert "Internal admin cleanup" not in text_search.text
-    assert 'href="/bounties?status=open&q=proof%20inspection"' in text_search.text
+    assert 'href="/bounties?status=open&amp;q=proof+inspection"' in text_search.text
 
     issue_search = client.get("/api/v1/bounties?q=65")
     assert issue_search.status_code == 200
@@ -444,7 +495,7 @@ def test_bounties_page_and_api_sort_public_rows(sqlite_url: str) -> None:
     )
     assert 'name="sort"' in available_page.text
     assert '<option value="available" selected>Most MRWK available</option>' in available_page.text
-    assert 'href="/bounties?status=open&sort=available"' in available_page.text
+    assert 'href="/bounties?status=open&amp;sort=available"' in available_page.text
 
     whitespace_sort_page = client.get("/bounties", params={"sort": "   "})
     assert whitespace_sort_page.status_code == 200

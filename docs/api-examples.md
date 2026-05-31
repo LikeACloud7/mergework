@@ -18,8 +18,10 @@ Check service status and list bounties:
 curl -s "$API_HOST/api/v1/status"
 curl -s "$API_HOST/api/v1/bounties"
 curl -s "$API_HOST/api/v1/bounties?status=open"
+curl -s "$API_HOST/api/v1/bounties?status=open&availability=effectively_open"
 curl -s "$API_HOST/api/v1/bounties?status=open&sort=available&limit=5"
 curl -s "$API_HOST/api/v1/bounties/summary?status=open&q=proof"
+curl -s "$API_HOST/api/v1/bounties/summary?status=open&availability=effectively_open"
 curl -s "$API_HOST/api/v1/bounties/summary?status=open&sort=awards&limit=5"
 ```
 
@@ -60,6 +62,11 @@ when deciding whether a bounty still has practical capacity; do not describe
 pending payout proposals as proof-backed paid work until a proof exists. Award counters can change
 as accepted work is paid; refresh concrete examples against the live API before
 relying on available slot counts.
+
+Use `availability=effectively_open` when discovery clients should only return
+rows whose `effective_awards_remaining` is greater than zero. Omit it, or use
+`availability=all`, when raw ledger status should remain the only availability
+filter.
 
 Use `sort` to choose the bounty order: `newest` is the default, `reward` sorts
 by per-award reward, `available` sorts by the remaining MRWK pool, and `awards`
@@ -777,9 +784,11 @@ and has effectively available awards:
 ```bash
 # List all open bounties with their capacity
 curl -s "$API_HOST/api/v1/bounties?status=open"
+curl -s "$API_HOST/api/v1/bounties?status=open&availability=effectively_open"
 
 # Quick capacity summary
 curl -s "$API_HOST/api/v1/bounties/summary?status=open"
+curl -s "$API_HOST/api/v1/bounties/summary?status=open&availability=effectively_open"
 
 # Inspect one bounty by its internal id (from /api/v1/bounties)
 curl -s "$API_HOST/api/v1/bounties/<bounty_id>"

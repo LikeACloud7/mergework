@@ -11,6 +11,10 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.accounts import normalized_wallet_address
+from app.bounty_filters import (
+    BOUNTY_AVAILABILITY_FILTER_LABELS,
+    normalize_bounty_availability_filter,
+)
 from app.bounty_sorting import BOUNTY_SORT_LABELS, normalize_bounty_sort
 from app.db import session_scope
 from app.ledger_views import account_ledger_transaction_types, account_ledger_transactions
@@ -25,7 +29,11 @@ from app.status import (
 
 
 def _bounties_api_url(
-    status: str | None, query_text: str, selected_sort: str, limit: int | None
+    status: str | None,
+    query_text: str,
+    selected_sort: str,
+    limit: int | None,
+    selected_availability: str,
 ) -> str:
     params: list[tuple[str, str]] = []
     if status:
@@ -34,9 +42,29 @@ def _bounties_api_url(
         params.append(("q", query_text))
     if selected_sort != "newest":
         params.append(("sort", selected_sort))
+    if selected_availability != "all":
+        params.append(("availability", selected_availability))
     if limit is not None:
         params.append(("limit", str(limit)))
     return f"/api/v1/bounties?{urlencode(params)}" if params else "/api/v1/bounties"
+
+
+def _bounties_page_url(
+    *,
+    status: str | None,
+    query_text: str,
+    selected_sort: str,
+    limit: int | None,
+    selected_availability: str,
+) -> str:
+    api_path = _bounties_api_url(
+        status,
+        query_text,
+        selected_sort,
+        limit,
+        selected_availability,
+    )
+    return api_path.replace("/api/v1/bounties", "/bounties", 1)
 
 
 def public_bounties_context(
@@ -45,13 +73,25 @@ def public_bounties_context(
     q: str | None,
     sort: str | None = None,
     limit: int | None = None,
+    availability: str | None = None,
 ) -> dict[str, Any]:
     selected_status = status.strip().lower() if status is not None else None
     query_text = q.strip() if q is not None else ""
     selected_sort = normalize_bounty_sort(sort)
+    selected_availability = normalize_bounty_availability_filter(availability)
     limit_options: tuple[int, ...] = (10, 25, 50, 100, 200)
     if limit is not None and limit not in limit_options:
         limit_options = tuple(sorted((*limit_options, limit)))
+    status_filter_urls = {
+        status_value or "all": _bounties_page_url(
+            status=status_value,
+            query_text=query_text,
+            selected_sort=selected_sort,
+            limit=limit,
+            selected_availability=selected_availability,
+        )
+        for status_value in (None, "open", "paid", "closed")
+    }
     return {
         "bounties": bounties,
         "summary": bounty_list_summary(bounties),
@@ -59,9 +99,25 @@ def public_bounties_context(
         "query_text": query_text,
         "selected_sort": selected_sort,
         "sort_options": BOUNTY_SORT_LABELS,
+        "selected_availability": selected_availability,
+        "availability_options": BOUNTY_AVAILABILITY_FILTER_LABELS,
         "selected_limit": limit,
         "limit_options": limit_options,
-        "api_results_url": _bounties_api_url(selected_status, query_text, selected_sort, limit),
+        "status_filter_urls": status_filter_urls,
+        "clear_search_url": _bounties_page_url(
+            status=selected_status,
+            query_text="",
+            selected_sort=selected_sort,
+            limit=limit,
+            selected_availability=selected_availability,
+        ),
+        "api_results_url": _bounties_api_url(
+            selected_status,
+            query_text,
+            selected_sort,
+            limit,
+            selected_availability,
+        ),
     }
 
 
@@ -130,7 +186,7 @@ def register_public_routes(
     db_url: str,
     templates: Jinja2Templates,
     list_bounties_by_status: Callable[
-        [str | None, str | None, str | None, int | None], list[dict[str, Any]]
+        [str | None, str | None, str | None, int | None, str | None], list[dict[str, Any]]
     ],
     api_bounty: Callable[[int], dict[str, Any]],
     api_ledger: Callable[[], list[dict[str, Any]]],
@@ -144,12 +200,13 @@ def register_public_routes(
         q: str | None = Query(None),
         sort: str | None = Query(None),
         limit: int | None = Query(None, ge=1, le=200),
+        availability: str | None = Query(None),
     ) -> HTMLResponse:
-        bounties = list_bounties_by_status(status, q, sort, limit)
+        bounties = list_bounties_by_status(status, q, sort, limit, availability)
         return templates.TemplateResponse(
             request,
             "bounties.html",
-            public_bounties_context(bounties, status, q, sort, limit),
+            public_bounties_context(bounties, status, q, sort, limit, availability),
         )
 
     @app.get("/bounties/{bounty_id}", response_class=HTMLResponse)

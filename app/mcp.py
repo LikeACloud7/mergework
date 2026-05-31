@@ -14,7 +14,9 @@ MCPToolHandler = Callable[[str, str, dict[str, Any]], str | dict[str, Any]]
 MCP_TOOLS: list[dict[str, Any]] = [
     {
         "name": "list_bounties",
-        "description": "List MRWK bounties with optional status, q, sort, and limit filters",
+        "description": (
+            "List MRWK bounties with optional status, q, sort, availability, and limit filters"
+        ),
     },
     {
         "name": "get_bounty",

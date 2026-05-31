@@ -44,6 +44,7 @@ List current system counts and recent bounties:
 ```bash
 curl -s "$API_HOST/api/v1/status"
 curl -s "$API_HOST/api/v1/bounties"
+curl -s "$API_HOST/api/v1/bounties?status=open&availability=effectively_open"
 ```
 
 Get a lightweight counts-only bounty summary with optional status and search
@@ -52,8 +53,12 @@ filters:
 ```bash
 curl -s "$API_HOST/api/v1/bounties/summary"
 curl -s "$API_HOST/api/v1/bounties/summary?status=open"
+curl -s "$API_HOST/api/v1/bounties/summary?status=open&availability=effectively_open"
 curl -s "$API_HOST/api/v1/bounties/summary?q=docs"
 ```
+
+Use `availability=effectively_open` when scouting only for bounties with at
+least one effective award slot remaining.
 
 Inspect one bounty, accepted-work activity, a ledger page, and a proof:
 
