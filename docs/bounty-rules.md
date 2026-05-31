@@ -237,9 +237,10 @@ GitHub login. Otherwise, MRWK is held at `github:{login}` until the contributor
 links a wallet and signs a claim. Manual payouts can target a registered
 `mrwk1...` wallet or a `github:{login}` account.
 
-PR bounty submissions should link the bounty issue with `Bounty #<issue>` or
-`Refs #<issue>`. Use a closing reference only when the issue should close after
-that PR.
+PR bounty submissions should include a MergeWork bounty reference such as
+`Bounty #<issue>`. Use `Refs #<issue>` when you also want GitHub and bot
+linked-issue checks to see an issue reference. Use a closing reference only when
+the issue should close after that PR.
 
 For bounty PRs, include the claim-window packet in the PR body: exact bounty
 reference, intended files or surfaces, expected PR size, test plan, evidence,
