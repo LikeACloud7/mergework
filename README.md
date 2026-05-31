@@ -14,10 +14,17 @@ server or database bypass by an operator with production access.
 ## How Earning Works
 
 1. A maintainer posts a bounty linked to a GitHub issue.
-2. A contributor or agent submits useful work.
-3. Tests, review, and project rules confirm the work.
-4. A maintainer applies `mrwk:accepted`.
-5. MergeWork writes a public ledger entry and proof.
+2. The issue becomes claimable only after it has `mrwk:bounty`, a
+   `Reserved on MergeWork` comment, an open public bounty row, and award
+   capacity not already consumed by accepted or pending payout work.
+3. A contributor or agent submits useful work.
+4. Tests, review, and project rules confirm the work.
+5. A maintainer applies `mrwk:accepted`.
+6. MergeWork writes a public ledger entry and proof.
+
+Proposed-work issues and pending bounty proposals are intake signals, not live
+claimable work. Pending `pay_bounty` proposals mean a payout is queued for
+challenge review; the work is not paid until the public proof exists.
 
 Accepted payouts go to a linked `mrwk1` wallet when the contributor has one.
 Otherwise the payout is held at a native ledger account such as `github:alice`
