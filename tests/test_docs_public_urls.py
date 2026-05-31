@@ -124,6 +124,16 @@ def test_admin_runbook_documents_webhook_event_limit_cap() -> None:
     assert "/api/v1/admin/webhook-events?status=missing_submitter&limit=100" not in runbook
 
 
+def test_admin_runbook_documents_review_bounty_candidate_report() -> None:
+    runbook = Path("docs/admin-runbook.md").read_text(encoding="utf-8")
+
+    assert "scripts/review_bounty_candidates.py" in runbook
+    assert "--reviewer reviewer-login" in runbook
+    assert "fresh review candidates" in runbook
+    assert "already reviewed at the current head" in runbook
+    assert "It is advisory and read-only" in runbook
+
+
 def test_proposed_work_template_is_not_a_live_bounty_template() -> None:
     template = Path(".github/ISSUE_TEMPLATE/proposed-work.yml").read_text(encoding="utf-8")
     lowered = template.lower()
