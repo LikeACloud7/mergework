@@ -78,7 +78,6 @@ rows:
   "effective_open_awards": 1,
   "effective_open_pool_mrwk": "25",
   "availability_state_counts": {
-    "open": 1,
     "pending_payouts_partial": 1
   },
   "pending_payout_awards": 1,
