@@ -99,6 +99,8 @@ REQUIRED_PUBLIC_PHRASES = {
         "uses the production `.env`",
         "docker compose logs -f treasury-executor",
         "Verify `result.github_issue_finalization`",
+        "Accepted claims queued as pending `pay_bounty` proposals",
+        'Do not write "paid", "settled", "received", or "withdrawable"',
     ],
 }
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")

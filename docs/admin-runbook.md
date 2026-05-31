@@ -209,6 +209,29 @@ Manual payout checklist:
 Do not apply `mrwk:accepted` to maintainer-authored bounty issues for payment;
 those issues require the manual payout path.
 
+When posting a claim-intake update before proposal execution, use pending
+payout language and include enough data for contributors to distinguish queued
+work from paid proof-backed work:
+
+```text
+Accepted claims queued as pending `pay_bounty` proposals. These are not paid
+until proposal execution creates proof links.
+
+| Source | Recipient | Proposal | Executes after |
+| --- | --- | --- | --- |
+| <submission URL> | `<github:user-or-mrwk1...>` | <proposal URL> | <timestamp> |
+
+Skipped in this pass:
+
+| Source | Reason |
+| --- | --- |
+| <submission URL> | <duplicate, stale, out-of-scope, or needs-info reason> |
+```
+
+Do not write "paid", "settled", "received", or "withdrawable" in intake
+updates. Reserve those words for the follow-up comment after a proposal executes
+and the public proof or ledger entry exists.
+
 ### Webhook Outcome Inspection
 
 Use the admin-token webhook events API to inspect recent delivery outcomes before
