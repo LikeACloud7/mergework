@@ -53,11 +53,16 @@ filters:
 curl -s "$API_HOST/api/v1/bounties/summary"
 curl -s "$API_HOST/api/v1/bounties/summary?status=open"
 curl -s "$API_HOST/api/v1/bounties/summary?q=docs"
+curl -s "$API_HOST/api/v1/bounties/summary?repo=ramimbo%2Fmergework&issue_number=649"
 ```
 
 Read `availability_state_counts`, `pending_payout_awards`,
 `reduced_capacity_bounties`, and `effectively_unavailable_bounties` when raw
 summary capacity is higher than effective capacity.
+
+When your workflow starts from a GitHub issue URL, prefer exact
+`repo=owner/name` and `issue_number=N` filters on `/api/v1/bounties` or
+`/api/v1/bounties/summary`. Use `q` only for broader text discovery.
 
 Inspect one bounty, accepted-work activity, a ledger page, and a proof:
 
@@ -83,12 +88,21 @@ Inspect treasury proposals:
 ```bash
 curl -s "$API_HOST/api/v1/treasury/status"
 curl -s "$API_HOST/api/v1/treasury/proposals"
+curl -s "$API_HOST/api/v1/treasury/proposals?status=pending&action=pay_bounty&to_account=github%3Aalice"
+curl -s "$API_HOST/api/v1/treasury/proposals?action=pay_bounty&status=pending&bounty_id=<bounty_id>"
 curl -s "$API_HOST/api/v1/treasury/proposals/<proposal_id>"
 ```
+
+Use `to_account` with `status=pending` and `action=pay_bounty` when reconciling
+which delayed payout proposals target one GitHub account or MRWK wallet.
+Use `bounty_id` when you need the proposal slice for one internal MergeWork
+bounty id rather than a GitHub issue number.
 
 Use `/api/v1/treasury/status` before proposing fresh bounty rounds. It reports
 the rolling 24-hour reserve cap, recent reserve usage, pending create-bounty
 reserve, remaining create capacity, and the next capacity release time.
+Use proposal-list filters when you need one queue slice, such as pending
+`pay_bounty` proposals for one internal MergeWork bounty id.
 Use [docs/bounty-lifecycle.md](bounty-lifecycle.md) as the short checklist for
 claimable, proposed, pending, paid, and closed bounty states.
 
@@ -213,6 +227,10 @@ curl -s -X POST "$MCP_HOST/mcp" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_bounties","arguments":{}}}'
 ```
+
+Use `{"availability":"effectively_open"}` with `list_bounties` when you only want
+raw-open bounties that still have positive effective award capacity after
+pending payout or close proposals are considered.
 
 Inspect active attempt reservations for a bounty before opening overlapping
 work:

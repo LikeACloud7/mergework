@@ -18,7 +18,24 @@ def test_claim_inventory_uses_canonical_api_host_by_default() -> None:
 def _fixture() -> dict[str, object]:
     return {
         "bounties": [
-            {"id": 85, "issue_number": 578, "status": "open", "awards_remaining": 30},
+            {
+                "id": 85,
+                "issue_number": 578,
+                "status": "open",
+                "awards_remaining": 30,
+                "pending_payout_proposals": [
+                    {
+                        "proposal_id": 67,
+                        "executes_after": "2026-06-01T11:41:45Z",
+                        "to_account": "github:pending-reviewer",
+                        "bounty_id": 85,
+                        "accepted_by": "ramimbo",
+                        "submission_url": (
+                            "https://github.com/ramimbo/mergework/pull/620#pullrequestreview-67"
+                        ),
+                    }
+                ],
+            },
             {"id": 87, "issue_number": 581, "status": "open", "awards_remaining": 1},
         ],
         "proofs": [
@@ -79,6 +96,25 @@ def _fixture() -> dict[str, object]:
                         "url": "https://github.com/ramimbo/mergework/issues/578#issuecomment-4",
                         "author": {"login": "recent-winner"},
                         "body": "/claim https://github.com/ramimbo/mergework/pull/700",
+                    },
+                    {
+                        "url": "https://github.com/ramimbo/mergework/issues/578#issuecomment-5",
+                        "author": {"login": "pending-reviewer"},
+                        "body": (
+                            "/claim "
+                            "https://github.com/ramimbo/mergework/"
+                            "pull/620#pullrequestreview-67\n"
+                            "Reviewed current head while payout is pending."
+                        ),
+                    },
+                    {
+                        "url": "https://github.com/ramimbo/mergework/issues/578#issuecomment-6",
+                        "author": {"login": "pending-reviewer"},
+                        "body": (
+                            "Accepted review evidence: "
+                            "https://github.com/ramimbo/mergework/"
+                            "pull/620#pullrequestreview-67"
+                        ),
                     },
                 ],
             }
@@ -186,8 +222,56 @@ def test_claim_inventory_classifies_required_statuses(tmp_path, capsys) -> None:
         rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-3"]["source_type"]
         == "bounty_issue_comment"
     )
+    assert (
+        rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-5"]["likely_status"]
+        == "pending_payout"
+    )
+    assert (
+        rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-6"]["likely_status"]
+        == "pending_payout"
+    )
+    assert (
+        rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-5"][
+            "pending_proposal_id"
+        ]
+        == 67
+    )
+    assert (
+        rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-5"][
+            "pending_proposal_url"
+        ]
+        == "https://api.example.test/api/v1/treasury/proposals/67"
+    )
+    assert (
+        rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-5"][
+            "pending_executes_after"
+        ]
+        == "2026-06-01T11:41:45Z"
+    )
+    assert (
+        rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-5"]["pending_to_account"]
+        == "github:pending-reviewer"
+    )
+    assert (
+        rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-5"]["pending_bounty_id"]
+        == 85
+    )
+    assert (
+        rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-5"][
+            "pending_accepted_by"
+        ]
+        == "ramimbo"
+    )
+    assert (
+        rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-5"][
+            "pending_submission_url"
+        ]
+        == "https://github.com/ramimbo/mergework/pull/620#pullrequestreview-67"
+    )
+    assert report["summary"]["pending_payout"] == 2
     assert set(report["likely_status_enum"]) >= {
         "already_paid",
+        "pending_payout",
         "unpaid_candidate",
         "duplicate_candidate",
         "missing_bounty_ref",
@@ -206,9 +290,35 @@ def test_claim_inventory_markdown_report_is_pasteable() -> None:
     markdown = format_markdown_report(analyze_inventory(_fixture()))
 
     assert "## Claim Inventory" in markdown
-    assert "| Status | Bounty | Claimant | Type | Source | Proof |" in markdown
+    assert "| Status | Bounty | Claimant | Type | Source | Proof/Pending |" in markdown
     assert "`already_paid`" in markdown
+    assert "`pending_payout`" in markdown
     assert "https://api.mrwk.online/proofs/abc123" in markdown
+    assert "https://api.mrwk.online/api/v1/treasury/proposals/67" in markdown
+
+
+def test_claim_inventory_paid_proof_overrides_pending_payout() -> None:
+    fixture = _fixture()
+    proofs = fixture["proofs"]
+    assert isinstance(proofs, list)
+    proofs.append(
+        {
+            "source_url": "https://github.com/ramimbo/mergework/pull/620#pullrequestreview-67",
+            "proof_url": "/proofs/pending-later-paid",
+        }
+    )
+
+    report = analyze_inventory(fixture, api_host="https://api.example.test")
+    rows = {row["source_url"]: row for row in report["rows"]}
+
+    assert (
+        rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-5"]["likely_status"]
+        == "already_paid"
+    )
+    assert (
+        rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-5"]["proof_url"]
+        == "https://api.example.test/proofs/pending-later-paid"
+    )
 
 
 def test_claim_inventory_live_mode_uses_read_only_calls(monkeypatch) -> None:

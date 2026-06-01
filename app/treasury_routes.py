@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import json
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from sqlalchemy import select
 
+from app.control_chars import contains_control_character
 from app.db import session_scope
 from app.ledger.service import LedgerError
 from app.models import TreasuryProposal
+from app.openapi_request_bodies import TREASURY_CHALLENGE_BODY, TREASURY_PROPOSAL_BODY
 from app.path_params import SQLITE_INTEGER_MAX
 from app.treasury import (
     challenge_to_dict,
@@ -36,6 +39,58 @@ def _proposal_error(exc: LedgerError) -> HTTPException:
     return HTTPException(status_code=400, detail=detail)
 
 
+def _optional_query_filter(
+    value: str | None,
+    field: str,
+    *,
+    max_length: int,
+    blank_detail: str | None = None,
+) -> str | None:
+    if value is None:
+        return None
+    if contains_control_character(value):
+        raise HTTPException(status_code=400, detail=f"{field} must not contain control characters")
+    clean = value.strip()
+    if not clean:
+        raise HTTPException(status_code=400, detail=blank_detail or f"{field} is required")
+    if len(clean) > max_length:
+        raise HTTPException(status_code=400, detail=f"{field} is too long")
+    return clean
+
+
+def _proposal_payload_object(proposal: TreasuryProposal) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(proposal.payload_json)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _proposal_payload_matches(
+    proposal: TreasuryProposal,
+    *,
+    to_account: str | None,
+    bounty_id: int | None,
+) -> bool:
+    if to_account is None and bounty_id is None:
+        return True
+    payload = _proposal_payload_object(proposal)
+    if payload is None:
+        return False
+    if to_account is not None and payload.get("to_account") != to_account:
+        return False
+    if bounty_id is None:
+        return True
+    payload_bounty_id = payload.get("bounty_id")
+    return (
+        not isinstance(payload_bounty_id, bool)
+        and isinstance(payload_bounty_id, int)
+        and payload_bounty_id == bounty_id
+    )
+
+
 def register_treasury_routes(
     app: FastAPI,
     *,
@@ -49,12 +104,40 @@ def register_treasury_routes(
     @app.get("/api/v1/treasury/proposals")
     def api_treasury_proposals(
         limit: Annotated[int, Query(ge=1, le=200)] = 100,
+        action: Annotated[str | None, Query(max_length=40)] = None,
+        status: Annotated[str | None, Query(max_length=40)] = None,
+        to_account: Annotated[str | None, Query(max_length=128)] = None,
+        bounty_id: Annotated[int | None, Query(ge=1, le=SQLITE_INTEGER_MAX)] = None,
     ) -> list[dict[str, Any]]:
+        action_filter = _optional_query_filter(action, "action", max_length=40)
+        status_filter = _optional_query_filter(status, "status", max_length=40)
+        to_account_filter = _optional_query_filter(
+            to_account,
+            "to_account",
+            max_length=128,
+            blank_detail="to_account must not be blank",
+        )
         with session_scope(db_url) as session:
-            proposals = session.scalars(
-                select(TreasuryProposal).order_by(TreasuryProposal.id.desc()).limit(limit)
-            ).all()
-            return [proposal_to_dict(proposal) for proposal in proposals]
+            query = select(TreasuryProposal).order_by(TreasuryProposal.id.desc())
+            if action_filter is not None:
+                query = query.where(TreasuryProposal.action == action_filter)
+            if status_filter is not None:
+                query = query.where(TreasuryProposal.status == status_filter)
+            if to_account_filter is None and bounty_id is None:
+                query = query.limit(limit)
+
+            proposals: list[dict[str, Any]] = []
+            for proposal in session.scalars(query):
+                if not _proposal_payload_matches(
+                    proposal,
+                    to_account=to_account_filter,
+                    bounty_id=bounty_id,
+                ):
+                    continue
+                proposals.append(proposal_to_dict(proposal))
+                if len(proposals) >= limit:
+                    break
+            return proposals
 
     @app.get("/api/v1/treasury/status")
     def api_treasury_status() -> dict[str, Any]:
@@ -70,7 +153,7 @@ def register_treasury_routes(
                 raise HTTPException(status_code=404, detail="proposal not found")
             return proposal_to_dict(proposal)
 
-    @app.post("/api/v1/treasury/proposals")
+    @app.post("/api/v1/treasury/proposals", openapi_extra=TREASURY_PROPOSAL_BODY)
     async def api_create_treasury_proposal(
         request: Request,
         admin_login: str = Depends(require_admin_token),
@@ -111,7 +194,10 @@ def register_treasury_routes(
         except LedgerError as exc:
             raise _proposal_error(exc) from exc
 
-    @app.post("/api/v1/treasury/proposals/{proposal_id}/challenges")
+    @app.post(
+        "/api/v1/treasury/proposals/{proposal_id}/challenges",
+        openapi_extra=TREASURY_CHALLENGE_BODY,
+    )
     async def api_create_treasury_challenge(
         proposal_id: int,
         request: Request,
