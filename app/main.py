@@ -319,7 +319,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         return ledger_rows(limit)
 
     @app.get("/api/v1/ledger/{sequence}")
-    def api_ledger_entry(sequence: str) -> dict[str, Any]:
+    def api_ledger_entry(sequence: int | str) -> dict[str, Any]:
         sequence_id = positive_ledger_sequence(sequence)
         with session_scope(db_url) as session:
             entry = ledger_entry_to_dict(session, sequence_id)
