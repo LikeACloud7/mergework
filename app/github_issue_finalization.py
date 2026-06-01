@@ -11,6 +11,16 @@ GITHUB_LABEL = "mrwk:bounty"
 GITHUB_PAID_LABEL = "mrwk:paid"
 USER_AGENT = "MergeWork"
 API_VERSION = "2022-11-28"
+LIVE_BOUNTY_STATUS_BLOCK_START = "<!-- mergework:mrwk:live-bounty-status:start -->"
+LIVE_BOUNTY_STATUS_BLOCK_END = "<!-- mergework:mrwk:live-bounty-status:end -->"
+STALE_PENDING_BOUNTY_STATUS_TEXT = (
+    (
+        "Status: proposed bounty. This issue is not claimable until the treasury proposal "
+        "executes, the public bounty page exists, and the `Reserved on MergeWork` "
+        "claims-open comment is posted."
+    ),
+    "Status: proposed bounty. This issue is not claimable yet.",
+)
 PAID_BOUNTY_FINALIZATION_COMMENT_MARKER = "<!-- mergework:mrwk:paid-bounty-finalized -->"
 
 
@@ -152,6 +162,68 @@ def _existing_paid_finalization_comment_url(comments: list[dict[str, Any]]) -> s
     return None
 
 
+def _live_bounty_status_block(bounty_url: str) -> str:
+    return "\n".join(
+        [
+            LIVE_BOUNTY_STATUS_BLOCK_START,
+            "**MergeWork status:** live bounty",
+            "",
+            f"Reserved on MergeWork: {bounty_url}",
+            "",
+            (
+                "Claims are open only while the public bounty row remains open "
+                "and effective award capacity remains. Use the public bounty "
+                "page or API as the authoritative current status."
+            ),
+            LIVE_BOUNTY_STATUS_BLOCK_END,
+        ]
+    )
+
+
+def _without_stale_pending_bounty_status_text(body: str) -> str:
+    paragraphs = body.split("\n\n")
+    filtered = [
+        paragraph
+        for paragraph in paragraphs
+        if paragraph.strip() not in STALE_PENDING_BOUNTY_STATUS_TEXT
+    ]
+    return "\n\n".join(filtered).strip("\n")
+
+
+def _issue_body_with_live_bounty_status(body: str, bounty_url: str) -> str:
+    block = _live_bounty_status_block(bounty_url)
+    start = body.find(LIVE_BOUNTY_STATUS_BLOCK_START)
+    end = body.find(LIVE_BOUNTY_STATUS_BLOCK_END)
+    if start != -1 and end != -1 and start < end:
+        end += len(LIVE_BOUNTY_STATUS_BLOCK_END)
+        updated = f"{body[:start]}{block}{body[end:]}"
+    else:
+        updated = f"{block}\n\n{body}" if body else block
+    return _without_stale_pending_bounty_status_text(updated)
+
+
+def _refresh_live_bounty_issue_body(
+    *,
+    opener: Callable[..., Any],
+    issue_api_base: str,
+    github_token: str,
+    bounty_url: str,
+) -> dict[str, str]:
+    issue = _get_json(opener=opener, url=issue_api_base, github_token=github_token)
+    body = issue.get("body")
+    clean_body = body if isinstance(body, str) else ""
+    updated_body = _issue_body_with_live_bounty_status(clean_body, bounty_url)
+    if updated_body == clean_body:
+        return {"status": "already_current"}
+    _patch_json(
+        opener=opener,
+        url=issue_api_base,
+        github_token=github_token,
+        payload={"body": updated_body},
+    )
+    return {"status": "updated"}
+
+
 def finalize_created_bounty_issue(
     *,
     github_token: str,
@@ -185,16 +257,37 @@ def finalize_created_bounty_issue(
             github_token=clean_token,
             payload={"body": comment},
         )
+        try:
+            body_update = _refresh_live_bounty_issue_body(
+                opener=opener,
+                issue_api_base=issue_api_base,
+                github_token=clean_token,
+                bounty_url=bounty_url,
+            )
+        except HTTPError as exc:
+            body_update = {
+                "status": "failed",
+                "reason": f"github issue body update failed: HTTP {exc.code}",
+            }
+        except (OSError, ValueError) as exc:
+            body_update = {
+                "status": "failed",
+                "reason": f"github issue body update failed: {type(exc).__name__}",
+            }
     except HTTPError as exc:
         return {"status": "failed", "reason": f"github issue update failed: HTTP {exc.code}"}
     except (OSError, ValueError) as exc:
         return {"status": "failed", "reason": f"github issue update failed: {type(exc).__name__}"}
-    return {
+    result = {
         "status": "updated",
         "label": GITHUB_LABEL,
         "bounty_url": bounty_url,
         "comment_url": comment_response.get("html_url"),
+        "issue_body_status": body_update["status"],
     }
+    if "reason" in body_update:
+        result["issue_body_reason"] = body_update["reason"]
+    return result
 
 
 def finalize_paid_bounty_issue(
