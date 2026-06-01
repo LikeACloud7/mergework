@@ -686,6 +686,22 @@ def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) ->
     assert "Link a wallet" in me
 
 
+def test_wallet_pages_reject_control_character_filters(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    _, public_hex, address = _keypair()
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    _register_wallet(client, public_hex, "Main smoke wallet")
+    _fund_wallet(sqlite_url, address)
+
+    search_response = client.get("/wallets", params={"q": "\u0085Main"})
+    type_response = client.get(f"/wallets/{address}", params={"type": "test_funding\t"})
+
+    assert search_response.status_code == 400
+    assert search_response.json()["detail"] == "q must not contain control characters"
+    assert type_response.status_code == 400
+    assert type_response.json()["detail"] == "transaction type must not contain control characters"
+
+
 def test_me_page_shows_signed_in_github_claim_balance(sqlite_url: str, monkeypatch) -> None:
     monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "test-cookie-secret")
     create_schema(sqlite_url)
