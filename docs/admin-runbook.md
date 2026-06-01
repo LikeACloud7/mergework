@@ -44,8 +44,12 @@ Public reads:
 ```bash
 curl -s https://api.mrwk.online/api/v1/treasury/status
 curl -s https://api.mrwk.online/api/v1/treasury/proposals
+curl -s "https://api.mrwk.online/api/v1/treasury/proposals?status=pending&action=pay_bounty&to_account=github%3Aalice"
 curl -s https://api.mrwk.online/api/v1/treasury/proposals/<proposal_id>
 ```
+
+Use the filtered proposal list to reconcile pending payouts for one recipient
+without mixing unrelated `pay_bounty` proposals from busy review rounds.
 
 Legacy-compatible admin API reads remain available at
 `https://api.mrwk.ltclab.site` for existing scripts, but new examples should use
