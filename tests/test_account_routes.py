@@ -186,6 +186,7 @@ def test_account_routes_expose_pending_payouts_separately_from_paid_work(
     assert account_api["pending_summary"]["next_executes_after"].endswith("Z")
     assert len(accepted_api["accepted_work"]) == 1
     assert accepted_api["accepted_work"][0]["proof_hash"] == proof.hash
+    assert accepted_api["accepted_work"][0]["created_at"].endswith("Z")
     assert "Pending payouts" in page
     assert "Accepted work queued for treasury execution, not proof-backed paid work." in page
     assert f'href="/api/v1/treasury/proposals/{proposal.id}"' in page
