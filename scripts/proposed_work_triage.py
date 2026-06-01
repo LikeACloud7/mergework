@@ -62,6 +62,10 @@ LIVE_ISSUE_SEARCHES = (
     "label:proposed-work",
     '"proposed work"',
 )
+READ_ONLY_GH_COMMANDS = {
+    ("issue", "list"),
+    ("issue", "view"),
+}
 
 
 def _labels(raw: dict[str, Any]) -> list[str]:
@@ -337,6 +341,9 @@ def format_markdown(report: dict[str, Any]) -> str:
 
 
 def _run_gh(args: list[str]) -> Any:
+    if len(args) < 2 or tuple(args[:2]) not in READ_ONLY_GH_COMMANDS:
+        allowed = ", ".join(" ".join(command) for command in sorted(READ_ONLY_GH_COMMANDS))
+        raise RuntimeError(f"live mode only permits read-only gh commands: {allowed}")
     try:
         result = subprocess.run(
             ["gh", *args],

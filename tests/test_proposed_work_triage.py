@@ -485,3 +485,23 @@ def test_run_gh_reports_timeout_and_invalid_json(monkeypatch) -> None:
         assert "not-json" in str(exc)
     else:  # pragma: no cover - defensive assertion
         raise AssertionError("expected invalid JSON RuntimeError")
+
+
+def test_run_gh_rejects_mutating_commands_before_subprocess(monkeypatch) -> None:
+    def fail_if_called(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202, ARG001
+        raise AssertionError("mutating gh command should be rejected before subprocess.run")
+
+    monkeypatch.setattr("scripts.proposed_work_triage.subprocess.run", fail_if_called)
+
+    for args in (
+        ["issue", "comment", "672", "--body", "mutation"],
+        ["issue", "edit", "672", "--add-label", "proposed-work"],
+        ["pr", "review", "763", "--approve"],
+        ["api", "repos/ramimbo/mergework/issues/672"],
+    ):
+        try:
+            _run_gh(args)
+        except RuntimeError as exc:
+            assert "only permits read-only gh commands" in str(exc)
+        else:  # pragma: no cover - defensive assertion
+            raise AssertionError(f"expected read-only guard for {args}")
