@@ -297,10 +297,16 @@ curl -s "$API_HOST/api/v1/activity"
 curl -s "$API_HOST/api/v1/activity?q=p3xill"
 ```
 
-The optional `q` parameter filters activity rows by account, amount, submission
-URL, proof hash, bounty repo, bounty issue URL, internal bounty id, or GitHub
-issue number. The response groups matching proof-backed bounty payments into
-`totals`, contributor rollups, and the most recent payment rows:
+The optional `q` parameter filters proof-backed and pending activity rows by
+account, amount, submission URL, proof hash, proposal id, bounty repo, bounty
+issue URL, internal bounty id, or GitHub issue number. In other words, the
+same search can match bounty repo, bounty issue URL, proposal, proof, or
+submission evidence. The response groups
+matching proof-backed bounty payments into `totals`, contributor rollups, and
+the most recent payment rows. Accepted-but-not-yet-executed `pay_bounty`
+proposals appear separately in `pending_totals` and `pending_payouts`; they are
+not counted as paid, proof-backed, received, or withdrawable work until treasury
+execution creates a ledger proof:
 
 ```json
 {
@@ -308,6 +314,10 @@ issue number. The response groups matching proof-backed bounty payments into
     "accepted_awards": 2,
     "accepted_mrwk": "115",
     "contributors": 1
+  },
+  "pending_totals": {
+    "pending_awards": 1,
+    "pending_mrwk": "50"
   },
   "query": "p3xill",
   "contributors": [
@@ -321,6 +331,24 @@ issue number. The response groups matching proof-backed bounty payments into
       "latest_bounty_issue_url": "https://github.com/ramimbo/mergework/issues/219",
       "latest_proof_hash": "99f78d41b9a493ba2e6136cba0b0762f013a913c9d90c562976282e93d00b81f",
       "latest_proof_url": "/proofs/99f78d41b9a493ba2e6136cba0b0762f013a913c9d90c562976282e93d00b81f"
+    }
+  ],
+  "pending_payouts": [
+    {
+      "proposal_id": 67,
+      "proposal_url": "/api/v1/treasury/proposals/67",
+      "status": "pending",
+      "account": "github:p3xill",
+      "amount_mrwk": "50",
+      "submission_url": "https://github.com/ramimbo/mergework/pull/226#pullrequestreview-4354910919",
+      "bounty_repo": "ramimbo/mergework",
+      "bounty_id": 91,
+      "bounty_issue_number": 643,
+      "bounty_issue_url": "https://github.com/ramimbo/mergework/issues/643",
+      "bounty_url": "/bounties/91",
+      "accepted_by": "ramimbo",
+      "proposed_at": "2026-05-31T11:41:45.307945",
+      "executes_after": "2026-06-01T11:41:45.307945"
     }
   ],
   "recent": [

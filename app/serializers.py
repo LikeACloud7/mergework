@@ -428,6 +428,95 @@ def _activity_row_matches(row: dict[str, Any], query: str) -> bool:
     }
 
 
+def _pending_activity_row(
+    proposal: TreasuryProposal, payload: dict[str, Any], bounty: Bounty | None
+) -> dict[str, Any]:
+    amount_microunits = bounty.reward_microunits if bounty else 0
+    return {
+        "proposal_id": proposal.id,
+        "proposal_url": f"/api/v1/treasury/proposals/{proposal.id}",
+        "status": proposal.status,
+        "account": payload.get("to_account"),
+        "amount_mrwk": format_mrwk(amount_microunits) if bounty else None,
+        "amount_microunits": amount_microunits,
+        "submission_url": payload.get("submission_url"),
+        "bounty_repo": bounty.repo if bounty else None,
+        "bounty_issue_number": bounty.issue_number if bounty else None,
+        "bounty_issue_url": bounty.issue_url if bounty else None,
+        "bounty_id": bounty.id if bounty else _proposal_bounty_id(payload),
+        "bounty_url": _bounty_detail_url(bounty.id if bounty else _proposal_bounty_id(payload)),
+        "accepted_by": payload.get("accepted_by"),
+        "proposed_at": proposal.proposed_at.isoformat(),
+        "executes_after": proposal.executes_after.isoformat(),
+    }
+
+
+def _pending_activity_row_matches(row: dict[str, Any], query: str) -> bool:
+    if not query:
+        return True
+    searchable_values = (
+        row["proposal_id"],
+        row["proposal_url"],
+        row["status"],
+        row["account"],
+        row["amount_mrwk"],
+        row["submission_url"],
+        row["bounty_id"],
+        row["bounty_repo"],
+        row["bounty_issue_url"],
+        row["bounty_issue_number"],
+        row["accepted_by"],
+    )
+    if any(query in str(value or "").lower() for value in searchable_values):
+        return True
+    issue_number = _activity_hash_issue_query(query)
+    if issue_number is None:
+        return False
+    return issue_number in {
+        str(row["proposal_id"] or ""),
+        str(row["bounty_id"] or ""),
+        str(row["bounty_issue_number"] or ""),
+    }
+
+
+def pending_activity_rows(session: Session, query: str | None = None) -> list[dict[str, Any]]:
+    """Return pending accepted work without treating it as proof-backed activity."""
+    search_query = _activity_search_query(query)
+    proposals = session.scalars(
+        select(TreasuryProposal)
+        .where(TreasuryProposal.status == "pending", TreasuryProposal.action == "pay_bounty")
+        .order_by(TreasuryProposal.executes_after.asc(), TreasuryProposal.id.asc())
+    ).all()
+    parsed: list[tuple[TreasuryProposal, dict[str, Any], int | None]] = []
+    bounty_ids: set[int] = set()
+    for proposal in proposals:
+        payload = _proposal_payload(proposal)
+        if payload is None:
+            continue
+        bounty_id = _proposal_bounty_id(payload)
+        if bounty_id is not None:
+            bounty_ids.add(bounty_id)
+        parsed.append((proposal, payload, bounty_id))
+
+    bounty_by_id = (
+        {
+            bounty.id: bounty
+            for bounty in session.scalars(select(Bounty).where(Bounty.id.in_(bounty_ids))).all()
+        }
+        if bounty_ids
+        else {}
+    )
+
+    pending: list[dict[str, Any]] = []
+    for proposal, payload, bounty_id in parsed:
+        bounty = bounty_by_id.get(bounty_id) if bounty_id is not None else None
+        row = _pending_activity_row(proposal, payload, bounty)
+        if row["account"] is None or not _pending_activity_row_matches(row, search_query):
+            continue
+        pending.append(row)
+    return pending
+
+
 def activity_to_dict(session: Session, query: str | None = None) -> dict[str, Any]:
     """Build the public activity feed and contributor totals."""
     search_query = _activity_search_query(query)
@@ -483,14 +572,24 @@ def activity_to_dict(session: Session, query: str | None = None) -> dict[str, An
     for row in recent:
         del row["amount_microunits"]
 
+    pending_payouts = pending_activity_rows(session, search_query)
+    pending_microunits = sum(int(row["amount_microunits"]) for row in pending_payouts)
+    for row in pending_payouts:
+        del row["amount_microunits"]
+
     return {
         "totals": {
             "accepted_awards": len(recent),
             "accepted_mrwk": format_mrwk(total_microunits),
             "contributors": len(contributors),
         },
+        "pending_totals": {
+            "pending_awards": len(pending_payouts),
+            "pending_mrwk": format_mrwk(pending_microunits),
+        },
         "query": search_query,
         "contributors": contributors,
+        "pending_payouts": pending_payouts[:100],
         "recent": recent[:100],
     }
 
