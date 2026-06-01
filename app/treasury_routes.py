@@ -13,7 +13,7 @@ from app.ledger.service import LedgerError
 from app.models import TreasuryProposal
 from app.openapi_request_bodies import TREASURY_CHALLENGE_BODY, TREASURY_PROPOSAL_BODY
 from app.path_params import SQLITE_INTEGER_MAX, positive_proposal_id
-from app.query_validation import reject_control_char_query_param
+from app.query_validation import reject_noncanonical_int_query_param
 from app.treasury import (
     TREASURY_ACTIONS,
     challenge_to_dict,
@@ -116,8 +116,8 @@ def register_treasury_routes(
         to_account: Annotated[str | None, Query(max_length=128)] = None,
         bounty_id: Annotated[int | None, Query(ge=1, le=SQLITE_INTEGER_MAX)] = None,
     ) -> list[dict[str, Any]]:
-        reject_control_char_query_param(request, "limit")
-        reject_control_char_query_param(request, "bounty_id")
+        reject_noncanonical_int_query_param(request, "limit")
+        reject_noncanonical_int_query_param(request, "bounty_id")
         action_filter = _optional_query_filter(
             action,
             "action",

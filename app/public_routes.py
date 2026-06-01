@@ -18,7 +18,7 @@ from app.db import session_scope
 from app.ledger_views import account_ledger_transaction_types, account_ledger_transactions
 from app.models import Wallet
 from app.path_params import SQLITE_INTEGER_MAX, proof_hash_from_path
-from app.query_validation import reject_control_char_query_param
+from app.query_validation import reject_noncanonical_int_query_param
 from app.serializers import bounty_list_summary, wallet_to_dict
 from app.status import (
     CURRENT_TRANSFER_PATHS,
@@ -262,8 +262,8 @@ def register_public_routes(
         issue_number: int | None = Query(None, ge=1, le=SQLITE_INTEGER_MAX),
         availability: str | None = Query(None),
     ) -> HTMLResponse:
-        reject_control_char_query_param(request, "limit")
-        reject_control_char_query_param(request, "issue_number")
+        reject_noncanonical_int_query_param(request, "limit")
+        reject_noncanonical_int_query_param(request, "issue_number")
         bounties = list_bounties_by_status(status, q, sort, limit, repo, issue_number, availability)
         return templates.TemplateResponse(
             request,

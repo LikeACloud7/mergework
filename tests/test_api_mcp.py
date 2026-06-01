@@ -52,17 +52,41 @@ def test_ledger_api_rejects_out_of_range_limits(sqlite_url: str, limit: str) -> 
     assert response.status_code == 422
 
 
-def test_ledger_api_rejects_control_character_limit(sqlite_url: str) -> None:
+@pytest.mark.parametrize(
+    ("query", "expected_detail"),
+    (
+        ("%C2%8550", "limit must not contain control characters"),
+        ("50.0", "limit must be a canonical positive integer"),
+        ("%2B50", "limit must be a canonical positive integer"),
+        ("050", "limit must be a canonical positive integer"),
+    ),
+)
+def test_ledger_api_rejects_noncanonical_limit(
+    sqlite_url: str, query: str, expected_detail: str
+) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
         ensure_genesis(session)
 
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 
-    response = client.get("/api/v1/ledger?limit=%C2%8550")
+    response = client.get(f"/api/v1/ledger?limit={query}")
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "limit must not contain control characters"
+    assert response.json()["detail"] == expected_detail
+
+
+def test_ledger_api_applies_default_limit_when_omitted(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get("/api/v1/ledger")
+
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
 
 
 def test_head_requests_match_get_routes_without_body(sqlite_url: str) -> None:

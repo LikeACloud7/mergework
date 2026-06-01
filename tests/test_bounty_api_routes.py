@@ -428,11 +428,20 @@ def test_bounty_api_limit_rejects_out_of_range_values(sqlite_url: str) -> None:
 
     controlled_list = client.get("/api/v1/bounties?limit=%C2%8550")
     controlled_summary = client.get("/api/v1/bounties/summary?limit=50%C2%85")
+    decimal_list = client.get("/api/v1/bounties?limit=50.0")
+    plus_summary = client.get("/api/v1/bounties/summary?limit=%2B50")
+    leading_zero_list = client.get("/api/v1/bounties?limit=050")
 
     assert controlled_list.status_code == 400
     assert controlled_list.json()["detail"] == "limit must not contain control characters"
     assert controlled_summary.status_code == 400
     assert controlled_summary.json()["detail"] == "limit must not contain control characters"
+    assert decimal_list.status_code == 400
+    assert decimal_list.json()["detail"] == "limit must be a canonical positive integer"
+    assert plus_summary.status_code == 400
+    assert plus_summary.json()["detail"] == "limit must be a canonical positive integer"
+    assert leading_zero_list.status_code == 400
+    assert leading_zero_list.json()["detail"] == "limit must be a canonical positive integer"
 
 
 def test_bounty_api_issue_number_rejects_sqlite_overflow_values(sqlite_url: str) -> None:
@@ -498,6 +507,9 @@ def test_bounty_api_filters_by_exact_repo_and_issue_number(sqlite_url: str) -> N
     composed = client.get("/api/v1/bounties?repo=ramimbo%2Fmergework&q=proposed-work")
     controlled_issue = client.get("/api/v1/bounties?issue_number=%C2%85649")
     controlled_summary_issue = client.get("/api/v1/bounties/summary?issue_number=649%C2%85")
+    decimal_issue = client.get("/api/v1/bounties?issue_number=649.0")
+    plus_summary_issue = client.get("/api/v1/bounties/summary?issue_number=%2B649")
+    leading_zero_issue = client.get("/api/v1/bounties?issue_number=00649")
 
     assert [row["id"] for row in by_repo.json()] == [other_mergework.id, mergework_649.id]
     assert [row["id"] for row in exact.json()] == [mergework_649.id]
@@ -518,4 +530,14 @@ def test_bounty_api_filters_by_exact_repo_and_issue_number(sqlite_url: str) -> N
     assert (
         controlled_summary_issue.json()["detail"]
         == "issue_number must not contain control characters"
+    )
+    assert decimal_issue.status_code == 400
+    assert decimal_issue.json()["detail"] == "issue_number must be a canonical positive integer"
+    assert plus_summary_issue.status_code == 400
+    assert (
+        plus_summary_issue.json()["detail"] == "issue_number must be a canonical positive integer"
+    )
+    assert leading_zero_issue.status_code == 400
+    assert (
+        leading_zero_issue.json()["detail"] == "issue_number must be a canonical positive integer"
     )
