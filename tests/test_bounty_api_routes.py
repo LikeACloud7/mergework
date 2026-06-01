@@ -426,6 +426,14 @@ def test_bounty_api_limit_rejects_out_of_range_values(sqlite_url: str) -> None:
     assert client.get("/api/v1/bounties/summary?limit=0").status_code == 422
     assert client.get("/api/v1/bounties/summary?limit=201").status_code == 422
 
+    controlled_list = client.get("/api/v1/bounties?limit=%C2%8550")
+    controlled_summary = client.get("/api/v1/bounties/summary?limit=50%C2%85")
+
+    assert controlled_list.status_code == 400
+    assert controlled_list.json()["detail"] == "limit must not contain control characters"
+    assert controlled_summary.status_code == 400
+    assert controlled_summary.json()["detail"] == "limit must not contain control characters"
+
 
 def test_bounty_api_issue_number_rejects_sqlite_overflow_values(sqlite_url: str) -> None:
     create_schema(sqlite_url)
@@ -488,6 +496,8 @@ def test_bounty_api_filters_by_exact_repo_and_issue_number(sqlite_url: str) -> N
     by_issue = client.get("/api/v1/bounties?issue_number=649")
     summary = client.get("/api/v1/bounties/summary?repo=ramimbo%2Fmergework")
     composed = client.get("/api/v1/bounties?repo=ramimbo%2Fmergework&q=proposed-work")
+    controlled_issue = client.get("/api/v1/bounties?issue_number=%C2%85649")
+    controlled_summary_issue = client.get("/api/v1/bounties/summary?issue_number=649%C2%85")
 
     assert [row["id"] for row in by_repo.json()] == [other_mergework.id, mergework_649.id]
     assert [row["id"] for row in exact.json()] == [mergework_649.id]
@@ -502,3 +512,10 @@ def test_bounty_api_filters_by_exact_repo_and_issue_number(sqlite_url: str) -> N
     invalid_repo = client.get("/api/v1/bounties?repo=ramimbo%C2%85mergework")
     assert invalid_repo.status_code == 400
     assert invalid_repo.json()["detail"] == "repo must not contain control characters"
+    assert controlled_issue.status_code == 400
+    assert controlled_issue.json()["detail"] == "issue_number must not contain control characters"
+    assert controlled_summary_issue.status_code == 400
+    assert (
+        controlled_summary_issue.json()["detail"]
+        == "issue_number must not contain control characters"
+    )

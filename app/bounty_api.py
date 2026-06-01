@@ -27,6 +27,7 @@ from app.ledger.service import (
 )
 from app.models import Bounty, Proof, Submission
 from app.path_params import SQLITE_INTEGER_MAX, issue_number_search_value, positive_bounty_id
+from app.query_validation import reject_control_char_query_param
 from app.serializers import (
     bounties_to_dict,
     bounty_awards_to_dict,
@@ -183,6 +184,7 @@ def register_bounty_api_routes(
 
     @app.get("/api/v1/bounties")
     def api_bounties(
+        request: Request,
         status: str | None = Query(None),
         q: str | None = Query(None),
         limit: Annotated[int | None, Query(ge=1, le=200)] = None,
@@ -191,6 +193,8 @@ def register_bounty_api_routes(
         issue_number: Annotated[int | None, Query(ge=1, le=SQLITE_INTEGER_MAX)] = None,
         availability: str | None = Query(None),
     ) -> list[dict[str, Any]]:
+        reject_control_char_query_param(request, "limit")
+        reject_control_char_query_param(request, "issue_number")
         return _list_bounties_by_status(
             status,
             q,
@@ -203,6 +207,7 @@ def register_bounty_api_routes(
 
     @app.get("/api/v1/bounties/summary")
     def api_bounties_summary(
+        request: Request,
         status: str | None = Query(None),
         q: str | None = Query(None),
         limit: Annotated[int | None, Query(ge=1, le=200)] = None,
@@ -211,6 +216,8 @@ def register_bounty_api_routes(
         issue_number: Annotated[int | None, Query(ge=1, le=SQLITE_INTEGER_MAX)] = None,
         availability: str | None = Query(None),
     ) -> dict[str, Any]:
+        reject_control_char_query_param(request, "limit")
+        reject_control_char_query_param(request, "issue_number")
         return bounty_list_summary(
             _list_bounties_by_status(
                 status,

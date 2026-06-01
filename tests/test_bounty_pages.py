@@ -295,6 +295,10 @@ def test_bounties_page_honors_limit_filter(sqlite_url: str) -> None:
     too_large_limit = client.get("/bounties?limit=201")
     assert too_large_limit.status_code == 422
 
+    controlled_limit = client.get("/bounties?limit=%C2%8550")
+    assert controlled_limit.status_code == 400
+    assert controlled_limit.json()["detail"] == "limit must not contain control characters"
+
 
 def test_bounties_page_rejects_sqlite_overflow_issue_number(sqlite_url: str) -> None:
     create_schema(sqlite_url)
@@ -402,6 +406,9 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
     assert [row["issue_number"] for row in underscore_search.json()] == [66]
 
     source_filter_page = client.get("/bounties?repo=ramimbo%2Fmergework&issue_number=64")
+    controlled_source_filter_page = client.get(
+        "/bounties?repo=ramimbo%2Fmergework&issue_number=%C2%8564"
+    )
     assert source_filter_page.status_code == 200
     assert "Source filter: ramimbo/mergework #64." in source_filter_page.text
     assert "Improve public bounty discovery" in source_filter_page.text
@@ -422,6 +429,11 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
     backslash_search = client.get("/api/v1/bounties", params={"q": "\\"})
     assert backslash_search.status_code == 200
     assert [row["issue_number"] for row in backslash_search.json()] == [66]
+    assert controlled_source_filter_page.status_code == 400
+    assert (
+        controlled_source_filter_page.json()["detail"]
+        == "issue_number must not contain control characters"
+    )
 
 
 def test_bounties_page_and_api_sort_public_rows(sqlite_url: str) -> None:
