@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.accounts import normalized_wallet_address
 from app.bounty_availability import normalize_bounty_availability_filter
 from app.bounty_sorting import BOUNTY_SORT_LABELS, normalize_bounty_sort
+from app.control_chars import contains_control_character
 from app.db import session_scope
 from app.ledger_views import account_ledger_transaction_types, account_ledger_transactions
 from app.models import Wallet
@@ -169,6 +170,8 @@ def public_bounties_context(
 
 
 def wallets_page_context(session: Session, q: str | None = None) -> dict[str, Any]:
+    if q is not None and contains_control_character(q):
+        raise HTTPException(status_code=400, detail="q must not contain control characters")
     query_text = q.strip() if q is not None else ""
     query = select(Wallet)
     if query_text:
@@ -197,6 +200,10 @@ def wallet_page_context(
     wallet = session.get(Wallet, normalized_address)
     if wallet is None:
         raise HTTPException(status_code=404, detail="wallet not found")
+    if transaction_type is not None and contains_control_character(transaction_type):
+        raise HTTPException(
+            status_code=400, detail="transaction type must not contain control characters"
+        )
     selected_transaction_type = transaction_type.strip() if transaction_type is not None else ""
     return {
         "wallet": wallet_to_dict(session, wallet),

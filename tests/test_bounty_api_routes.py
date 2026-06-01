@@ -354,6 +354,22 @@ def test_bounty_api_filters_by_status(sqlite_url: str) -> None:
     assert invalid.json()["detail"] == "status must be one of: open, paid, closed"
 
 
+def test_bounty_api_search_query_rejects_control_characters(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    list_response = client.get("/api/v1/bounties?q=%C2%85open")
+    summary_response = client.get("/api/v1/bounties/summary?q=open%09")
+
+    assert list_response.status_code == 400
+    assert list_response.json()["detail"] == "q must not contain control characters"
+    assert summary_response.status_code == 400
+    assert summary_response.json()["detail"] == "q must not contain control characters"
+
+
 def test_bounty_api_limit_caps_filtered_rows(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
