@@ -376,6 +376,11 @@ def test_bounty_api_search_query_rejects_control_characters(sqlite_url: str) -> 
     ("path", "detail"),
     [
         ("/api/v1/bounties?limit=not-an-int&limit=1", "limit must be provided at most once"),
+        ("/api/v1/bounties?sort=bogus&sort=newest", "sort must be provided at most once"),
+        (
+            "/api/v1/bounties/summary?repo=a%2Fb&repo=c%2Fd",
+            "repo must be provided at most once",
+        ),
         (
             "/api/v1/bounties/summary?issue_number=abc&issue_number=1",
             "issue_number must be provided at most once",
