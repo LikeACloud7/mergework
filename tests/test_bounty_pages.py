@@ -8,6 +8,7 @@ from app.db import create_schema, session_scope
 from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
 from app.models import LedgerEntry, Proof
+from app.path_params import SQLITE_INTEGER_MAX
 from app.treasury import propose_treasury_action
 
 
@@ -293,6 +294,20 @@ def test_bounties_page_honors_limit_filter(sqlite_url: str) -> None:
 
     too_large_limit = client.get("/bounties?limit=201")
     assert too_large_limit.status_code == 422
+
+
+def test_bounties_page_rejects_sqlite_overflow_issue_number(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    max_issue_number = client.get(f"/bounties?issue_number={SQLITE_INTEGER_MAX}")
+    oversized_issue_number = client.get(f"/bounties?issue_number={SQLITE_INTEGER_MAX + 1}")
+
+    assert max_issue_number.status_code == 200
+    assert oversized_issue_number.status_code == 422
 
 
 def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) -> None:
