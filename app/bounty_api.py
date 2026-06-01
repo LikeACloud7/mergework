@@ -22,7 +22,6 @@ from app.control_chars import contains_control_character
 from app.db import session_scope
 from app.ledger.reconciliation import payout_reconciliation_summary, reconcile_accepted_payouts
 from app.ledger.service import (
-    CONTROL_CHAR_RE,
     LedgerError,
     validate_public_url,
 )
@@ -316,7 +315,7 @@ def register_bounty_api_routes(
         if data.get("note") is not None:
             note = optional_str(data, "note").strip()
             if note:
-                if CONTROL_CHAR_RE.search(note):
+                if contains_control_character(note):
                     raise HTTPException(
                         status_code=400,
                         detail="verifier_result.note must not contain control characters",
