@@ -11,6 +11,7 @@ GITHUB_LABEL = "mrwk:bounty"
 GITHUB_PAID_LABEL = "mrwk:paid"
 USER_AGENT = "MergeWork"
 API_VERSION = "2022-11-28"
+PAID_BOUNTY_FINALIZATION_COMMENT_MARKER = "<!-- mergework:mrwk:paid-bounty-finalized -->"
 
 
 def _github_request(
@@ -38,11 +39,15 @@ def _github_request(
     )
 
 
-def _read_json(response: Any) -> dict[str, Any]:
+def _read_json_value(response: Any) -> Any:
     body = response.read()
     if not body:
         return {}
-    data = json.loads(body.decode())
+    return json.loads(body.decode())
+
+
+def _read_json(response: Any) -> dict[str, Any]:
+    data = _read_json_value(response)
     return cast(dict[str, Any], data) if isinstance(data, dict) else {}
 
 
@@ -67,6 +72,20 @@ def _get_json(
     request = _github_request(url, github_token, method="GET")
     with opener(request, timeout=10) as response:
         return _read_json(response)
+
+
+def _get_json_list(
+    *,
+    opener: Callable[..., Any],
+    url: str,
+    github_token: str,
+) -> list[dict[str, Any]]:
+    request = _github_request(url, github_token, method="GET")
+    with opener(request, timeout=10) as response:
+        data = _read_json_value(response)
+    if not isinstance(data, list):
+        return []
+    return [item for item in data if isinstance(item, dict)]
 
 
 def _patch_json(
@@ -112,6 +131,25 @@ def _has_label(issue: dict[str, Any], label: str) -> bool:
         if isinstance(name, str) and name.lower() == label.lower():
             return True
     return False
+
+
+def _paid_finalization_comment_body(bounty_url: str) -> str:
+    return (
+        f"Filled and paid on MergeWork: {bounty_url}\n\n"
+        "All awards for this bounty have proof-backed payments, "
+        "so this bounty issue is closed.\n\n"
+        f"{PAID_BOUNTY_FINALIZATION_COMMENT_MARKER}"
+    )
+
+
+def _existing_paid_finalization_comment_url(comments: list[dict[str, Any]]) -> str | None:
+    for comment in comments:
+        body = comment.get("body")
+        if not isinstance(body, str) or PAID_BOUNTY_FINALIZATION_COMMENT_MARKER not in body:
+            continue
+        html_url = comment.get("html_url")
+        return str(html_url) if html_url is not None else None
+    return None
 
 
 def finalize_created_bounty_issue(
@@ -195,18 +233,20 @@ def finalize_paid_bounty_issue(
             )
         comment_url = None
         if issue_state != "closed":
-            comment = (
-                f"Filled and paid on MergeWork: {bounty_url}\n\n"
-                "All awards for this bounty have proof-backed payments, "
-                "so this bounty issue is closed."
-            )
-            comment_response = _post_json(
+            comments = _get_json_list(
                 opener=opener,
-                url=f"{issue_api_base}/comments",
+                url=f"{issue_api_base}/comments?per_page=100",
                 github_token=clean_token,
-                payload={"body": comment},
             )
-            comment_url = comment_response.get("html_url")
+            comment_url = _existing_paid_finalization_comment_url(comments)
+            if comment_url is None:
+                comment_response = _post_json(
+                    opener=opener,
+                    url=f"{issue_api_base}/comments",
+                    github_token=clean_token,
+                    payload={"body": _paid_finalization_comment_body(bounty_url)},
+                )
+                comment_url = comment_response.get("html_url")
         if issue_state != "closed":
             _patch_json(
                 opener=opener,

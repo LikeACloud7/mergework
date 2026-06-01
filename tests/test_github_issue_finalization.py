@@ -9,7 +9,7 @@ from app.github_issue_finalization import finalize_created_bounty_issue, finaliz
 
 
 class _FakeResponse:
-    def __init__(self, body: dict[str, Any]) -> None:
+    def __init__(self, body: Any) -> None:
         self._body = body
 
     def __enter__(self) -> _FakeResponse:
@@ -121,6 +121,8 @@ def test_finalize_paid_bounty_issue_adds_label_comment_and_closes_open_issue() -
 
     def fake_opener(request: Request, timeout: float) -> _FakeResponse:
         requests.append(request)
+        if request.full_url.endswith("/comments?per_page=100"):
+            return _FakeResponse([])
         if request.get_method() == "GET":
             return _FakeResponse({"state": "open", "labels": [{"name": "mrwk:bounty"}]})
         if request.full_url.endswith("/comments"):
@@ -147,16 +149,23 @@ def test_finalize_paid_bounty_issue_adds_label_comment_and_closes_open_issue() -
         "comment_url": "https://github.com/ramimbo/mergework/issues/77#issuecomment-2",
         "closed": True,
     }
-    assert [request.get_method() for request in requests] == ["GET", "POST", "POST", "PATCH"]
+    assert [request.get_method() for request in requests] == [
+        "GET",
+        "POST",
+        "GET",
+        "POST",
+        "PATCH",
+    ]
     assert requests[1].full_url == (
         "https://api.github.com/repos/ramimbo/mergework/issues/77/labels"
     )
     assert json.loads((requests[1].data or b"").decode()) == {"labels": ["mrwk:paid"]}
-    comment_body = json.loads((requests[2].data or b"").decode())["body"]
+    comment_body = json.loads((requests[3].data or b"").decode())["body"]
     assert "Filled and paid on MergeWork" in comment_body
     assert "https://mrwk.example/bounties/123" in comment_body
-    assert requests[3].full_url == "https://api.github.com/repos/ramimbo/mergework/issues/77"
-    assert json.loads((requests[3].data or b"").decode()) == {
+    assert "mergework:mrwk:paid-bounty-finalized" in comment_body
+    assert requests[4].full_url == "https://api.github.com/repos/ramimbo/mergework/issues/77"
+    assert json.loads((requests[4].data or b"").decode()) == {
         "state": "closed",
         "state_reason": "completed",
     }
@@ -192,6 +201,8 @@ def test_finalize_paid_bounty_issue_comments_and_closes_when_paid_label_exists_o
 
     def fake_opener(request: Request, timeout: float) -> _FakeResponse:
         requests.append(request)
+        if request.full_url.endswith("/comments?per_page=100"):
+            return _FakeResponse([])
         if request.full_url.endswith("/comments"):
             return _FakeResponse(
                 {"html_url": "https://github.com/ramimbo/mergework/issues/77#issuecomment-2"}
@@ -212,9 +223,83 @@ def test_finalize_paid_bounty_issue_comments_and_closes_when_paid_label_exists_o
         "comment_url": "https://github.com/ramimbo/mergework/issues/77#issuecomment-2",
         "closed": True,
     }
-    assert [request.get_method() for request in requests] == ["GET", "POST", "PATCH"]
-    comment_body = json.loads((requests[1].data or b"").decode())["body"]
+    assert [request.get_method() for request in requests] == ["GET", "GET", "POST", "PATCH"]
+    comment_body = json.loads((requests[2].data or b"").decode())["body"]
     assert "Filled and paid on MergeWork" in comment_body
+    assert "mergework:mrwk:paid-bounty-finalized" in comment_body
+
+
+def test_finalize_paid_bounty_issue_reuses_marker_comment_after_close_failure() -> None:
+    requests: list[Request] = []
+    issue: dict[str, Any] = {"state": "open", "labels": [{"name": "mrwk:bounty"}]}
+    comments: list[dict[str, Any]] = []
+    patch_attempts = 0
+
+    def fake_opener(request: Request, timeout: float) -> _FakeResponse:
+        nonlocal patch_attempts
+        requests.append(request)
+        if request.get_method() == "GET" and request.full_url.endswith("/comments?per_page=100"):
+            return _FakeResponse(comments)
+        if request.get_method() == "GET":
+            return _FakeResponse(issue)
+        if request.full_url.endswith("/labels"):
+            issue["labels"] = [{"name": "mrwk:bounty"}, {"name": "mrwk:paid"}]
+            return _FakeResponse({})
+        if request.full_url.endswith("/comments"):
+            body = json.loads((request.data or b"").decode())["body"]
+            comments.append(
+                {
+                    "body": body,
+                    "html_url": "https://github.com/ramimbo/mergework/issues/77#issuecomment-2",
+                }
+            )
+            return _FakeResponse(comments[-1])
+        if request.get_method() == "PATCH":
+            patch_attempts += 1
+            if patch_attempts == 1:
+                raise HTTPError(
+                    url=request.full_url,
+                    code=500,
+                    msg="temporary github failure",
+                    hdrs=None,
+                    fp=None,
+                )
+            issue["state"] = "closed"
+            return _FakeResponse({})
+        raise AssertionError(f"unexpected request {request.get_method()} {request.full_url}")
+
+    first_result = finalize_paid_bounty_issue(
+        github_token="github-token",
+        public_base_url="https://mrwk.example",
+        bounty={"id": 123, "repo": "ramimbo/mergework", "issue_number": 77},
+        opener=fake_opener,
+    )
+    retry_result = finalize_paid_bounty_issue(
+        github_token="github-token",
+        public_base_url="https://mrwk.example",
+        bounty={"id": 123, "repo": "ramimbo/mergework", "issue_number": 77},
+        opener=fake_opener,
+    )
+
+    assert first_result == {
+        "status": "failed",
+        "reason": "github issue update failed: HTTP 500",
+    }
+    assert retry_result == {
+        "status": "updated",
+        "label": "mrwk:paid",
+        "bounty_url": "https://mrwk.example/bounties/123",
+        "comment_url": "https://github.com/ramimbo/mergework/issues/77#issuecomment-2",
+        "closed": True,
+    }
+    comment_posts = [
+        request
+        for request in requests
+        if request.get_method() == "POST" and request.full_url.endswith("/comments")
+    ]
+    assert len(comment_posts) == 1
+    assert len(comments) == 1
+    assert "mergework:mrwk:paid-bounty-finalized" in comments[0]["body"]
 
 
 def test_finalize_paid_bounty_issue_skips_without_token() -> None:

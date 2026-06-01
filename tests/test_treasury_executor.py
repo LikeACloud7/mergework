@@ -307,6 +307,7 @@ def test_executor_does_not_finalize_pending_payout_full_bounty(sqlite_url: str) 
 
 def test_executor_keeps_retrying_failed_paid_issue_finalization(sqlite_url: str) -> None:
     _init_db(sqlite_url)
+    finalizer_calls = 0
 
     def fake_paid_finalizer(
         *,
@@ -314,6 +315,8 @@ def test_executor_keeps_retrying_failed_paid_issue_finalization(sqlite_url: str)
         public_base_url: str,
         bounty: dict[str, object],
     ) -> dict[str, object]:
+        nonlocal finalizer_calls
+        finalizer_calls += 1
         return {"status": "failed", "reason": "github unavailable"}
 
     with session_scope(sqlite_url) as session:
@@ -347,6 +350,24 @@ def test_executor_keeps_retrying_failed_paid_issue_finalization(sqlite_url: str)
 
     assert report["paid_issue_finalization"]["attempted"] == 1
     assert report["paid_issue_finalization"]["failed"] == 1
+    assert finalizer_calls == 1
+    with session_scope(sqlite_url) as session:
+        bounty = session.scalar(select(Bounty).where(Bounty.issue_number == 97))
+        assert bounty is not None
+        assert bounty.status == "paid"
+        assert bounty.github_paid_issue_finalized_at is None
+
+    retry_report = execute_due_treasury_proposals(
+        sqlite_url,
+        github_issue_token="github-issue-token",
+        public_base_url="https://mrwk.example",
+        executed_by="treasury-executor",
+        paid_issue_finalizer=fake_paid_finalizer,
+    )
+
+    assert retry_report["paid_issue_finalization"]["attempted"] == 1
+    assert retry_report["paid_issue_finalization"]["failed"] == 1
+    assert finalizer_calls == 2
     with session_scope(sqlite_url) as session:
         bounty = session.scalar(select(Bounty).where(Bounty.issue_number == 97))
         assert bounty is not None
