@@ -13,3 +13,12 @@ def reject_control_char_query_param(request: Request, name: str) -> None:
                 status_code=400,
                 detail=f"{name} must not contain control characters",
             )
+
+
+def reject_repeated_query_param(request: Request, name: str) -> None:
+    """Reject ambiguous scalar query parameters before FastAPI chooses one value."""
+    if len(request.query_params.getlist(name)) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{name} must be provided at most once",
+        )

@@ -37,7 +37,7 @@ from app.path_params import (
     proof_hash_from_path,
 )
 from app.public_routes import register_public_routes
-from app.query_validation import reject_control_char_query_param
+from app.query_validation import reject_control_char_query_param, reject_repeated_query_param
 from app.status import health_status, system_status
 from app.treasury_routes import register_treasury_routes
 from app.wallet_api import register_wallet_api_routes
@@ -316,6 +316,7 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
     ) -> list[dict[str, Any]]:
         reject_control_char_query_param(request, "limit")
+        reject_repeated_query_param(request, "limit")
         return ledger_rows(limit)
 
     @app.get("/api/v1/ledger/{sequence}")

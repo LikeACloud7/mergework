@@ -632,6 +632,28 @@ def test_treasury_proposals_list_rejects_invalid_filters(
     assert response.json()["detail"] == expected_detail
 
 
+@pytest.mark.parametrize(
+    ("query", "detail"),
+    [
+        ("limit=not-an-int&limit=2", "limit must be provided at most once"),
+        ("status=invalid&status=pending", "status must be provided at most once"),
+        ("action=invalid&action=pay_bounty", "action must be provided at most once"),
+        ("to_account=bad&to_account=github%3Aalice", "to_account must be provided at most once"),
+        ("bounty_id=not-an-int&bounty_id=1", "bounty_id must be provided at most once"),
+    ],
+)
+def test_treasury_proposals_list_rejects_repeated_scalar_filters(
+    sqlite_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    query: str,
+    detail: str,
+) -> None:
+    response = _client(sqlite_url, monkeypatch).get(f"/api/v1/treasury/proposals?{query}")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == detail
+
+
 def test_direct_proposal_creation_requires_admin_token(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

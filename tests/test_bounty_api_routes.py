@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.db import create_schema, session_scope
@@ -369,6 +370,40 @@ def test_bounty_api_search_query_rejects_control_characters(sqlite_url: str) -> 
     assert list_response.json()["detail"] == "q must not contain control characters"
     assert summary_response.status_code == 400
     assert summary_response.json()["detail"] == "q must not contain control characters"
+
+
+@pytest.mark.parametrize(
+    ("path", "detail"),
+    [
+        ("/api/v1/bounties?limit=not-an-int&limit=1", "limit must be provided at most once"),
+        (
+            "/api/v1/bounties/summary?issue_number=abc&issue_number=1",
+            "issue_number must be provided at most once",
+        ),
+        ("/api/v1/bounties?status=bogus&status=open", "status must be provided at most once"),
+        (
+            "/api/v1/bounties/summary?q=first&q=second",
+            "q must be provided at most once",
+        ),
+        (
+            "/api/v1/bounties?availability=bad&availability=all",
+            "availability must be provided at most once",
+        ),
+    ],
+)
+def test_bounty_api_rejects_repeated_scalar_filters(
+    sqlite_url: str, path: str, detail: str
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get(path)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == detail
 
 
 def test_bounty_api_limit_caps_filtered_rows(sqlite_url: str) -> None:
