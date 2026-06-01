@@ -326,6 +326,15 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
             reward_mrwk="100",
             acceptance=r"Document C:\work\mergework examples.",
         )
+        create_bounty(
+            session,
+            repo="example/other",
+            issue_number=64,
+            issue_url="https://github.com/example/other/issues/64",
+            title="Other repo same issue",
+            reward_mrwk="25",
+            acceptance="Other repository bounty.",
+        )
 
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 
@@ -376,6 +385,24 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
     underscore_search = client.get("/api/v1/bounties?q=_")
     assert underscore_search.status_code == 200
     assert [row["issue_number"] for row in underscore_search.json()] == [66]
+
+    source_filter_page = client.get("/bounties?repo=ramimbo%2Fmergework&issue_number=64")
+    assert source_filter_page.status_code == 200
+    assert "Source filter: ramimbo/mergework #64." in source_filter_page.text
+    assert "Improve public bounty discovery" in source_filter_page.text
+    assert "Other repo same issue" not in source_filter_page.text
+    assert (
+        'href="/bounties?status=open&repo=ramimbo%2Fmergework&issue_number=64"'
+        in source_filter_page.text
+    )
+    assert (
+        'href="/bounties?status=paid&repo=ramimbo%2Fmergework&issue_number=64"'
+        in source_filter_page.text
+    )
+    assert 'href="/bounties?repo=ramimbo%2Fmergework&issue_number=64"' in source_filter_page.text
+    assert (
+        'href="/api/v1/bounties?repo=ramimbo%2Fmergework&amp;issue_number=64">View JSON results</a>'
+    ) in source_filter_page.text
 
     backslash_search = client.get("/api/v1/bounties", params={"q": "\\"})
     assert backslash_search.status_code == 200
@@ -459,6 +486,101 @@ def test_bounties_page_and_api_sort_public_rows(sqlite_url: str) -> None:
     invalid_sort = client.get("/api/v1/bounties?sort=bogus")
     assert invalid_sort.status_code == 400
     assert invalid_sort.json()["detail"] == "sort must be one of: newest, reward, available, awards"
+
+
+def test_bounties_page_api_and_summary_filter_effectively_open_rows(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        effectively_open = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=80,
+            issue_url="https://github.com/ramimbo/mergework/issues/80",
+            title="Fresh open bounty",
+            reward_mrwk="100",
+            acceptance="This bounty has no pending payout proposals.",
+        )
+        partially_open = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=81,
+            issue_url="https://github.com/ramimbo/mergework/issues/81",
+            title="Partially open bounty",
+            reward_mrwk="50",
+            max_awards=2,
+            acceptance="This bounty still has one effective award after a pending payout.",
+        )
+        effectively_full = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=82,
+            issue_url="https://github.com/ramimbo/mergework/issues/82",
+            title="Effectively full bounty",
+            reward_mrwk="75",
+            acceptance="This bounty is raw-open but covered by a pending payout.",
+        )
+        propose_treasury_action(
+            session,
+            action="pay_bounty",
+            payload={
+                "bounty_id": partially_open.id,
+                "to_account": "github:alice",
+                "submission_url": "https://github.com/ramimbo/mergework/pull/81",
+                "accepted_by": "maintainer",
+            },
+            proposed_by="maintainer",
+        )
+        propose_treasury_action(
+            session,
+            action="pay_bounty",
+            payload={
+                "bounty_id": effectively_full.id,
+                "to_account": "github:bob",
+                "submission_url": "https://github.com/ramimbo/mergework/pull/82",
+                "accepted_by": "maintainer",
+            },
+            proposed_by="maintainer",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    default_rows = client.get("/api/v1/bounties?status=open")
+    assert default_rows.status_code == 200
+    assert [row["issue_number"] for row in default_rows.json()] == [82, 81, 80]
+
+    filtered_rows = client.get("/api/v1/bounties?status=open&availability=effectively_open")
+    assert filtered_rows.status_code == 200
+    assert [row["issue_number"] for row in filtered_rows.json()] == [81, 80]
+
+    summary = client.get("/api/v1/bounties/summary?status=open&availability=effectively_open")
+    assert summary.status_code == 200
+    assert summary.json()["bounties_shown"] == 2
+    assert summary.json()["open_awards"] == 3
+    assert summary.json()["effective_open_awards"] == 2
+
+    page = client.get("/bounties?status=open&availability=effectively_open")
+    assert page.status_code == 200
+    assert effectively_open.title in page.text
+    assert partially_open.title in page.text
+    assert effectively_full.title not in page.text
+    assert 'href="/api/v1/bounties?status=open&amp;availability=effectively_open">' in page.text
+
+    filtered_search_page = client.get("/bounties?status=open&q=Fresh&availability=effectively_open")
+    assert filtered_search_page.status_code == 200
+    assert (
+        'href="/bounties?status=open&availability=effectively_open">Clear search</a>'
+        in filtered_search_page.text
+    )
+    assert 'href="/bounties?q=Fresh&availability=effectively_open"' in filtered_search_page.text
+    assert (
+        'href="/bounties?status=paid&q=Fresh&availability=effectively_open"'
+        in filtered_search_page.text
+    )
+
+    empty_effective_page = client.get("/bounties?availability=effectively_open&q=missing")
+    assert empty_effective_page.status_code == 200
+    assert "No bounties match these filters." in empty_effective_page.text
 
 
 def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:

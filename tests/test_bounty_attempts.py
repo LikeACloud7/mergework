@@ -10,6 +10,7 @@ from app.db import create_schema, session_scope
 from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
 from app.main import _signed_value, create_app
 from app.models import BountyAttempt, LedgerEntry
+from app.treasury import propose_treasury_action
 
 COOKIE_SECRET = "test-cookie-secret"
 
@@ -325,6 +326,133 @@ def test_bounty_api_rows_include_active_attempt_summary(sqlite_url: str) -> None
     assert [attempt["submitter_account"] for attempt in attempts["attempts"]] == [
         "github:bob",
         "github:alice",
+    ]
+
+
+def test_bounty_attempt_warnings_respect_full_pending_payout_capacity(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    now = datetime.now(UTC)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=329,
+            issue_url="https://github.com/ramimbo/mergework/issues/329",
+            title="Full pending payout attempt warning",
+            reward_mrwk="50",
+            max_awards=2,
+            acceptance="Effective capacity should block attempts.",
+        )
+        for pull_number, submitter in ((329, "github:alice"), (330, "github:bob")):
+            propose_treasury_action(
+                session,
+                action="pay_bounty",
+                payload={
+                    "bounty_id": bounty.id,
+                    "to_account": submitter,
+                    "submission_url": f"https://github.com/ramimbo/mergework/pull/{pull_number}",
+                    "accepted_by": "maintainer",
+                },
+                proposed_by="maintainer",
+            )
+
+        assert bounty_attempt_warnings(session, bounty, now) == [
+            "bounty has no award slots remaining",
+            "2 awards covered by pending payout proposals; 0 awards effectively available.",
+        ]
+
+
+def test_bounty_attempt_registration_blocks_full_pending_payout_capacity(
+    sqlite_url: str, monkeypatch
+) -> None:
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", COOKIE_SECRET)
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=330,
+            issue_url="https://github.com/ramimbo/mergework/issues/330",
+            title="Full pending payout attempt creation",
+            reward_mrwk="50",
+            acceptance="Attempt creation should use effective capacity.",
+        )
+        propose_treasury_action(
+            session,
+            action="pay_bounty",
+            payload={
+                "bounty_id": bounty.id,
+                "to_account": "github:winner",
+                "submission_url": "https://github.com/ramimbo/mergework/pull/330",
+                "accepted_by": "maintainer",
+            },
+            proposed_by="maintainer",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    _set_login(client, "alice")
+
+    response = client.post(
+        f"/api/v1/bounties/{bounty.id}/attempts",
+        json={"submitter_account": "github:alice", "ttl_seconds": 3600},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "status": "not_available",
+        "bounty_id": bounty.id,
+        "warnings": [
+            "bounty has no award slots remaining",
+            "1 award covered by pending payout proposal; 0 awards effectively available.",
+        ],
+    }
+
+
+def test_bounty_attempt_registration_allows_partial_pending_payout_capacity(
+    sqlite_url: str, monkeypatch
+) -> None:
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", COOKIE_SECRET)
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=331,
+            issue_url="https://github.com/ramimbo/mergework/issues/331",
+            title="Partial pending payout attempt creation",
+            reward_mrwk="50",
+            max_awards=2,
+            acceptance="Positive effective capacity should remain startable.",
+        )
+        propose_treasury_action(
+            session,
+            action="pay_bounty",
+            payload={
+                "bounty_id": bounty.id,
+                "to_account": "github:winner",
+                "submission_url": "https://github.com/ramimbo/mergework/pull/331",
+                "accepted_by": "maintainer",
+            },
+            proposed_by="maintainer",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    _set_login(client, "alice")
+
+    response = client.post(
+        f"/api/v1/bounties/{bounty.id}/attempts",
+        json={"submitter_account": "github:alice", "ttl_seconds": 3600},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["warnings"] == [
+        "1 award covered by pending payout proposal; 1 award effectively available.",
+        "bounty has 1 active attempt",
     ]
 
 

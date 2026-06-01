@@ -41,6 +41,20 @@ class ClaimRow:
     duplicate_key: str
     likely_status: str
     proof_url: str | None = None
+    pending_proposal_id: int | None = None
+    pending_proposal_url: str | None = None
+    pending_executes_after: str | None = None
+    pending_to_account: str | None = None
+    pending_bounty_id: int | None = None
+    pending_accepted_by: str | None = None
+    pending_submission_url: str | None = None
+
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _author_login(raw: Any) -> str:
@@ -185,6 +199,52 @@ def _proof_for_surface(text: str, source_url: str, proof_by_source: dict[str, st
     return None
 
 
+def _pending_payout_sources(data: dict[str, Any], api_host: str) -> dict[str, dict[str, Any]]:
+    pending_by_source: dict[str, dict[str, Any]] = {}
+    for bounty in data.get("bounties", []):
+        if not isinstance(bounty, dict):
+            continue
+        bounty_id = _int_or_none(bounty.get("id", bounty.get("bounty_id")))
+        bounty_issue = _int_or_none(bounty.get("issue_number", bounty.get("number")))
+        proposals = bounty.get("pending_payout_proposals", [])
+        if not isinstance(proposals, list):
+            continue
+        for proposal in proposals:
+            if not isinstance(proposal, dict):
+                continue
+            source = _normalize_url(str(proposal.get("submission_url") or ""))
+            if not source:
+                continue
+            proposal_id = _int_or_none(proposal.get("proposal_id", proposal.get("id")))
+            proposal_url = None
+            if proposal_id is not None:
+                proposal_url = f"{api_host.rstrip('/')}/api/v1/treasury/proposals/{proposal_id}"
+            pending_by_source[source] = {
+                "pending_proposal_id": proposal_id,
+                "pending_proposal_url": proposal_url,
+                "pending_executes_after": proposal.get("executes_after"),
+                "pending_to_account": proposal.get("to_account"),
+                "pending_bounty_id": bounty_id,
+                "pending_bounty_issue": bounty_issue,
+                "pending_accepted_by": proposal.get("accepted_by"),
+                "pending_submission_url": source,
+            }
+    return pending_by_source
+
+
+def _pending_payout_for_surface(
+    text: str, source_url: str, pending_by_source: dict[str, dict[str, Any]]
+) -> dict[str, Any] | None:
+    pending = pending_by_source.get(source_url)
+    if pending:
+        return pending
+    for linked_url in _github_urls(text):
+        pending = pending_by_source.get(linked_url)
+        if pending:
+            return pending
+    return None
+
+
 def _duplicate_key(text: str, source_url: str, bounty_issue: int | None) -> str:
     linked_urls = [url for url in _github_urls(text) if url != source_url]
     core = linked_urls[0] if linked_urls else source_url
@@ -200,6 +260,7 @@ def _surface_row(
     fallback_bounty_issue: int | None,
     bounties: dict[int, dict[str, Any]],
     proof_by_source: dict[str, str],
+    pending_by_source: dict[str, dict[str, Any]],
     duplicate_counts: Counter[str],
 ) -> ClaimRow | None:
     source_url = _normalize_url(source_url)
@@ -209,10 +270,13 @@ def _surface_row(
     bounty_issue = _first_bounty_ref(text, fallback_bounty_issue)
     duplicate_key = _duplicate_key(text, source_url, bounty_issue)
     proof_url = _proof_for_surface(text, source_url, proof_by_source)
+    pending_payout = _pending_payout_for_surface(text, source_url, pending_by_source)
     bounty = bounties.get(bounty_issue) if bounty_issue is not None else None
     bounty_id = bounty.get("bounty_id") if bounty else None
     if proof_url:
         likely_status = "already_paid"
+    elif pending_payout:
+        likely_status = "pending_payout"
     elif bounty_issue is None:
         likely_status = "missing_bounty_ref"
     elif bounty is None:
@@ -223,6 +287,7 @@ def _surface_row(
         likely_status = "ignored_or_unclear"
     else:
         likely_status = "unpaid_candidate"
+    pending_details = pending_payout if likely_status == "pending_payout" else None
     return ClaimRow(
         source_url=source_url,
         bounty_issue=bounty_issue,
@@ -232,6 +297,37 @@ def _surface_row(
         duplicate_key=duplicate_key,
         likely_status=likely_status,
         proof_url=proof_url,
+        pending_proposal_id=(
+            _int_or_none(pending_details.get("pending_proposal_id")) if pending_details else None
+        ),
+        pending_proposal_url=(
+            str(pending_details.get("pending_proposal_url"))
+            if pending_details and pending_details.get("pending_proposal_url")
+            else None
+        ),
+        pending_executes_after=(
+            str(pending_details.get("pending_executes_after"))
+            if pending_details and pending_details.get("pending_executes_after")
+            else None
+        ),
+        pending_to_account=(
+            str(pending_details.get("pending_to_account"))
+            if pending_details and pending_details.get("pending_to_account")
+            else None
+        ),
+        pending_bounty_id=(
+            _int_or_none(pending_details.get("pending_bounty_id")) if pending_details else None
+        ),
+        pending_accepted_by=(
+            str(pending_details.get("pending_accepted_by"))
+            if pending_details and pending_details.get("pending_accepted_by")
+            else None
+        ),
+        pending_submission_url=(
+            str(pending_details.get("pending_submission_url"))
+            if pending_details and pending_details.get("pending_submission_url")
+            else None
+        ),
     )
 
 
@@ -309,6 +405,7 @@ def _raw_surfaces(data: dict[str, Any]) -> list[dict[str, Any]]:
 def analyze_inventory(data: dict[str, Any], *, api_host: str = DEFAULT_API_HOST) -> dict[str, Any]:
     bounties = _bounty_index(data)
     proof_by_source = _proof_sources(data, api_host)
+    pending_by_source = _pending_payout_sources(data, api_host)
     surfaces = _raw_surfaces(data)
     keys: list[str] = []
     for surface in surfaces:
@@ -339,6 +436,7 @@ def analyze_inventory(data: dict[str, Any], *, api_host: str = DEFAULT_API_HOST)
             fallback_bounty_issue=surface.get("fallback_bounty_issue"),
             bounties=bounties,
             proof_by_source=proof_by_source,
+            pending_by_source=pending_by_source,
             duplicate_counts=duplicate_counts,
         )
         if row is None:
@@ -355,6 +453,7 @@ def analyze_inventory(data: dict[str, Any], *, api_host: str = DEFAULT_API_HOST)
             "rows": len(rows),
             "bounty_issues": len(bounties),
             "already_paid": status_counts["already_paid"],
+            "pending_payout": status_counts["pending_payout"],
             "unpaid_candidate": status_counts["unpaid_candidate"],
             "duplicate_candidate": status_counts["duplicate_candidate"],
             "missing_bounty_ref": status_counts["missing_bounty_ref"],
@@ -363,6 +462,7 @@ def analyze_inventory(data: dict[str, Any], *, api_host: str = DEFAULT_API_HOST)
         },
         "likely_status_enum": [
             "already_paid",
+            "pending_payout",
             "unpaid_candidate",
             "duplicate_candidate",
             "missing_bounty_ref",
@@ -378,12 +478,17 @@ def format_markdown_report(report: dict[str, Any]) -> str:
     for key, value in report["summary"].items():
         lines.append(f"- **{key.replace('_', ' ')}**: {value}")
     lines.append("")
-    lines.append("| Status | Bounty | Claimant | Type | Source | Proof |")
+    lines.append("| Status | Bounty | Claimant | Type | Source | Proof/Pending |")
     lines.append("| --- | ---: | --- | --- | --- | --- |")
     for row in report["rows"]:
         bounty = row["bounty_issue"] if row["bounty_issue"] is not None else ""
         source = f"[source]({row['source_url']})"
-        proof = f"[proof]({row['proof_url']})" if row.get("proof_url") else ""
+        proof = ""
+        if row.get("proof_url"):
+            proof = f"[proof]({row['proof_url']})"
+        elif row.get("pending_proposal_url"):
+            proposal = row.get("pending_proposal_id") or "pending"
+            proof = f"[pending proposal {proposal}]({row['pending_proposal_url']})"
         lines.append(
             f"| `{row['likely_status']}` | {bounty} | {row['claimant']} | "
             f"{row['source_type']} | {source} | {proof} |"

@@ -44,8 +44,12 @@ Public reads:
 ```bash
 curl -s https://api.mrwk.online/api/v1/treasury/status
 curl -s https://api.mrwk.online/api/v1/treasury/proposals
+curl -s "https://api.mrwk.online/api/v1/treasury/proposals?status=pending&action=pay_bounty&to_account=github%3Aalice"
 curl -s https://api.mrwk.online/api/v1/treasury/proposals/<proposal_id>
 ```
+
+Use the filtered proposal list to reconcile pending payouts for one recipient
+without mixing unrelated `pay_bounty` proposals from busy review rounds.
 
 Legacy-compatible admin API reads remain available at
 `https://api.mrwk.ltclab.site` for existing scripts, but new examples should use
@@ -270,6 +274,22 @@ The command only reads PRs and issues; it does not close PRs, label issues, or
 post comments. It reports missing bounty references, closed or exhausted bounty
 references, dirty or unknown merge state, `mrwk:needs-info`, and likely duplicate
 PR scope within the same bounty issue.
+
+For reviewer-specific review-bounty preflight, generate a candidate report with
+the reviewer login:
+
+```bash
+python scripts/review_bounty_candidates.py \
+  --repo ramimbo/mergework \
+  --reviewer reviewer-login \
+  --format markdown
+```
+
+The report classifies open PRs as fresh review candidates, self-authored,
+already reviewed at the current head by that reviewer, already covered by
+current-head human reviews, waiting for author update, dirty/conflicted, missing
+the standard quality check, or `mrwk:needs-info`. It is advisory and read-only:
+it does not comment, label, close, accept claims, or pay anything.
 
 ### Claim Inventory
 
