@@ -138,6 +138,10 @@ def register_bounty_api_routes(
                     )
                 query = query.where(Bounty.status == normalized_status)
             if query_text is not None:
+                if contains_control_character(query_text):
+                    raise HTTPException(
+                        status_code=400, detail="q must not contain control characters"
+                    )
                 normalized_query = query_text.strip()
                 if normalized_query:
                     escaped_query = (

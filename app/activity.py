@@ -2,16 +2,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.control_chars import contains_control_character
 from app.db import session_scope
 from app.serializers import activity_to_dict
 
 
 def activity_context(session: Session, query: str | None = None) -> dict[str, Any]:
+    if query is not None and contains_control_character(query):
+        raise HTTPException(status_code=400, detail="q must not contain control characters")
     return activity_to_dict(session, query)
 
 

@@ -136,6 +136,10 @@ def account_accepted_work_context(session: Session, account: str) -> dict[str, A
 
 
 def _transaction_type_filter(tx_type: str | None) -> tuple[str, str | None]:
+    if tx_type is not None and contains_control_character(tx_type):
+        raise HTTPException(
+            status_code=400, detail="transaction type must not contain control characters"
+        )
     selected = (tx_type or "all").strip().lower()
     if selected in {"", "all"}:
         return "all", None
