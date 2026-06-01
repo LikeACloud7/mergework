@@ -52,6 +52,9 @@ def test_public_bounties_context_normalizes_filter_state() -> None:
             "/api/v1/bounties?status=open&q=proof&repo=ramimbo%2Fmergework"
             "&issue_number=649&sort=reward"
         ),
+        "clear_search_url": (
+            "/bounties?status=open&repo=ramimbo%2Fmergework&issue_number=649&sort=reward"
+        ),
         "status_filter_urls": {
             "all": ("/bounties?q=proof&repo=ramimbo%2Fmergework&issue_number=649&sort=reward"),
             "open": (
