@@ -275,6 +275,22 @@ post comments. It reports missing bounty references, closed or exhausted bounty
 references, dirty or unknown merge state, `mrwk:needs-info`, and likely duplicate
 PR scope within the same bounty issue.
 
+For reviewer-specific review-bounty preflight, generate a candidate report with
+the reviewer login:
+
+```bash
+python scripts/review_bounty_candidates.py \
+  --repo ramimbo/mergework \
+  --reviewer reviewer-login \
+  --format markdown
+```
+
+The report classifies open PRs as fresh review candidates, self-authored,
+already reviewed at the current head by that reviewer, already covered by
+current-head human reviews, waiting for author update, dirty/conflicted, missing
+the standard quality check, or `mrwk:needs-info`. It is advisory and read-only:
+it does not comment, label, close, accept claims, or pay anything.
+
 ### Claim Inventory
 
 Use the claim-inventory report when a busy bounty round needs a public,
