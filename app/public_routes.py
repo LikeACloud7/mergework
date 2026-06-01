@@ -254,6 +254,7 @@ def register_public_routes(
         availability: str | None = Query(None),
     ) -> HTMLResponse:
         reject_control_char_query_param(request, "limit")
+        reject_control_char_query_param(request, "issue_number")
         bounties = list_bounties_by_status(status, q, sort, limit, repo, issue_number, availability)
         return templates.TemplateResponse(
             request,

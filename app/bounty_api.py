@@ -191,6 +191,7 @@ def register_bounty_api_routes(
         availability: str | None = Query(None),
     ) -> list[dict[str, Any]]:
         reject_control_char_query_param(request, "limit")
+        reject_control_char_query_param(request, "issue_number")
         return _list_bounties_by_status(
             status,
             q,
@@ -213,6 +214,7 @@ def register_bounty_api_routes(
         availability: str | None = Query(None),
     ) -> dict[str, Any]:
         reject_control_char_query_param(request, "limit")
+        reject_control_char_query_param(request, "issue_number")
         return bounty_list_summary(
             _list_bounties_by_status(
                 status,
