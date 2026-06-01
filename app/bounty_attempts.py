@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -10,6 +10,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.control_chars import contains_control_character
 from app.db import session_scope
 from app.ledger.service import CONTROL_CHAR_RE, LedgerError, validate_public_url
 from app.models import Bounty, BountyAttempt
@@ -36,6 +37,15 @@ def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
+
+
+def _reject_control_char_query_param(request: Request, name: str) -> None:
+    for value in request.query_params.getlist(name):
+        if contains_control_character(value):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{name} must not contain control characters",
+            )
 
 
 def _attempt_effective_status(attempt: BountyAttempt, now: datetime) -> str:
@@ -152,7 +162,13 @@ def register_bounty_attempt_routes(
         return submitter_account
 
     @app.get("/api/v1/bounties/{bounty_id}/attempts")
-    def api_bounty_attempts(bounty_id: int, include_expired: bool = Query(False)) -> dict[str, Any]:
+    def api_bounty_attempts(
+        request: Request,
+        bounty_id: int,
+        include_expired: bool = Query(False),
+        limit: Annotated[int | None, Query(ge=1, le=100)] = None,
+    ) -> dict[str, Any]:
+        _reject_control_char_query_param(request, "limit")
         bounty_id = positive_bounty_id(bounty_id)
         now = _utc_now()
         with session_scope(db_url) as session:
@@ -160,7 +176,7 @@ def register_bounty_attempt_routes(
             if bounty is None:
                 raise HTTPException(status_code=404, detail="bounty not found")
             listing = list_bounty_attempts(
-                session, bounty, include_expired=include_expired, now=now
+                session, bounty, include_expired=include_expired, limit=limit, now=now
             )
             return {
                 "bounty_id": bounty_id,

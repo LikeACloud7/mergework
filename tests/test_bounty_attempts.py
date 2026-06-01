@@ -108,6 +108,18 @@ def test_bounty_attempts_register_list_duplicate_and_release(sqlite_url: str, mo
         "github:alice",
     ]
 
+    limited = client.get(f"/api/v1/bounties/{bounty.id}/attempts?limit=1")
+    assert limited.status_code == 200
+    assert [attempt["submitter_account"] for attempt in limited.json()["attempts"]] == [
+        "github:bob"
+    ]
+
+    assert client.get(f"/api/v1/bounties/{bounty.id}/attempts?limit=0").status_code == 422
+    assert client.get(f"/api/v1/bounties/{bounty.id}/attempts?limit=101").status_code == 422
+    control_padded_limit = client.get(f"/api/v1/bounties/{bounty.id}/attempts?limit=%C2%851")
+    assert control_padded_limit.status_code == 400
+    assert control_padded_limit.json()["detail"] == "limit must not contain control characters"
+
     wrong_submitter = client.post(
         f"/api/v1/bounty-attempts/{first_attempt['id']}/release",
         json={"submitter_account": "github:bob"},
