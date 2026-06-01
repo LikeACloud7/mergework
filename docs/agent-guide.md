@@ -224,6 +224,10 @@ curl -s -X POST "$MCP_HOST/mcp" \
   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_bounties","arguments":{}}}'
 ```
 
+Use `{"availability":"effectively_open"}` with `list_bounties` when you only want
+raw-open bounties that still have positive effective award capacity after
+pending payout or close proposals are considered.
+
 Inspect active attempt reservations for a bounty before opening overlapping
 work:
 

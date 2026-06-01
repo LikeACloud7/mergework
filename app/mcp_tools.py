@@ -7,6 +7,10 @@ from sqlalchemy import func, or_, select
 
 from app.accounts import normalized_account, normalized_wallet_address
 from app.bounty_attempts import list_bounty_attempts
+from app.bounty_availability import (
+    filter_bounties_by_availability,
+    normalize_bounty_availability_filter,
+)
 from app.bounty_sorting import normalize_bounty_sort, sort_bounties
 from app.control_chars import contains_control_character
 from app.db import session_scope
@@ -143,14 +147,23 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
                     text_filter = or_(text_filter, Bounty.issue_number == issue_number)
                 query = query.where(text_filter)
             sort = normalize_bounty_sort(optional_clean_str_arg("sort"))
+            availability = normalize_bounty_availability_filter(
+                optional_clean_str_arg("availability")
+            )
             limit = list_limit_arg()
-            if sort == "newest":
+            if sort == "newest" and availability == "all":
                 newest_bounties = session.scalars(
                     query.order_by(Bounty.id.desc()).limit(limit)
                 ).all()
                 return json.dumps(bounties_to_dict(newest_bounties, session=session))
             bounties = session.scalars(query.order_by(Bounty.id.desc())).all()
-            sorted_bounties = sort_bounties(bounties_to_dict(bounties, session=session), sort)
+            sorted_bounties = sort_bounties(
+                filter_bounties_by_availability(
+                    bounties_to_dict(bounties, session=session),
+                    availability,
+                ),
+                sort,
+            )
             return json.dumps(sorted_bounties[:limit])
         if name == "get_bounty":
             bounty = session.get(Bounty, positive_int_arg("id"))

@@ -234,7 +234,8 @@ def test_api_examples_document_bounty_list_response_shape() -> None:
     assert "capacity totals" in examples
     assert "full bounty" in examples
     assert "same optional `status`, `q`, `repo`," in examples
-    assert "`issue_number`, `sort`, and `limit` filters" in examples
+    assert "`issue_number`, `sort`, `limit`, and `availability` filters" in examples
+    assert "availability=effectively_open" in examples
     assert "Use `id` for the single-bounty API path" in examples
 
 

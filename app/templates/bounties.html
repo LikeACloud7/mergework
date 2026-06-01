@@ -21,8 +21,13 @@
     <option value="{{ limit_option }}"{% if selected_limit == limit_option %} selected{% endif %}>{{ limit_option }}</option>
     {% endfor %}
   </select>
+  <label for="bounty-availability">Availability</label>
+  <select id="bounty-availability" name="availability">
+    <option value="all"{% if selected_availability == "all" %} selected{% endif %}>All visible rows</option>
+    <option value="effectively_open"{% if selected_availability == "effectively_open" %} selected{% endif %}>Effectively open</option>
+  </select>
   <button type="submit">Search</button>
-  {% if query_text %}<a href="/bounties{% if selected_status or selected_sort != "newest" or selected_limit %}?{% if selected_status %}status={{ selected_status }}{% endif %}{% if selected_status and (selected_sort != "newest" or selected_limit) %}&{% endif %}{% if selected_sort != "newest" %}sort={{ selected_sort }}{% endif %}{% if selected_sort != "newest" and selected_limit %}&{% endif %}{% if selected_limit %}limit={{ selected_limit }}{% endif %}{% endif %}">Clear search</a>{% endif %}
+  {% if query_text %}<a href="{{ clear_search_url | safe }}">Clear search</a>{% endif %}
 </form>
 <nav aria-label="Bounty status filters">
   <a href="{{ status_filter_urls.all | safe }}"{% if not selected_status %} aria-current="page"{% endif %}>All</a>
@@ -85,7 +90,7 @@
     <p>{{ bounty.acceptance }}</p>
   </article>
   {% else %}
-  {% if query_text or selected_status %}
+  {% if query_text or selected_status or selected_availability != "all" %}
   <p>No bounties match these filters.</p>
   <p><a href="/bounties">Clear filters</a></p>
   {% else %}

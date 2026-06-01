@@ -46,6 +46,7 @@ def test_public_bounties_context_normalizes_filter_state() -> None:
             "awards": "Most award slots",
         },
         "selected_limit": None,
+        "selected_availability": "all",
         "limit_options": (10, 25, 50, 100, 200),
         "api_results_url": (
             "/api/v1/bounties?status=open&q=proof&repo=ramimbo%2Fmergework"
