@@ -648,6 +648,7 @@ def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) ->
     funded_all_type_filter_upper = client.get(f"/wallets/{funded_address}?type=ALL").text
     funded_all_type_filter_spaced = client.get(f"/wallets/{funded_address}?type=%20all%20").text
     funded_missing_type = client.get(f"/wallets/{funded_address}?type=bounty_payment").text
+    funded_unknown_type = client.get(f"/wallets/{funded_address}?type=not_a_real_type")
     transfer = client.get("/transfer").text
     me = client.get("/me").text
 
@@ -691,6 +692,11 @@ def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) ->
     assert "wallet_transfer" in funded_all_type_filter_spaced
     assert "test_funding" in funded_all_type_filter_spaced
     assert "No wallet transactions match this type." in funded_missing_type
+    assert funded_unknown_type.status_code == 400
+    assert funded_unknown_type.json()["detail"] == (
+        "transaction type must be one of: all, bounty_payment, bounty_reserve, "
+        "bounty_release, github_claim, wallet_transfer, genesis, test_funding"
+    )
     assert "Signed transfer" in transfer
     assert "both wallets are registered" in transfer
     assert "/static/wallet.js" in transfer
