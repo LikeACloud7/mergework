@@ -219,13 +219,13 @@ def wallet_page_context(
 
 
 def ledger_entry_page_context(
-    sequence: int, api_ledger_entry: Callable[[int], dict[str, Any]]
+    sequence: str, api_ledger_entry: Callable[[str], dict[str, Any]]
 ) -> dict[str, Any]:
     entry = api_ledger_entry(sequence)
     previous_sequence = entry["sequence"] - 1 if entry["sequence"] > 1 else None
     next_sequence = entry["sequence"] + 1
     try:
-        api_ledger_entry(next_sequence)
+        api_ledger_entry(str(next_sequence))
     except HTTPException as exc:
         if exc.status_code != 404:
             raise
@@ -246,9 +246,9 @@ def register_public_routes(
         [str | None, str | None, str | None, int | None, str | None, int | None, str | None],
         list[dict[str, Any]],
     ],
-    api_bounty: Callable[[int], dict[str, Any]],
+    api_bounty: Callable[[str], dict[str, Any]],
     api_ledger: Callable[[], list[dict[str, Any]]],
-    api_ledger_entry: Callable[[int], dict[str, Any]],
+    api_ledger_entry: Callable[[str], dict[str, Any]],
     api_proof: Callable[[str], dict[str, Any]],
 ) -> None:
     @app.get("/bounties", response_class=HTMLResponse)
@@ -281,7 +281,7 @@ def register_public_routes(
         )
 
     @app.get("/bounties/{bounty_id}", response_class=HTMLResponse)
-    def bounty_page(request: Request, bounty_id: int) -> HTMLResponse:
+    def bounty_page(request: Request, bounty_id: str) -> HTMLResponse:
         return templates.TemplateResponse(
             request, "bounty_detail.html", {"bounty": api_bounty(bounty_id)}
         )
@@ -291,7 +291,7 @@ def register_public_routes(
         return templates.TemplateResponse(request, "ledger.html", {"entries": api_ledger()})
 
     @app.get("/ledger/{sequence}", response_class=HTMLResponse)
-    def ledger_entry_page(request: Request, sequence: int) -> HTMLResponse:
+    def ledger_entry_page(request: Request, sequence: str) -> HTMLResponse:
         return templates.TemplateResponse(
             request, "ledger_entry.html", ledger_entry_page_context(sequence, api_ledger_entry)
         )

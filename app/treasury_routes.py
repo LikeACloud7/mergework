@@ -12,7 +12,7 @@ from app.db import session_scope
 from app.ledger.service import LedgerError
 from app.models import TreasuryProposal
 from app.openapi_request_bodies import TREASURY_CHALLENGE_BODY, TREASURY_PROPOSAL_BODY
-from app.path_params import SQLITE_INTEGER_MAX
+from app.path_params import SQLITE_INTEGER_MAX, positive_proposal_id
 from app.query_validation import reject_noncanonical_int_query_param
 from app.treasury import (
     TREASURY_ACTIONS,
@@ -25,14 +25,6 @@ from app.treasury import (
 from app.treasury_executor import execute_treasury_proposal_with_finalization
 
 TREASURY_PROPOSAL_STATUSES = ("pending", "executed", "blocked")
-
-
-def _positive_proposal_id(proposal_id: int) -> int:
-    if proposal_id <= 0:
-        raise HTTPException(status_code=400, detail="proposal id must be positive")
-    if proposal_id > SQLITE_INTEGER_MAX:
-        raise HTTPException(status_code=400, detail="proposal id is too large")
-    return proposal_id
 
 
 def _proposal_error(exc: LedgerError) -> HTTPException:
@@ -176,10 +168,10 @@ def register_treasury_routes(
             return treasury_status(session)
 
     @app.get("/api/v1/treasury/proposals/{proposal_id}")
-    def api_treasury_proposal(proposal_id: int) -> dict[str, Any]:
-        proposal_id = _positive_proposal_id(proposal_id)
+    def api_treasury_proposal(proposal_id: str) -> dict[str, Any]:
+        proposal_id_int = positive_proposal_id(proposal_id)
         with session_scope(db_url) as session:
-            proposal = session.get(TreasuryProposal, proposal_id)
+            proposal = session.get(TreasuryProposal, proposal_id_int)
             if proposal is None:
                 raise HTTPException(status_code=404, detail="proposal not found")
             return proposal_to_dict(proposal)
@@ -210,14 +202,14 @@ def register_treasury_routes(
 
     @app.post("/api/v1/treasury/proposals/{proposal_id}/execute")
     def api_execute_treasury_proposal(
-        proposal_id: int,
+        proposal_id: str,
         admin_login: str = Depends(require_admin_token),
     ) -> dict[str, Any]:
-        proposal_id = _positive_proposal_id(proposal_id)
+        proposal_id_int = positive_proposal_id(proposal_id)
         try:
             return execute_treasury_proposal_with_finalization(
                 db_url,
-                proposal_id=proposal_id,
+                proposal_id=proposal_id_int,
                 executed_by=admin_login,
                 github_issue_token=github_issue_token,
                 public_base_url=public_base_url,
@@ -230,11 +222,11 @@ def register_treasury_routes(
         openapi_extra=TREASURY_CHALLENGE_BODY,
     )
     async def api_create_treasury_challenge(
-        proposal_id: int,
+        proposal_id: str,
         request: Request,
         github_login: str = Depends(require_github_login),
     ) -> dict[str, Any]:
-        proposal_id = _positive_proposal_id(proposal_id)
+        proposal_id_int = positive_proposal_id(proposal_id)
         data = await json_object(request)
         challenge_type = data.get("challenge_type")
         reason = data.get("reason")
@@ -246,7 +238,7 @@ def register_treasury_routes(
             try:
                 challenge = create_treasury_challenge(
                     session,
-                    proposal_id=proposal_id,
+                    proposal_id=proposal_id_int,
                     github_login=github_login,
                     challenge_type=challenge_type,
                     reason=reason,

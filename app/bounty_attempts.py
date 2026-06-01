@@ -26,7 +26,7 @@ LoginDependency = Callable[[Request], str]
 RequiredString = Callable[[dict[str, Any], str], str]
 OptionalInteger = Callable[[dict[str, Any], str, int], int]
 NormalizeAccount = Callable[[str], str]
-PositiveBountyId = Callable[[int], int]
+PositiveBountyId = Callable[[int | str], int]
 
 
 def _utc_now() -> datetime:
@@ -155,33 +155,33 @@ def register_bounty_attempt_routes(
     @app.get("/api/v1/bounties/{bounty_id}/attempts")
     def api_bounty_attempts(
         request: Request,
-        bounty_id: int,
+        bounty_id: str,
         include_expired: bool = Query(False),
         limit: Annotated[int | None, Query(ge=1, le=100)] = None,
     ) -> dict[str, Any]:
         reject_noncanonical_int_query_param(request, "limit")
-        bounty_id = positive_bounty_id(bounty_id)
+        bounty_id_int = positive_bounty_id(bounty_id)
         now = _utc_now()
         with session_scope(db_url) as session:
-            bounty = session.get(Bounty, bounty_id)
+            bounty = session.get(Bounty, bounty_id_int)
             if bounty is None:
                 raise HTTPException(status_code=404, detail="bounty not found")
             listing = list_bounty_attempts(
                 session, bounty, include_expired=include_expired, limit=limit, now=now
             )
             return {
-                "bounty_id": bounty_id,
+                "bounty_id": bounty_id_int,
                 "warnings": listing["warnings"],
                 "attempts": listing["attempts"],
             }
 
     @app.post("/api/v1/bounties/{bounty_id}/attempts", openapi_extra=OPTIONAL_ATTEMPT_BODY)
     async def api_create_bounty_attempt(
-        bounty_id: int,
+        bounty_id: str,
         request: Request,
         github_login: str = Depends(require_github_login),
     ) -> JSONResponse:
-        bounty_id = positive_bounty_id(bounty_id)
+        bounty_id_int = positive_bounty_id(bounty_id)
         data = await _optional_json_object(request, json_object)
         submitter_account = attempt_submitter_account(data, github_login)
         ttl_seconds = optional_int(data, "ttl_seconds", DEFAULT_ATTEMPT_TTL_SECONDS)
@@ -205,10 +205,10 @@ def register_bounty_attempt_routes(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         now = _utc_now()
         with session_scope(db_url) as session:
-            bounty = session.get(Bounty, bounty_id)
+            bounty = session.get(Bounty, bounty_id_int)
             if bounty is None:
                 raise HTTPException(status_code=404, detail="bounty not found")
-            expire_stale_bounty_attempts(session, bounty_id, now, submitter_account)
+            expire_stale_bounty_attempts(session, bounty_id_int, now, submitter_account)
             bounty_data = bounty_to_dict(bounty, session=session)
             awards_remaining = int(bounty_data["effective_awards_remaining"])
             if bounty.status != "open" or awards_remaining <= 0:
@@ -216,14 +216,14 @@ def register_bounty_attempt_routes(
                     status_code=409,
                     content={
                         "status": "not_available",
-                        "bounty_id": bounty_id,
+                        "bounty_id": bounty_id_int,
                         "warnings": bounty_attempt_warnings(session, bounty, now),
                     },
                 )
             existing = session.scalar(
                 select(BountyAttempt)
                 .where(
-                    *_active_attempt_conditions(bounty_id, now),
+                    *_active_attempt_conditions(bounty_id_int, now),
                     BountyAttempt.submitter_account == submitter_account,
                 )
                 .order_by(BountyAttempt.created_at.desc(), BountyAttempt.id.desc())
@@ -239,7 +239,7 @@ def register_bounty_attempt_routes(
                     },
                 )
             attempt = BountyAttempt(
-                bounty_id=bounty_id,
+                bounty_id=bounty_id_int,
                 submitter_account=submitter_account,
                 source_url=source_url,
                 status="active",
@@ -252,11 +252,11 @@ def register_bounty_attempt_routes(
                 session.flush()
             except IntegrityError:
                 session.rollback()
-                bounty = session.get(Bounty, bounty_id)
+                bounty = session.get(Bounty, bounty_id_int)
                 existing = session.scalar(
                     select(BountyAttempt)
                     .where(
-                        *_active_attempt_conditions(bounty_id, now),
+                        *_active_attempt_conditions(bounty_id_int, now),
                         BountyAttempt.submitter_account == submitter_account,
                     )
                     .order_by(BountyAttempt.created_at.desc(), BountyAttempt.id.desc())

@@ -271,10 +271,10 @@ def register_bounty_api_routes(
             return proposal_to_dict(proposal)
 
     @app.get("/api/v1/bounties/{bounty_id}")
-    def api_bounty(bounty_id: int) -> dict[str, Any]:
-        bounty_id = positive_bounty_id(bounty_id)
+    def api_bounty(bounty_id: str) -> dict[str, Any]:
+        bounty_id_int = positive_bounty_id(bounty_id)
         with session_scope(db_url) as session:
-            bounty = session.get(Bounty, bounty_id)
+            bounty = session.get(Bounty, bounty_id_int)
             if bounty is None:
                 raise HTTPException(status_code=404, detail="bounty not found")
             result = bounty_to_dict(bounty, session=session)
@@ -295,11 +295,11 @@ def register_bounty_api_routes(
 
     @app.post("/api/v1/bounties/{bounty_id}/pay")
     async def api_pay_bounty(
-        bounty_id: int,
+        bounty_id: str,
         request: Request,
         admin_login: str = Depends(require_admin_token),
     ) -> Any:
-        bounty_id = positive_bounty_id(bounty_id)
+        bounty_id_int = positive_bounty_id(bounty_id)
         data = await json_object(request)
         try:
             requested_account = required_str(data, "to_account")
@@ -330,7 +330,7 @@ def register_bounty_api_routes(
                 verifier_result["note"] = note[:240]
         with session_scope(db_url) as session:
             existing_proof = _existing_payout_proof_for_submission(
-                session, bounty_id, clean_submission_url
+                session, bounty_id_int, clean_submission_url
             )
             if existing_proof is not None:
                 return JSONResponse(
@@ -342,7 +342,7 @@ def register_bounty_api_routes(
                     session,
                     action="pay_bounty",
                     payload={
-                        "bounty_id": bounty_id,
+                        "bounty_id": bounty_id_int,
                         "to_account": requested_account,
                         "submission_url": clean_submission_url,
                         "accepted_by": accepted_by,
@@ -356,11 +356,11 @@ def register_bounty_api_routes(
 
     @app.post("/api/v1/bounties/{bounty_id}/close")
     async def api_close_bounty(
-        bounty_id: int,
+        bounty_id: str,
         request: Request,
         admin_login: str = Depends(require_admin_token),
     ) -> dict[str, Any]:
-        bounty_id = positive_bounty_id(bounty_id)
+        bounty_id_int = positive_bounty_id(bounty_id)
         data = await json_object(request)
         reference = optional_str(data, "reference") if data.get("reference") is not None else None
         closed_by = optional_str(data, "closed_by", admin_login)
@@ -370,7 +370,7 @@ def register_bounty_api_routes(
                     session,
                     action="close_bounty",
                     payload={
-                        "bounty_id": bounty_id,
+                        "bounty_id": bounty_id_int,
                         "closed_by": closed_by,
                         "reference": reference,
                     },
