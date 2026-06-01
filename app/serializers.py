@@ -217,6 +217,16 @@ def _payload_bounty_id_filter(bounty_id: int) -> ColumnElement[bool]:
     )
 
 
+def _payload_account_filter(account: str) -> ColumnElement[bool]:
+    """Narrow pending-proposal scans for canonical JSON account fields."""
+    encoded_account = json.dumps(account, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    marker = f'"to_account":{encoded_account}'
+    return or_(
+        TreasuryProposal.payload_json.contains(f"{marker},"),
+        TreasuryProposal.payload_json.contains(f"{marker}}}"),
+    )
+
+
 def _pending_bounty_proposals_by_bounty_id(
     session: Session,
 ) -> dict[int, PendingBountyProposals]:
@@ -669,6 +679,72 @@ def accepted_work_for_account(session: Session, account: str) -> list[dict[str, 
     return accepted_work
 
 
+def pending_payouts_for_account(session: Session, account: str) -> list[dict[str, Any]]:
+    """Return accepted-but-not-yet-executed payout proposals for one account."""
+    proposals = session.scalars(
+        select(TreasuryProposal)
+        .where(
+            TreasuryProposal.status == "pending",
+            TreasuryProposal.action == "pay_bounty",
+            _payload_account_filter(account),
+        )
+        .order_by(TreasuryProposal.executes_after.asc(), TreasuryProposal.id.asc())
+    ).all()
+    pending: list[dict[str, Any]] = []
+    for proposal in proposals:
+        payload = _proposal_payload(proposal)
+        if payload is None or payload.get("to_account") != account:
+            continue
+        bounty_id = _proposal_bounty_id(payload)
+        bounty = session.get(Bounty, bounty_id) if bounty_id is not None else None
+        pending.append(
+            {
+                "proposal_id": proposal.id,
+                "proposal_url": f"/api/v1/treasury/proposals/{proposal.id}",
+                "status": proposal.status,
+                "amount_mrwk": format_mrwk(bounty.reward_microunits) if bounty else None,
+                "bounty_id": bounty_id,
+                "bounty_url": _bounty_detail_url(bounty_id),
+                "repo": bounty.repo if bounty else None,
+                "issue_number": bounty.issue_number if bounty else None,
+                "issue_url": bounty.issue_url if bounty else None,
+                "submission_url": payload.get("submission_url"),
+                "accepted_by": payload.get("accepted_by"),
+                "proposed_at": proposal.proposed_at.isoformat(),
+                "executes_after": proposal.executes_after.isoformat(),
+            }
+        )
+    return pending
+
+
+def pending_payout_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize pending payout proposal rows without treating them as paid."""
+    total_microunits = 0
+    for row in rows:
+        amount = row.get("amount_mrwk")
+        if amount is None:
+            continue
+        total_microunits += int(Decimal(str(amount)) * Decimal(1_000_000))
+    next_executes_after = min(
+        (str(row["executes_after"]) for row in rows if row.get("executes_after")),
+        default=None,
+    )
+    return {
+        "pending_awards": len(rows),
+        "pending_mrwk": format_mrwk(total_microunits),
+        "next_executes_after": next_executes_after,
+    }
+
+
+def empty_pending_payout_summary() -> dict[str, Any]:
+    """Return the stable empty shape for pending payout summaries."""
+    return {
+        "pending_awards": 0,
+        "pending_mrwk": "0",
+        "next_executes_after": None,
+    }
+
+
 def empty_accepted_summary() -> dict[str, Any]:
     """Return the stable empty shape for accepted-work summaries."""
     return {
@@ -693,6 +769,14 @@ def safe_accepted_work_for_account(session: Session, account: str) -> list[dict[
     """Return accepted-work rows, falling back to an empty list."""
     try:
         return accepted_work_for_account(session, account)
+    except Exception:
+        return []
+
+
+def safe_pending_payouts_for_account(session: Session, account: str) -> list[dict[str, Any]]:
+    """Return pending payout rows, falling back to an empty list."""
+    try:
+        return pending_payouts_for_account(session, account)
     except Exception:
         return []
 
