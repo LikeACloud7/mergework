@@ -18,7 +18,11 @@ from app.db import session_scope
 from app.ledger_views import account_ledger_transaction_types, account_ledger_transactions
 from app.models import Wallet
 from app.path_params import SQLITE_INTEGER_MAX, proof_hash_from_path
-from app.query_validation import reject_noncanonical_int_query_param
+from app.query_validation import (
+    reject_control_char_query_param,
+    reject_noncanonical_int_query_param,
+    reject_repeated_query_param,
+)
 from app.serializers import bounty_list_summary, wallet_to_dict
 from app.status import (
     CURRENT_TRANSFER_PATHS,
@@ -262,8 +266,12 @@ def register_public_routes(
         issue_number: int | None = Query(None, ge=1, le=SQLITE_INTEGER_MAX),
         availability: str | None = Query(None),
     ) -> HTMLResponse:
-        reject_noncanonical_int_query_param(request, "limit")
-        reject_noncanonical_int_query_param(request, "issue_number")
+        for name in ("status", "q", "limit", "sort", "repo", "issue_number", "availability"):
+            reject_repeated_query_param(request, name)
+        for name in ("status", "q", "sort", "repo", "availability"):
+            reject_control_char_query_param(request, name)
+        for name in ("limit", "issue_number"):
+            reject_noncanonical_int_query_param(request, name)
         bounties = list_bounties_by_status(status, q, sort, limit, repo, issue_number, availability)
         return templates.TemplateResponse(
             request,
@@ -298,6 +306,8 @@ def register_public_routes(
 
     @app.get("/wallets", response_class=HTMLResponse)
     def wallets_page(request: Request, q: str | None = Query(None)) -> HTMLResponse:
+        reject_control_char_query_param(request, "q")
+        reject_repeated_query_param(request, "q")
         with session_scope(db_url) as session:
             context = wallets_page_context(session, q)
         return templates.TemplateResponse(request, "wallets.html", context)
@@ -308,6 +318,12 @@ def register_public_routes(
         address: str,
         type: str | None = Query(None),  # noqa: A002
     ) -> HTMLResponse:
+        for value in request.query_params.getlist("type"):
+            if contains_control_character(value):
+                raise HTTPException(
+                    status_code=400, detail="transaction type must not contain control characters"
+                )
+        reject_repeated_query_param(request, "type")
         with session_scope(db_url) as session:
             context = wallet_page_context(session, address, type)
         return templates.TemplateResponse(request, "wallet_detail.html", context)

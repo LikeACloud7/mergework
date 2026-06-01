@@ -209,11 +209,20 @@ def test_activity_query_rejects_control_characters(sqlite_url: str) -> None:
 
     api_response = client.get("/api/v1/activity?q=%C2%85github")
     page_response = client.get("/activity?q=github%09")
+    masked_api_response = client.get("/api/v1/activity?q=%C2%85github&q=alice")
+    repeated_api_response = client.get("/api/v1/activity?q=github&q=alice")
+    repeated_page_response = client.get("/activity?q=github&q=alice")
 
     assert api_response.status_code == 400
     assert api_response.json()["detail"] == "q must not contain control characters"
     assert page_response.status_code == 400
     assert page_response.json()["detail"] == "q must not contain control characters"
+    assert masked_api_response.status_code == 400
+    assert masked_api_response.json()["detail"] == "q must not contain control characters"
+    assert repeated_api_response.status_code == 400
+    assert repeated_api_response.json()["detail"] == "q must be provided at most once"
+    assert repeated_page_response.status_code == 400
+    assert repeated_page_response.json()["detail"] == "q must be provided at most once"
 
 
 def test_activity_api_exposes_pending_payouts_separately_from_paid_work(

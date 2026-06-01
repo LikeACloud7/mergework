@@ -300,6 +300,33 @@ def test_bounties_page_honors_limit_filter(sqlite_url: str) -> None:
     assert controlled_limit.json()["detail"] == "limit must not contain control characters"
 
 
+def test_bounties_page_rejects_repeated_scalar_filters(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    cases = {
+        "/bounties?limit=not-an-int&limit=10": "limit must be provided at most once",
+        "/bounties?issue_number=bad&issue_number=64": "issue_number must be provided at most once",
+        "/bounties?status=bogus&status=open": "status must be provided at most once",
+        "/bounties?q=first&q=second": "q must be provided at most once",
+        "/bounties?sort=reward&sort=newest": "sort must be provided at most once",
+        "/bounties?repo=ramimbo%2Fmergework&repo=example%2Fother": (
+            "repo must be provided at most once"
+        ),
+        "/bounties?availability=all&availability=effectively_open": (
+            "availability must be provided at most once"
+        ),
+    }
+
+    for path, detail in cases.items():
+        response = client.get(path)
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == detail
+
+
 def test_bounties_page_rejects_sqlite_overflow_issue_number(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:

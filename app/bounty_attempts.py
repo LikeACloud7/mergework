@@ -14,7 +14,11 @@ from app.db import session_scope
 from app.ledger.service import CONTROL_CHAR_RE, LedgerError, validate_public_url
 from app.models import Bounty, BountyAttempt
 from app.openapi_request_bodies import OPTIONAL_ATTEMPT_BODY, OPTIONAL_ATTEMPT_RELEASE_BODY
-from app.query_validation import reject_noncanonical_int_query_param
+from app.query_validation import (
+    reject_control_char_query_param,
+    reject_noncanonical_int_query_param,
+    reject_repeated_query_param,
+)
 from app.serializers import bounty_to_dict
 
 DEFAULT_ATTEMPT_TTL_SECONDS = 24 * 60 * 60
@@ -159,6 +163,9 @@ def register_bounty_attempt_routes(
         include_expired: bool = Query(False),
         limit: Annotated[int | None, Query(ge=1, le=100)] = None,
     ) -> dict[str, Any]:
+        for name in ("include_expired", "limit"):
+            reject_repeated_query_param(request, name)
+        reject_control_char_query_param(request, "include_expired")
         reject_noncanonical_int_query_param(request, "limit")
         bounty_id_int = positive_bounty_id(bounty_id)
         now = _utc_now()

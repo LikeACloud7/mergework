@@ -265,6 +265,8 @@ def test_account_page_filters_transactions_by_type(sqlite_url: str) -> None:
     claims = client.get("/accounts/github:alice?tx_type=github_claim")
     invalid = client.get("/accounts/github:alice?tx_type=bogus")
     control = client.get("/accounts/github:alice?tx_type=%C2%85bounty_payment")
+    masked_control = client.get("/accounts/github:alice?tx_type=%C2%85bounty_payment&tx_type=all")
+    repeated = client.get("/accounts/github:alice?tx_type=bounty_payment&tx_type=all")
 
     assert all_rows.status_code == 200
     assert "Transaction type filters" in all_rows.text
@@ -287,6 +289,10 @@ def test_account_page_filters_transactions_by_type(sqlite_url: str) -> None:
 
     assert control.status_code == 400
     assert control.json()["detail"] == "transaction type must not contain control characters"
+    assert masked_control.status_code == 400
+    assert masked_control.json()["detail"] == "transaction type must not contain control characters"
+    assert repeated.status_code == 400
+    assert repeated.json()["detail"] == "tx_type must be provided at most once"
 
 
 def test_account_api_does_not_advertise_wallet_transfers_for_plain_accounts(

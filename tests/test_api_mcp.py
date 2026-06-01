@@ -89,6 +89,19 @@ def test_ledger_api_applies_default_limit_when_omitted(sqlite_url: str) -> None:
     assert isinstance(response.json(), list)
 
 
+def test_ledger_api_rejects_repeated_limit_before_using_later_value(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get("/api/v1/ledger?limit=not-an-int&limit=1")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "limit must be provided at most once"
+
+
 def test_head_requests_match_get_routes_without_body(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:

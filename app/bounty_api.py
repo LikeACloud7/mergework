@@ -27,7 +27,11 @@ from app.ledger.service import (
 )
 from app.models import Bounty, Proof, Submission
 from app.path_params import SQLITE_INTEGER_MAX, issue_number_search_value, positive_bounty_id
-from app.query_validation import reject_noncanonical_int_query_param
+from app.query_validation import (
+    reject_control_char_query_param,
+    reject_noncanonical_int_query_param,
+    reject_repeated_query_param,
+)
 from app.serializers import (
     bounties_to_dict,
     bounty_awards_to_dict,
@@ -193,8 +197,12 @@ def register_bounty_api_routes(
         issue_number: Annotated[int | None, Query(ge=1, le=SQLITE_INTEGER_MAX)] = None,
         availability: str | None = Query(None),
     ) -> list[dict[str, Any]]:
-        reject_noncanonical_int_query_param(request, "limit")
-        reject_noncanonical_int_query_param(request, "issue_number")
+        for name in ("status", "q", "limit", "sort", "repo", "issue_number", "availability"):
+            reject_repeated_query_param(request, name)
+        for name in ("status", "q", "sort", "repo", "availability"):
+            reject_control_char_query_param(request, name)
+        for name in ("limit", "issue_number"):
+            reject_noncanonical_int_query_param(request, name)
         return _list_bounties_by_status(
             status,
             q,
@@ -216,8 +224,12 @@ def register_bounty_api_routes(
         issue_number: Annotated[int | None, Query(ge=1, le=SQLITE_INTEGER_MAX)] = None,
         availability: str | None = Query(None),
     ) -> dict[str, Any]:
-        reject_noncanonical_int_query_param(request, "limit")
-        reject_noncanonical_int_query_param(request, "issue_number")
+        for name in ("status", "q", "limit", "sort", "repo", "issue_number", "availability"):
+            reject_repeated_query_param(request, name)
+        for name in ("status", "q", "sort", "repo", "availability"):
+            reject_control_char_query_param(request, name)
+        for name in ("limit", "issue_number"):
+            reject_noncanonical_int_query_param(request, name)
         return bounty_list_summary(
             _list_bounties_by_status(
                 status,
