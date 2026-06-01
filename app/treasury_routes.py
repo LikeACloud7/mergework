@@ -13,6 +13,7 @@ from app.ledger.service import LedgerError
 from app.models import TreasuryProposal
 from app.openapi_request_bodies import TREASURY_CHALLENGE_BODY, TREASURY_PROPOSAL_BODY
 from app.path_params import SQLITE_INTEGER_MAX
+from app.query_validation import reject_control_char_query_param
 from app.treasury import (
     TREASURY_ACTIONS,
     challenge_to_dict,
@@ -116,12 +117,14 @@ def register_treasury_routes(
 ) -> None:
     @app.get("/api/v1/treasury/proposals")
     def api_treasury_proposals(
+        request: Request,
         limit: Annotated[int, Query(ge=1, le=200)] = 100,
         action: Annotated[str | None, Query(max_length=40)] = None,
         status: Annotated[str | None, Query(max_length=40)] = None,
         to_account: Annotated[str | None, Query(max_length=128)] = None,
         bounty_id: Annotated[int | None, Query(ge=1, le=SQLITE_INTEGER_MAX)] = None,
     ) -> list[dict[str, Any]]:
+        reject_control_char_query_param(request, "limit")
         action_filter = _optional_query_filter(
             action,
             "action",

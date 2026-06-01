@@ -52,6 +52,19 @@ def test_ledger_api_rejects_out_of_range_limits(sqlite_url: str, limit: str) -> 
     assert response.status_code == 422
 
 
+def test_ledger_api_rejects_control_character_limit(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get("/api/v1/ledger?limit=%C2%8550")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "limit must not contain control characters"
+
+
 def test_head_requests_match_get_routes_without_body(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:

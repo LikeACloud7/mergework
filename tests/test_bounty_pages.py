@@ -294,6 +294,10 @@ def test_bounties_page_honors_limit_filter(sqlite_url: str) -> None:
     too_large_limit = client.get("/bounties?limit=201")
     assert too_large_limit.status_code == 422
 
+    controlled_limit = client.get("/bounties?limit=%C2%8550")
+    assert controlled_limit.status_code == 400
+    assert controlled_limit.json()["detail"] == "limit must not contain control characters"
+
 
 def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) -> None:
     create_schema(sqlite_url)

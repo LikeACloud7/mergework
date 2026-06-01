@@ -409,12 +409,15 @@ def test_treasury_proposals_list_honors_limit(
     limited = client.get("/api/v1/treasury/proposals?limit=1")
     too_small = client.get("/api/v1/treasury/proposals?limit=0")
     too_large = client.get("/api/v1/treasury/proposals?limit=201")
+    controlled_limit = client.get("/api/v1/treasury/proposals?limit=%C2%8550")
 
     assert limited.status_code == 200
     assert [proposal["id"] for proposal in limited.json()] == [second["id"]]
     assert first["id"] not in [proposal["id"] for proposal in limited.json()]
     assert too_small.status_code == 422
     assert too_large.status_code == 422
+    assert controlled_limit.status_code == 400
+    assert controlled_limit.json()["detail"] == "limit must not contain control characters"
 
 
 def test_treasury_proposals_list_filters_by_recipient_before_limit(

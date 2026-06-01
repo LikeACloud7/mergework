@@ -409,6 +409,14 @@ def test_bounty_api_limit_rejects_out_of_range_values(sqlite_url: str) -> None:
     assert client.get("/api/v1/bounties/summary?limit=0").status_code == 422
     assert client.get("/api/v1/bounties/summary?limit=201").status_code == 422
 
+    controlled_list = client.get("/api/v1/bounties?limit=%C2%8550")
+    controlled_summary = client.get("/api/v1/bounties/summary?limit=50%C2%85")
+
+    assert controlled_list.status_code == 400
+    assert controlled_list.json()["detail"] == "limit must not contain control characters"
+    assert controlled_summary.status_code == 400
+    assert controlled_summary.json()["detail"] == "limit must not contain control characters"
+
 
 def test_bounty_api_filters_by_exact_repo_and_issue_number(sqlite_url: str) -> None:
     create_schema(sqlite_url)
