@@ -124,6 +124,18 @@ def test_bounty_attempts_register_list_duplicate_and_release(sqlite_url: str, mo
     assert control_padded_limit.status_code == 400
     assert control_padded_limit.json()["detail"] == "limit must not contain control characters"
 
+    repeated_limit = client.get(f"/api/v1/bounties/{bounty.id}/attempts?limit=bad&limit=1")
+    assert repeated_limit.status_code == 400
+    assert repeated_limit.json()["detail"] == "limit must be provided at most once"
+
+    repeated_include_expired = client.get(
+        f"/api/v1/bounties/{bounty.id}/attempts?include_expired=bad&include_expired=false"
+    )
+    assert repeated_include_expired.status_code == 400
+    assert (
+        repeated_include_expired.json()["detail"] == "include_expired must be provided at most once"
+    )
+
     wrong_submitter = client.post(
         f"/api/v1/bounty-attempts/{first_attempt['id']}/release",
         json={"submitter_account": "github:bob"},
