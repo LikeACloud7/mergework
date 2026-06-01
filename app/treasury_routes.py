@@ -125,6 +125,7 @@ def register_treasury_routes(
         bounty_id: Annotated[int | None, Query(ge=1, le=SQLITE_INTEGER_MAX)] = None,
     ) -> list[dict[str, Any]]:
         reject_control_char_query_param(request, "limit")
+        reject_control_char_query_param(request, "bounty_id")
         action_filter = _optional_query_filter(
             action,
             "action",
