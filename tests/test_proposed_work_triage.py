@@ -4,7 +4,7 @@ import json
 import subprocess
 from typing import Any
 
-from scripts.proposed_work_triage import analyze_proposed_work, format_markdown, main
+from scripts.proposed_work_triage import _run_gh, analyze_proposed_work, format_markdown, main
 
 
 def _complete_body(topic: str = "queue review") -> str:
@@ -383,3 +383,28 @@ def test_proposed_work_triage_live_mode_uses_read_only_gh(monkeypatch, capsys) -
         call[:3] == ["gh", "issue", "list"] or call[:3] == ["gh", "issue", "view"] for call in calls
     )
     assert not any("comment" in call or "edit" in call for call in calls)
+
+
+def test_run_gh_reports_timeout_and_invalid_json(monkeypatch) -> None:
+    def fake_timeout(args, **kwargs):  # noqa: ANN001, ANN202, ARG001
+        raise subprocess.TimeoutExpired(args, timeout=15)
+
+    monkeypatch.setattr("scripts.proposed_work_triage.subprocess.run", fake_timeout)
+    try:
+        _run_gh(["issue", "list"])
+    except RuntimeError as exc:
+        assert "timed out" in str(exc)
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected timeout RuntimeError")
+
+    def fake_invalid_json(args, **kwargs):  # noqa: ANN001, ANN202
+        return subprocess.CompletedProcess(args, 0, stdout="not-json", stderr="")
+
+    monkeypatch.setattr("scripts.proposed_work_triage.subprocess.run", fake_invalid_json)
+    try:
+        _run_gh(["issue", "list"])
+    except RuntimeError as exc:
+        assert "invalid JSON" in str(exc)
+        assert "not-json" in str(exc)
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected invalid JSON RuntimeError")

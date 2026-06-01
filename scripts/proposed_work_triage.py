@@ -331,16 +331,23 @@ def format_markdown(report: dict[str, Any]) -> str:
 
 
 def _run_gh(args: list[str]) -> Any:
-    result = subprocess.run(
-        ["gh", *args],
-        capture_output=True,
-        text=True,
-        timeout=GH_TIMEOUT_SECONDS,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["gh", *args],
+            capture_output=True,
+            text=True,
+            timeout=GH_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"gh command timed out after {GH_TIMEOUT_SECONDS}s") from exc
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or result.stdout.strip())
-    return json.loads(result.stdout)
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        excerpt = result.stdout[:200].strip()
+        raise RuntimeError(f"gh returned invalid JSON: {excerpt}") from exc
 
 
 def _gh_issue_search(repo: str, query: str, limit: int) -> list[dict[str, Any]]:
