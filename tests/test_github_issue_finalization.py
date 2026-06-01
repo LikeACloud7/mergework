@@ -29,6 +29,11 @@ class _FakeResponse:
 
 def test_finalize_created_bounty_issue_adds_label_and_claims_open_comment() -> None:
     requests: list[Request] = []
+    stale_status = (
+        "Status: proposed bounty. This issue is not claimable until the treasury proposal "
+        "executes, the public bounty page exists, and the `Reserved on MergeWork` "
+        "claims-open comment is posted."
+    )
 
     def fake_opener(request: Request, timeout: float) -> _FakeResponse:
         requests.append(request)
@@ -37,7 +42,11 @@ def test_finalize_created_bounty_issue_adds_label_and_claims_open_comment() -> N
                 {
                     "body": (
                         "## MRWK Bounty\n\n"
-                        "Status: proposed bounty. This issue is not claimable yet."
+                        f"{stale_status}\n\n"
+                        "Reward: `50 MRWK per accepted award`\n"
+                        "Max awards: `10`\n\n"
+                        "## Work Needed\n\n"
+                        "Normal bounty details stay here."
                     )
                 }
             )
@@ -82,7 +91,10 @@ def test_finalize_created_bounty_issue_adds_label_and_claims_open_comment() -> N
     issue_body = json.loads((requests[3].data or b"").decode())["body"]
     assert issue_body.startswith(LIVE_BOUNTY_STATUS_BLOCK_START)
     assert "Reserved on MergeWork: https://mrwk.example/bounties/123" in issue_body
-    assert "Status: proposed bounty. This issue is not claimable yet." in issue_body
+    assert stale_status not in issue_body
+    assert "Reward: `50 MRWK per accepted award`" in issue_body
+    assert "Max awards: `10`" in issue_body
+    assert "Normal bounty details stay here." in issue_body
 
 
 def test_finalize_created_bounty_issue_replaces_existing_live_status_block() -> None:
@@ -98,7 +110,15 @@ def test_finalize_created_bounty_issue_replaces_existing_live_status_block() -> 
     def fake_opener(request: Request, timeout: float) -> _FakeResponse:
         requests.append(request)
         if request.get_method() == "GET":
-            return _FakeResponse({"body": f"Intro\n\n{stale_block}\n\nOriginal details"})
+            return _FakeResponse(
+                {
+                    "body": (
+                        f"Intro\n\n{stale_block}\n\n"
+                        "Status: proposed bounty. This issue is not claimable yet.\n\n"
+                        "Original details"
+                    )
+                }
+            )
         if request.full_url.endswith("/comments"):
             return _FakeResponse(
                 {"html_url": "https://github.com/ramimbo/mergework/issues/77#issuecomment-1"}
@@ -119,6 +139,7 @@ def test_finalize_created_bounty_issue_replaces_existing_live_status_block() -> 
     assert issue_body.count(LIVE_BOUNTY_STATUS_BLOCK_START) == 1
     assert issue_body.count(LIVE_BOUNTY_STATUS_BLOCK_END) == 1
     assert "old status" not in issue_body
+    assert "Status: proposed bounty. This issue is not claimable yet." not in issue_body
     assert issue_body.startswith("Intro\n\n")
     assert issue_body.endswith("\n\nOriginal details")
 

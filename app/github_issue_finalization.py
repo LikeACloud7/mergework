@@ -13,6 +13,14 @@ USER_AGENT = "MergeWork"
 API_VERSION = "2022-11-28"
 LIVE_BOUNTY_STATUS_BLOCK_START = "<!-- mergework:mrwk:live-bounty-status:start -->"
 LIVE_BOUNTY_STATUS_BLOCK_END = "<!-- mergework:mrwk:live-bounty-status:end -->"
+STALE_PENDING_BOUNTY_STATUS_TEXT = (
+    (
+        "Status: proposed bounty. This issue is not claimable until the treasury proposal "
+        "executes, the public bounty page exists, and the `Reserved on MergeWork` "
+        "claims-open comment is posted."
+    ),
+    "Status: proposed bounty. This issue is not claimable yet.",
+)
 PAID_BOUNTY_FINALIZATION_COMMENT_MARKER = "<!-- mergework:mrwk:paid-bounty-finalized -->"
 
 
@@ -172,14 +180,26 @@ def _live_bounty_status_block(bounty_url: str) -> str:
     )
 
 
+def _without_stale_pending_bounty_status_text(body: str) -> str:
+    paragraphs = body.split("\n\n")
+    filtered = [
+        paragraph
+        for paragraph in paragraphs
+        if paragraph.strip() not in STALE_PENDING_BOUNTY_STATUS_TEXT
+    ]
+    return "\n\n".join(filtered).strip("\n")
+
+
 def _issue_body_with_live_bounty_status(body: str, bounty_url: str) -> str:
     block = _live_bounty_status_block(bounty_url)
     start = body.find(LIVE_BOUNTY_STATUS_BLOCK_START)
     end = body.find(LIVE_BOUNTY_STATUS_BLOCK_END)
     if start != -1 and end != -1 and start < end:
         end += len(LIVE_BOUNTY_STATUS_BLOCK_END)
-        return f"{body[:start]}{block}{body[end:]}"
-    return f"{block}\n\n{body}" if body else block
+        updated = f"{body[:start]}{block}{body[end:]}"
+    else:
+        updated = f"{block}\n\n{body}" if body else block
+    return _without_stale_pending_bounty_status_text(updated)
 
 
 def _refresh_live_bounty_issue_body(
