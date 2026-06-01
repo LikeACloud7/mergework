@@ -102,6 +102,8 @@ def register_bounty_api_routes(
         query_text: str | None = None,
         sort: str | None = None,
         limit: int | None = None,
+        repo: str | None = None,
+        issue_number: int | None = None,
     ) -> list[dict[str, Any]]:
         try:
             normalized_sort = normalize_bounty_sort(sort)
@@ -133,15 +135,25 @@ def register_bounty_api_routes(
                         .replace("_", "\\_")
                     )
                     like_query = f"%{escaped_query}%"
-                    issue_number = issue_number_search_value(normalized_query)
+                    query_issue_number = issue_number_search_value(normalized_query)
                     text_filter = or_(
                         func.lower(Bounty.repo).like(like_query, escape="\\"),
                         func.lower(Bounty.title).like(like_query, escape="\\"),
                         func.lower(Bounty.acceptance).like(like_query, escape="\\"),
                     )
-                    if issue_number is not None:
-                        text_filter = or_(text_filter, Bounty.issue_number == issue_number)
+                    if query_issue_number is not None:
+                        text_filter = or_(text_filter, Bounty.issue_number == query_issue_number)
                     query = query.where(text_filter)
+            if repo is not None:
+                if contains_control_character(repo):
+                    raise HTTPException(
+                        status_code=400, detail="repo must not contain control characters"
+                    )
+                normalized_repo = repo.strip().lower()
+                if normalized_repo:
+                    query = query.where(func.lower(Bounty.repo) == normalized_repo)
+            if issue_number is not None:
+                query = query.where(Bounty.issue_number == issue_number)
             bounties = session.scalars(query.order_by(Bounty.id.desc())).all()
             sorted_bounties = sort_bounties(
                 bounties_to_dict(bounties, session=session),
@@ -157,8 +169,12 @@ def register_bounty_api_routes(
         q: str | None = Query(None),
         limit: Annotated[int | None, Query(ge=1, le=200)] = None,
         sort: str | None = Query(None),
+        repo: str | None = Query(None),
+        issue_number: Annotated[int | None, Query(ge=1)] = None,
     ) -> list[dict[str, Any]]:
-        return _list_bounties_by_status(status, q, sort=sort, limit=limit)
+        return _list_bounties_by_status(
+            status, q, sort=sort, limit=limit, repo=repo, issue_number=issue_number
+        )
 
     @app.get("/api/v1/bounties/summary")
     def api_bounties_summary(
@@ -166,8 +182,14 @@ def register_bounty_api_routes(
         q: str | None = Query(None),
         limit: Annotated[int | None, Query(ge=1, le=200)] = None,
         sort: str | None = Query(None),
+        repo: str | None = Query(None),
+        issue_number: Annotated[int | None, Query(ge=1)] = None,
     ) -> dict[str, Any]:
-        return bounty_list_summary(_list_bounties_by_status(status, q, sort=sort, limit=limit))
+        return bounty_list_summary(
+            _list_bounties_by_status(
+                status, q, sort=sort, limit=limit, repo=repo, issue_number=issue_number
+            )
+        )
 
     @app.get("/api/v1/admin/webhook-events")
     def api_admin_webhook_events(

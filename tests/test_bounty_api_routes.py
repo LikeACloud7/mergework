@@ -408,3 +408,59 @@ def test_bounty_api_limit_rejects_out_of_range_values(sqlite_url: str) -> None:
     assert client.get("/api/v1/bounties?limit=201").status_code == 422
     assert client.get("/api/v1/bounties/summary?limit=0").status_code == 422
     assert client.get("/api/v1/bounties/summary?limit=201").status_code == 422
+
+
+def test_bounty_api_filters_by_exact_repo_and_issue_number(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        mergework_649 = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=649,
+            issue_url="https://github.com/ramimbo/mergework/issues/649",
+            title="MergeWork proposed-work intake",
+            reward_mrwk="50",
+            max_awards=20,
+            acceptance="Useful proposed-work issue submissions.",
+        )
+        other_mergework = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=650,
+            issue_url="https://github.com/ramimbo/mergework/issues/650",
+            title="Other MergeWork bounty",
+            reward_mrwk="25",
+            acceptance="Other source issue.",
+        )
+        other_repo_same_issue = create_bounty(
+            session,
+            repo="example/other",
+            issue_number=649,
+            issue_url="https://github.com/example/other/issues/649",
+            title="Same issue number in another repo",
+            reward_mrwk="10",
+            acceptance="Same issue number should remain distinguishable by repo.",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    by_repo = client.get("/api/v1/bounties?repo=RAMIMBO%2FMergeWork")
+    exact = client.get("/api/v1/bounties?repo=ramimbo%2Fmergework&issue_number=649")
+    by_issue = client.get("/api/v1/bounties?issue_number=649")
+    summary = client.get("/api/v1/bounties/summary?repo=ramimbo%2Fmergework")
+    composed = client.get("/api/v1/bounties?repo=ramimbo%2Fmergework&q=proposed-work")
+
+    assert [row["id"] for row in by_repo.json()] == [other_mergework.id, mergework_649.id]
+    assert [row["id"] for row in exact.json()] == [mergework_649.id]
+    assert [row["id"] for row in by_issue.json()] == [
+        other_repo_same_issue.id,
+        mergework_649.id,
+    ]
+    assert summary.json()["bounties_shown"] == 2
+    assert summary.json()["open_awards"] == 21
+    assert [row["id"] for row in composed.json()] == [mergework_649.id]
+
+    invalid_repo = client.get("/api/v1/bounties?repo=ramimbo%C2%85mergework")
+    assert invalid_repo.status_code == 400
+    assert invalid_repo.json()["detail"] == "repo must not contain control characters"

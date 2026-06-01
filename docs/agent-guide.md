@@ -53,7 +53,12 @@ filters:
 curl -s "$API_HOST/api/v1/bounties/summary"
 curl -s "$API_HOST/api/v1/bounties/summary?status=open"
 curl -s "$API_HOST/api/v1/bounties/summary?q=docs"
+curl -s "$API_HOST/api/v1/bounties/summary?repo=ramimbo%2Fmergework&issue_number=649"
 ```
+
+When your workflow starts from a GitHub issue URL, prefer exact
+`repo=owner/name` and `issue_number=N` filters on `/api/v1/bounties` or
+`/api/v1/bounties/summary`. Use `q` only for broader text discovery.
 
 Inspect one bounty, accepted-work activity, a ledger page, and a proof:
 
