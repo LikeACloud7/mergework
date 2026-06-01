@@ -142,6 +142,13 @@ on the proposal and confirm the issue has both `mrwk:bounty` and the
 or partial, use the manual fallback rules above after confirming the public
 bounty row exists.
 
+The production treasury executor also finalizes fully paid bounty issues. It
+only acts on bounty rows whose stored status is `paid`; it must not close rounds
+that are merely full because pending payout proposals consume effective
+capacity. Successful paid-issue finalization adds `mrwk:paid`, posts a concise
+filled-and-paid comment when needed, closes the GitHub issue, and records a
+local finalization marker so later executor passes do not repeat the comment.
+
 ## Accept Work
 
 ### PR Bounties
