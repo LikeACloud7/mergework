@@ -299,6 +299,8 @@ def register_public_routes(
 
     @app.get("/wallets", response_class=HTMLResponse)
     def wallets_page(request: Request, q: str | None = Query(None)) -> HTMLResponse:
+        reject_control_char_query_param(request, "q")
+        reject_repeated_query_param(request, "q")
         with session_scope(db_url) as session:
             context = wallets_page_context(session, q)
         return templates.TemplateResponse(request, "wallets.html", context)
@@ -309,6 +311,12 @@ def register_public_routes(
         address: str,
         type: str | None = Query(None),  # noqa: A002
     ) -> HTMLResponse:
+        for value in request.query_params.getlist("type"):
+            if contains_control_character(value):
+                raise HTTPException(
+                    status_code=400, detail="transaction type must not contain control characters"
+                )
+        reject_repeated_query_param(request, "type")
         with session_scope(db_url) as session:
             context = wallet_page_context(session, address, type)
         return templates.TemplateResponse(request, "wallet_detail.html", context)

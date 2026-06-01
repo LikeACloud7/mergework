@@ -14,6 +14,7 @@ from app.ledger.service import TREASURY_ACCOUNT, format_mrwk, get_balance
 from app.ledger_views import account_ledger_transactions
 from app.models import Account
 from app.path_params import SQLITE_INTEGER_MAX
+from app.query_validation import reject_repeated_query_param
 from app.serializers import (
     accepted_work_for_account,
     account_accepted_summary,
@@ -187,6 +188,12 @@ def register_account_routes(app: FastAPI, *, db_url: str, templates: Jinja2Templ
     def account_page(
         request: Request, account: str, tx_type: str | None = Query(None)
     ) -> HTMLResponse:
+        for value in request.query_params.getlist("tx_type"):
+            if contains_control_character(value):
+                raise HTTPException(
+                    status_code=400, detail="transaction type must not contain control characters"
+                )
+        reject_repeated_query_param(request, "tx_type")
         with session_scope(db_url) as session:
             context = account_page_context(session, account, tx_type)
         return templates.TemplateResponse(request, "account.html", context)
