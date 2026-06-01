@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.db import create_schema, session_scope
 from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
+from app.path_params import SQLITE_INTEGER_MAX
 from app.treasury import propose_treasury_action
 
 
@@ -408,6 +409,27 @@ def test_bounty_api_limit_rejects_out_of_range_values(sqlite_url: str) -> None:
     assert client.get("/api/v1/bounties?limit=201").status_code == 422
     assert client.get("/api/v1/bounties/summary?limit=0").status_code == 422
     assert client.get("/api/v1/bounties/summary?limit=201").status_code == 422
+
+
+def test_bounty_api_issue_number_rejects_sqlite_overflow_values(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    oversized_issue_number = SQLITE_INTEGER_MAX + 1
+
+    bounties = client.get(f"/api/v1/bounties?issue_number={oversized_issue_number}")
+    summary = client.get(f"/api/v1/bounties/summary?issue_number={oversized_issue_number}")
+
+    assert bounties.status_code == 422
+    assert summary.status_code == 422
+
+    at_limit_bounties = client.get(f"/api/v1/bounties?issue_number={SQLITE_INTEGER_MAX}")
+    at_limit_summary = client.get(f"/api/v1/bounties/summary?issue_number={SQLITE_INTEGER_MAX}")
+
+    assert at_limit_bounties.status_code == 200
+    assert at_limit_summary.status_code == 200
 
 
 def test_bounty_api_filters_by_exact_repo_and_issue_number(sqlite_url: str) -> None:

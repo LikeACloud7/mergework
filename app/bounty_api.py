@@ -27,7 +27,7 @@ from app.ledger.service import (
     validate_public_url,
 )
 from app.models import Bounty, Proof, Submission
-from app.path_params import issue_number_search_value, positive_bounty_id
+from app.path_params import SQLITE_INTEGER_MAX, issue_number_search_value, positive_bounty_id
 from app.serializers import (
     bounties_to_dict,
     bounty_awards_to_dict,
@@ -185,7 +185,7 @@ def register_bounty_api_routes(
         limit: Annotated[int | None, Query(ge=1, le=200)] = None,
         sort: str | None = Query(None),
         repo: str | None = Query(None),
-        issue_number: Annotated[int | None, Query(ge=1)] = None,
+        issue_number: Annotated[int | None, Query(ge=1, le=SQLITE_INTEGER_MAX)] = None,
         availability: str | None = Query(None),
     ) -> list[dict[str, Any]]:
         return _list_bounties_by_status(
@@ -205,7 +205,7 @@ def register_bounty_api_routes(
         limit: Annotated[int | None, Query(ge=1, le=200)] = None,
         sort: str | None = Query(None),
         repo: str | None = Query(None),
-        issue_number: Annotated[int | None, Query(ge=1)] = None,
+        issue_number: Annotated[int | None, Query(ge=1, le=SQLITE_INTEGER_MAX)] = None,
         availability: str | None = Query(None),
     ) -> dict[str, Any]:
         return bounty_list_summary(
