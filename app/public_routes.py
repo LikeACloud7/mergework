@@ -205,6 +205,8 @@ def wallet_page_context(
             status_code=400, detail="transaction type must not contain control characters"
         )
     selected_transaction_type = transaction_type.strip() if transaction_type is not None else ""
+    if selected_transaction_type.lower() == "all":
+        selected_transaction_type = ""
     return {
         "wallet": wallet_to_dict(session, wallet),
         "transactions": account_ledger_transactions(

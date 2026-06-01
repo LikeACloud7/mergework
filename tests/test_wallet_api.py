@@ -644,6 +644,9 @@ def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) ->
     detail = client.get(f"/wallets/{address}").text
     funded_detail = client.get(f"/wallets/{funded_address}").text
     funded_type_filter = client.get(f"/wallets/{funded_address}?type=test_funding").text
+    funded_all_type_filter = client.get(f"/wallets/{funded_address}?type=all").text
+    funded_all_type_filter_upper = client.get(f"/wallets/{funded_address}?type=ALL").text
+    funded_all_type_filter_spaced = client.get(f"/wallets/{funded_address}?type=%20all%20").text
     funded_missing_type = client.get(f"/wallets/{funded_address}?type=bounty_payment").text
     transfer = client.get("/transfer").text
     me = client.get("/me").text
@@ -679,6 +682,14 @@ def test_wallet_pages_expose_transfer_and_github_claim_flows(sqlite_url: str) ->
     assert "Filter wallet transactions" in funded_detail
     assert 'value="test_funding" selected' in funded_type_filter
     assert "Showing test_funding transactions." in funded_type_filter
+    assert "Showing all transactions." not in funded_all_type_filter
+    assert "wallet_transfer" in funded_all_type_filter
+    assert "test_funding" in funded_all_type_filter
+    assert "No wallet transactions match this type." not in funded_all_type_filter
+    assert "wallet_transfer" in funded_all_type_filter_upper
+    assert "test_funding" in funded_all_type_filter_upper
+    assert "wallet_transfer" in funded_all_type_filter_spaced
+    assert "test_funding" in funded_all_type_filter_spaced
     assert "No wallet transactions match this type." in funded_missing_type
     assert "Signed transfer" in transfer
     assert "both wallets are registered" in transfer
