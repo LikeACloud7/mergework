@@ -1013,6 +1013,77 @@ def test_mcp_rejects_oversized_integer_arguments_without_500(
 @pytest.mark.parametrize(
     ("tool_name", "arguments", "request_id"),
     [
+        ("list_bounties", {"limit": "03"}, 21),
+        ("list_bounties", {"limit": "+3"}, 22),
+        ("list_bounties", {"limit": " 3"}, 23),
+        ("get_bounty", {"id": "099"}, 24),
+        ("get_bounty", {"id": "+99"}, 25),
+        ("get_ledger_entry", {"sequence": "01"}, 26),
+        ("submit_work_proof", {"bounty_id": "099"}, 27),
+        ("submit_work_proof", {"issue_number": "0656"}, 28),
+    ],
+)
+def test_mcp_rejects_noncanonical_integer_string_arguments(
+    sqlite_url: str, tool_name: str, arguments: dict[str, object], request_id: int
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/call",
+            "params": {"name": tool_name, "arguments": arguments},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "error": {"code": -32602, "message": "invalid tool arguments"},
+    }
+
+
+def test_mcp_accepts_canonical_integer_string_arguments(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=656,
+            issue_url="https://github.com/ramimbo/mergework/issues/656",
+            title="MCP canonical integer args",
+            reward_mrwk="75",
+            acceptance="MCP should keep canonical numeric string compatibility.",
+        )
+        bounty_id = bounty.id
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 29,
+            "method": "tools/call",
+            "params": {"name": "get_bounty", "arguments": {"id": str(bounty_id)}},
+        },
+    )
+
+    payload = json.loads(response.json()["result"]["content"][0]["text"])
+    assert payload["id"] == bounty_id
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "arguments", "request_id"),
+    [
         ("get_balance", {"account": True}, 13),
         ("get_balance", {"account": 123}, 14),
         ("get_balance", {"account": ""}, 15),
