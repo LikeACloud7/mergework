@@ -10,11 +10,11 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.control_chars import contains_control_character
 from app.db import session_scope
 from app.ledger.service import CONTROL_CHAR_RE, LedgerError, validate_public_url
 from app.models import Bounty, BountyAttempt
 from app.openapi_request_bodies import OPTIONAL_ATTEMPT_BODY, OPTIONAL_ATTEMPT_RELEASE_BODY
+from app.query_validation import reject_noncanonical_int_query_param
 from app.serializers import bounty_to_dict
 
 DEFAULT_ATTEMPT_TTL_SECONDS = 24 * 60 * 60
@@ -37,15 +37,6 @@ def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
-
-
-def _reject_control_char_query_param(request: Request, name: str) -> None:
-    for value in request.query_params.getlist(name):
-        if contains_control_character(value):
-            raise HTTPException(
-                status_code=400,
-                detail=f"{name} must not contain control characters",
-            )
 
 
 def _attempt_effective_status(attempt: BountyAttempt, now: datetime) -> str:
@@ -168,7 +159,7 @@ def register_bounty_attempt_routes(
         include_expired: bool = Query(False),
         limit: Annotated[int | None, Query(ge=1, le=100)] = None,
     ) -> dict[str, Any]:
-        _reject_control_char_query_param(request, "limit")
+        reject_noncanonical_int_query_param(request, "limit")
         bounty_id = positive_bounty_id(bounty_id)
         now = _utc_now()
         with session_scope(db_url) as session:

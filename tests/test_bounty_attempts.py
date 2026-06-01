@@ -116,9 +116,15 @@ def test_bounty_attempts_register_list_duplicate_and_release(sqlite_url: str, mo
 
     assert client.get(f"/api/v1/bounties/{bounty.id}/attempts?limit=0").status_code == 422
     assert client.get(f"/api/v1/bounties/{bounty.id}/attempts?limit=101").status_code == 422
-    control_padded_limit = client.get(f"/api/v1/bounties/{bounty.id}/attempts?limit=%C2%851")
-    assert control_padded_limit.status_code == 400
-    assert control_padded_limit.json()["detail"] == "limit must not contain control characters"
+    noncanonical_limits = {
+        "%C2%851": "limit must not contain control characters",
+        "1.0": "limit must be a canonical positive integer",
+        "%2B1": "limit must be a canonical positive integer",
+    }
+    for query, expected_detail in noncanonical_limits.items():
+        response = client.get(f"/api/v1/bounties/{bounty.id}/attempts?limit={query}")
+        assert response.status_code == 400
+        assert response.json()["detail"] == expected_detail
 
     wrong_submitter = client.post(
         f"/api/v1/bounty-attempts/{first_attempt['id']}/release",
