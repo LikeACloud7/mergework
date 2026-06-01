@@ -365,7 +365,7 @@ def ledger_to_dict(entry: LedgerEntry, proof_hash: str | None = None) -> dict[st
         "previous_hash": entry.previous_hash,
         "entry_hash": entry.entry_hash,
         "proof_hash": proof_hash,
-        "created_at": entry.created_at.isoformat(),
+        "created_at": public_utc_timestamp(entry.created_at),
     }
 
 
@@ -406,7 +406,7 @@ def _activity_row(entry: LedgerEntry, proof: Proof) -> dict[str, Any] | None:
         "proof_url": f"/proofs/{proof.hash}",
         "bounty_id": proof.bounty_id,
         "bounty_url": _bounty_detail_url(proof.bounty_id),
-        "created_at": entry.created_at.isoformat(),
+        "created_at": public_utc_timestamp(entry.created_at),
     }
 
 
@@ -680,7 +680,7 @@ def accepted_work_for_account(session: Session, account: str) -> list[dict[str, 
                 "bounty_id": proof.bounty_id,
                 "bounty_url": _bounty_detail_url(proof.bounty_id),
                 "accepted_by": data.get("accepted_by"),
-                "created_at": entry.created_at.isoformat(),
+                "created_at": public_utc_timestamp(entry.created_at),
             }
         )
     return accepted_work

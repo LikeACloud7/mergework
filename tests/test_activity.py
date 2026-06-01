@@ -115,6 +115,7 @@ def test_activity_api_summarizes_proof_backed_bounty_payments(sqlite_url: str) -
     assert payload["recent"][0]["bounty_issue_number"] == 11
     assert payload["recent"][0]["bounty_id"] == second_bounty.id
     assert payload["recent"][0]["bounty_url"] == f"/bounties/{second_bounty.id}"
+    assert payload["recent"][0]["created_at"].endswith("Z")
     assert all("unproved" not in row["submission_url"] for row in payload["recent"])
 
 
