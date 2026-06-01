@@ -608,6 +608,10 @@ def test_treasury_proposals_list_filters_by_action_status_and_bounty_id(
     (
         ("action", "\tpay_bounty", "action must not contain control characters"),
         ("bounty_id", "\x8599", "bounty_id must not contain control characters"),
+        ("bounty_id", "99.0", "bounty_id must be a canonical positive integer"),
+        ("bounty_id", "+99", "bounty_id must be a canonical positive integer"),
+        ("limit", "1.0", "limit must be a canonical positive integer"),
+        ("limit", "+1", "limit must be a canonical positive integer"),
         ("status", " ", "status is required"),
         ("action", "paybounty", "action must be one of: close_bounty, create_bounty, pay_bounty"),
         ("status", "complete", "status must be one of: pending, executed, blocked"),

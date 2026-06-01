@@ -409,6 +409,8 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
     controlled_source_filter_page = client.get(
         "/bounties?repo=ramimbo%2Fmergework&issue_number=%C2%8564"
     )
+    decimal_source_filter_page = client.get("/bounties?repo=ramimbo%2Fmergework&issue_number=64.0")
+    plus_limit_page = client.get("/bounties?limit=%2B1")
     assert source_filter_page.status_code == 200
     assert "Source filter: ramimbo/mergework #64." in source_filter_page.text
     assert "Improve public bounty discovery" in source_filter_page.text
@@ -434,6 +436,13 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
         controlled_source_filter_page.json()["detail"]
         == "issue_number must not contain control characters"
     )
+    assert decimal_source_filter_page.status_code == 400
+    assert (
+        decimal_source_filter_page.json()["detail"]
+        == "issue_number must be a canonical positive integer"
+    )
+    assert plus_limit_page.status_code == 400
+    assert plus_limit_page.json()["detail"] == "limit must be a canonical positive integer"
 
 
 def test_bounties_page_and_api_sort_public_rows(sqlite_url: str) -> None:
