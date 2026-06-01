@@ -58,6 +58,7 @@ def test_ledger_api_rejects_out_of_range_limits(sqlite_url: str, limit: str) -> 
         ("%C2%8550", "limit must not contain control characters"),
         ("50.0", "limit must be a canonical positive integer"),
         ("%2B50", "limit must be a canonical positive integer"),
+        ("050", "limit must be a canonical positive integer"),
     ),
 )
 def test_ledger_api_rejects_noncanonical_limit(
@@ -73,6 +74,19 @@ def test_ledger_api_rejects_noncanonical_limit(
 
     assert response.status_code == 400
     assert response.json()["detail"] == expected_detail
+
+
+def test_ledger_api_applies_default_limit_when_omitted(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get("/api/v1/ledger")
+
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
 
 
 def test_head_requests_match_get_routes_without_body(sqlite_url: str) -> None:

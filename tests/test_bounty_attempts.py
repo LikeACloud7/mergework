@@ -120,6 +120,7 @@ def test_bounty_attempts_register_list_duplicate_and_release(sqlite_url: str, mo
         "%C2%851": "limit must not contain control characters",
         "1.0": "limit must be a canonical positive integer",
         "%2B1": "limit must be a canonical positive integer",
+        "01": "limit must be a canonical positive integer",
     }
     for query, expected_detail in noncanonical_limits.items():
         response = client.get(f"/api/v1/bounties/{bounty.id}/attempts?limit={query}")

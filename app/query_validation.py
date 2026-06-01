@@ -6,7 +6,9 @@ from fastapi import HTTPException, Request
 
 from app.control_chars import contains_control_character
 
-CANONICAL_INTEGER_QUERY_RE = re.compile(r"^[0-9]+$")
+# Keep zero syntactically canonical so existing typed range validators own range errors,
+# while rejecting aliases like +1, 1.0, and 01 before integer coercion.
+CANONICAL_INTEGER_QUERY_RE = re.compile(r"^(?:0|[1-9][0-9]*)$")
 
 
 def reject_control_char_query_param(request: Request, name: str) -> None:
