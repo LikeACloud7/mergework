@@ -654,6 +654,12 @@ def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     assert missing_response.status_code == 404
     assert client.get("/api/v1/bounties/0").status_code == 400
     assert client.get("/bounties/0").status_code == 400
+    for noncanonical_id in (f"{bounty.id}.0", f"+{bounty.id}", f"%C2%85{bounty.id}"):
+        api_response = client.get(f"/api/v1/bounties/{noncanonical_id}")
+        assert api_response.status_code == 400
+        assert api_response.json()["detail"] == "bounty id must be a positive integer"
+        page_response = client.get(f"/bounties/{noncanonical_id}")
+        assert page_response.status_code == 400
 
     oversized_bounty_id = "9" * 40
     oversized_api_response = client.get(f"/api/v1/bounties/{oversized_bounty_id}")
@@ -892,6 +898,16 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert f'href="/ledger/{latest_sequence + 1}">Next entry</a>' not in latest_page.text
     assert client.get("/api/v1/ledger/0").status_code == 400
     assert client.get("/ledger/0").status_code == 400
+    for noncanonical_sequence in (
+        f"{payment_sequence}.0",
+        f"+{payment_sequence}",
+        f"%C2%85{payment_sequence}",
+    ):
+        api_response = client.get(f"/api/v1/ledger/{noncanonical_sequence}")
+        assert api_response.status_code == 400
+        assert api_response.json()["detail"] == "ledger sequence must be a positive integer"
+        page_response = client.get(f"/ledger/{noncanonical_sequence}")
+        assert page_response.status_code == 400
 
     oversized_sequence = "9" * 40
     oversized_api_response = client.get(f"/api/v1/ledger/{oversized_sequence}")
