@@ -1016,11 +1016,13 @@ def test_mcp_rejects_oversized_integer_arguments_without_500(
         ("list_bounties", {"limit": "03"}, 21),
         ("list_bounties", {"limit": "+3"}, 22),
         ("list_bounties", {"limit": " 3"}, 23),
-        ("get_bounty", {"id": "099"}, 24),
-        ("get_bounty", {"id": "+99"}, 25),
-        ("get_ledger_entry", {"sequence": "01"}, 26),
-        ("submit_work_proof", {"bounty_id": "099"}, 27),
-        ("submit_work_proof", {"issue_number": "0656"}, 28),
+        ("list_bounties", {"limit": "3 "}, 24),
+        ("get_bounty", {"id": "099"}, 25),
+        ("get_bounty", {"id": "+99"}, 26),
+        ("get_bounty", {"id": "99 "}, 27),
+        ("get_ledger_entry", {"sequence": "01"}, 28),
+        ("submit_work_proof", {"bounty_id": "099"}, 29),
+        ("submit_work_proof", {"issue_number": "0656"}, 30),
     ],
 )
 def test_mcp_rejects_noncanonical_integer_string_arguments(
