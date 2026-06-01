@@ -275,6 +275,9 @@ def _mark_duplicate_warnings(
 
 def analyze_proposed_work(data: dict[str, Any]) -> dict[str, Any]:
     payments = _payment_index(data)
+    data_warnings = [
+        warning for warning in data.get("data_warnings", []) if isinstance(warning, str)
+    ]
     proposals = [
         proposal
         for raw in data.get("issues", [])
@@ -296,6 +299,7 @@ def analyze_proposed_work(data: dict[str, Any]) -> dict[str, Any]:
             "warning_counts": dict(sorted(warning_counts.items())),
             "payment_counts": dict(sorted(payment_counts.items())),
             "related_groups": len(related_groups),
+            "data_warnings": data_warnings,
         },
         "proposals": proposals,
         "related_groups": related_groups,
@@ -309,6 +313,8 @@ def format_markdown(report: dict[str, Any]) -> str:
     lines.append(f"- related groups: {summary['related_groups']}")
     for state, count in summary["payment_counts"].items():
         lines.append(f"- {state} payment status: {count}")
+    for warning in summary.get("data_warnings", []):
+        lines.append(f"- data warning: {warning}")
     lines.append("")
     lines.append("## Issues")
     for item in report["proposals"]:
@@ -375,12 +381,19 @@ def _load_public_json(url: str) -> Any:
         return json.load(response)
 
 
-def _load_public_bounty_issue(api_host: str, issue_number: int) -> list[dict[str, Any]]:
+def _load_public_bounty_issue(
+    api_host: str, issue_number: int
+) -> tuple[list[dict[str, Any]], list[str]]:
     query = urllib.parse.urlencode({"issue_number": str(issue_number), "limit": "5"})
+    warnings: list[str] = []
     try:
         rows = _load_public_json(f"{api_host.rstrip('/')}/api/v1/bounties?{query}")
-    except (OSError, urllib.error.URLError, json.JSONDecodeError):
-        return []
+    except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        warnings.append(
+            "payment_state_incomplete: failed to load public bounty list "
+            f"for issue #{issue_number} ({type(exc).__name__})"
+        )
+        return [], warnings
     bounties: list[dict[str, Any]] = []
     for row in rows if isinstance(rows, list) else []:
         if not isinstance(row, dict):
@@ -390,11 +403,15 @@ def _load_public_bounty_issue(api_host: str, issue_number: int) -> list[dict[str
             continue
         try:
             detail = _load_public_json(f"{api_host.rstrip('/')}/api/v1/bounties/{bounty_id}")
-        except (OSError, urllib.error.URLError, json.JSONDecodeError):
+        except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+            warnings.append(
+                "payment_state_incomplete: failed to load public bounty "
+                f"detail for bounty {bounty_id}; using list row only ({type(exc).__name__})"
+            )
             detail = row
         if isinstance(detail, dict):
             bounties.append(detail)
-    return bounties
+    return bounties, warnings
 
 
 def load_live_issues(repo: str, limit: int, api_host: str = DEFAULT_API_HOST) -> dict[str, Any]:
@@ -420,9 +437,11 @@ def load_live_issues(repo: str, limit: int, api_host: str = DEFAULT_API_HOST) ->
             ]
         )
         issues.append(issue)
+    bounties, data_warnings = _load_public_bounty_issue(api_host, INTAKE_BOUNTY_ISSUE_NUMBER)
     return {
         "issues": issues,
-        "bounties": _load_public_bounty_issue(api_host, INTAKE_BOUNTY_ISSUE_NUMBER),
+        "bounties": bounties,
+        "data_warnings": data_warnings,
     }
 
 

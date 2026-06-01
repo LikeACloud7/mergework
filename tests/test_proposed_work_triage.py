@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import urllib.error
 from typing import Any
 
 from scripts.proposed_work_triage import _run_gh, analyze_proposed_work, format_markdown, main
@@ -383,6 +384,42 @@ def test_proposed_work_triage_live_mode_uses_read_only_gh(monkeypatch, capsys) -
         call[:3] == ["gh", "issue", "list"] or call[:3] == ["gh", "issue", "view"] for call in calls
     )
     assert not any("comment" in call or "edit" in call for call in calls)
+
+
+def test_proposed_work_triage_live_mode_warns_when_payment_state_is_incomplete(
+    monkeypatch, capsys
+) -> None:
+    def fake_run(args, **kwargs):  # noqa: ANN001, ANN202
+        if args[:3] == ["gh", "issue", "list"]:
+            stdout = json.dumps([{"number": 672}])
+        else:
+            stdout = json.dumps(
+                {
+                    "number": 672,
+                    "title": "Read-only proposed-work intake triage report",
+                    "url": "https://github.com/ramimbo/mergework/issues/672",
+                    "body": _complete_body(),
+                    "labels": [{"name": "proposed-work"}],
+                    "comments": [],
+                }
+            )
+        return subprocess.CompletedProcess(args, 0, stdout=stdout, stderr="")
+
+    def fake_urlopen(request, timeout):  # noqa: ANN001, ANN202, ARG001
+        raise urllib.error.URLError("offline")
+
+    monkeypatch.setattr("scripts.proposed_work_triage.subprocess.run", fake_run)
+    monkeypatch.setattr("scripts.proposed_work_triage.urllib.request.urlopen", fake_urlopen)
+
+    assert main(["--repo", "ramimbo/mergework", "--format", "json", "--limit", "1"]) == 0
+    output = json.loads(capsys.readouterr().out)
+
+    assert output["summary"]["payment_counts"] == {"none": 1}
+    assert output["summary"]["data_warnings"] == [
+        "payment_state_incomplete: failed to load public bounty list for issue #649 (URLError)"
+    ]
+    markdown = format_markdown(output)
+    assert "data warning: payment_state_incomplete" in markdown
 
 
 def test_run_gh_reports_timeout_and_invalid_json(monkeypatch) -> None:
