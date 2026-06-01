@@ -143,6 +143,13 @@ def test_bounty_attempts_register_list_duplicate_and_release(sqlite_url: str, mo
         repeated_include_expired.json()["detail"] == "include_expired must be provided at most once"
     )
 
+    for noncanonical_bool in ("1", "0", "yes", "no", "on", "off", "t", "f", "True"):
+        response = client.get(
+            f"/api/v1/bounties/{bounty.id}/attempts?include_expired={noncanonical_bool}"
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "include_expired must be true or false"
+
     wrong_submitter = client.post(
         f"/api/v1/bounty-attempts/{first_attempt['id']}/release",
         json={"submitter_account": "github:bob"},

@@ -9,6 +9,7 @@ from app.control_chars import contains_control_character
 # Keep zero syntactically canonical so existing typed range validators own range errors,
 # while rejecting aliases like +1, 1.0, and 01 before integer coercion.
 CANONICAL_INTEGER_QUERY_RE = re.compile(r"^(?:0|[1-9][0-9]*)$")
+CANONICAL_BOOLEAN_QUERY_VALUES = {"true", "false"}
 
 
 def reject_control_char_query_param(request: Request, name: str) -> None:
@@ -33,6 +34,21 @@ def reject_noncanonical_int_query_param(request: Request, name: str) -> None:
             raise HTTPException(
                 status_code=400,
                 detail=f"{name} must be a canonical positive integer",
+            )
+
+
+def reject_noncanonical_bool_query_param(request: Request, name: str) -> None:
+    """Reject boolean query aliases before application code trusts coerced values."""
+    for value in request.query_params.getlist(name):
+        if contains_control_character(value):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{name} must not contain control characters",
+            )
+        if value not in CANONICAL_BOOLEAN_QUERY_VALUES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{name} must be true or false",
             )
 
 
