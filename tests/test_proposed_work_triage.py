@@ -8,6 +8,20 @@ from typing import Any
 from scripts.proposed_work_triage import _run_gh, analyze_proposed_work, format_markdown, main
 
 
+class FakeResponse:
+    def __init__(self, payload: Any) -> None:
+        self.payload = payload
+
+    def __enter__(self) -> FakeResponse:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return json.dumps(self.payload).encode()
+
+
 def _complete_body(topic: str = "queue review") -> str:
     return f"""
 ## Problem
@@ -316,19 +330,6 @@ def test_proposed_work_triage_markdown_and_json_cli(tmp_path, capsys) -> None:
 def test_proposed_work_triage_live_mode_uses_read_only_gh(monkeypatch, capsys) -> None:
     calls: list[list[str]] = []
 
-    class FakeResponse:
-        def __init__(self, payload: Any) -> None:
-            self.payload = payload
-
-        def __enter__(self) -> FakeResponse:
-            return self
-
-        def __exit__(self, *args: object) -> None:
-            return None
-
-        def read(self) -> bytes:
-            return json.dumps(self.payload).encode()
-
     def fake_run(args, **kwargs):  # noqa: ANN001, ANN202
         calls.append(args)
         if args[:3] == ["gh", "issue", "list"]:
@@ -417,6 +418,45 @@ def test_proposed_work_triage_live_mode_warns_when_payment_state_is_incomplete(
     assert output["summary"]["payment_counts"] == {"none": 1}
     assert output["summary"]["data_warnings"] == [
         "payment_state_incomplete: failed to load public bounty list for issue #649 (URLError)"
+    ]
+    markdown = format_markdown(output)
+    assert "data warning: payment_state_incomplete" in markdown
+
+
+def test_proposed_work_triage_live_mode_warns_when_bounty_detail_fetch_fails(
+    monkeypatch, capsys
+) -> None:
+    def fake_run(args, **kwargs):  # noqa: ANN001, ANN202
+        if args[:3] == ["gh", "issue", "list"]:
+            stdout = json.dumps([{"number": 672}])
+        else:
+            stdout = json.dumps(
+                {
+                    "number": 672,
+                    "title": "Read-only proposed-work intake triage report",
+                    "url": "https://github.com/ramimbo/mergework/issues/672",
+                    "body": _complete_body(),
+                    "labels": [{"name": "proposed-work"}],
+                    "comments": [],
+                }
+            )
+        return subprocess.CompletedProcess(args, 0, stdout=stdout, stderr="")
+
+    def fake_urlopen(request, timeout):  # noqa: ANN001, ANN202, ARG001
+        if request.full_url.endswith("/api/v1/bounties?issue_number=649&limit=5"):
+            return FakeResponse([{"id": 96}])
+        raise urllib.error.URLError("offline")
+
+    monkeypatch.setattr("scripts.proposed_work_triage.subprocess.run", fake_run)
+    monkeypatch.setattr("scripts.proposed_work_triage.urllib.request.urlopen", fake_urlopen)
+
+    assert main(["--repo", "ramimbo/mergework", "--format", "json", "--limit", "1"]) == 0
+    output = json.loads(capsys.readouterr().out)
+
+    assert output["summary"]["payment_counts"] == {"none": 1}
+    assert output["summary"]["data_warnings"] == [
+        "payment_state_incomplete: failed to load public bounty "
+        "detail for bounty 96; using list row only (URLError)"
     ]
     markdown = format_markdown(output)
     assert "data warning: payment_state_incomplete" in markdown
