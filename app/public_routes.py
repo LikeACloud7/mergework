@@ -198,6 +198,8 @@ def wallet_page_context(
     if wallet is None:
         raise HTTPException(status_code=404, detail="wallet not found")
     selected_transaction_type = transaction_type.strip() if transaction_type is not None else ""
+    if selected_transaction_type.lower() == "all":
+        selected_transaction_type = ""
     return {
         "wallet": wallet_to_dict(session, wallet),
         "transactions": account_ledger_transactions(
