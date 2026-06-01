@@ -57,6 +57,26 @@ def test_account_views_reject_c1_controls_before_normalizing(
     assert resp.json()["detail"] == "account must not contain control characters"
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/accounts/%20github:alice",
+        "/api/v1/accounts/github:alice%20",
+        "/api/v1/accounts/%20github:alice/accepted-work",
+        "/api/v1/accounts/github:alice%20/accepted-work",
+        "/accounts/%20github:alice",
+        "/accounts/github:alice%20",
+    ],
+)
+def test_account_views_reject_path_whitespace_padding(sqlite_url: str, path: str) -> None:
+    client = _setup_app(sqlite_url)
+
+    resp = client.get(path)
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "account must not contain leading or trailing whitespace"
+
+
 def test_api_account_accepts_valid(sqlite_url: str) -> None:
     client = _setup_app(sqlite_url)
     resp = client.get("/api/v1/accounts/github:alice")
@@ -68,7 +88,7 @@ def test_api_account_rejects_empty_github_login(sqlite_url: str) -> None:
     client = _setup_app(sqlite_url)
     resp = client.get("/api/v1/accounts/github:%20")
     assert resp.status_code == 400
-    assert "github login" in resp.json()["detail"].lower()
+    assert resp.json()["detail"] == "account must not contain leading or trailing whitespace"
 
 
 def test_mcp_get_balance_rejects_empty_account(sqlite_url: str) -> None:
@@ -150,6 +170,7 @@ def test_account_page_rejects_empty_github_login(sqlite_url: str) -> None:
     client = _setup_app(sqlite_url)
     resp = client.get("/accounts/github:%20")
     assert resp.status_code == 400
+    assert resp.json()["detail"] == "account must not contain leading or trailing whitespace"
 
 
 def test_account_views_normalize_treasury_account(sqlite_url: str) -> None:
