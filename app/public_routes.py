@@ -10,7 +10,11 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.accounts import normalized_wallet_address
+from app.accounts import (
+    ACCOUNT_TRANSACTION_TYPE_OPTIONS,
+    ACCOUNT_TRANSACTION_TYPES,
+    normalized_wallet_address,
+)
 from app.bounty_availability import normalize_bounty_availability_filter
 from app.bounty_sorting import BOUNTY_SORT_LABELS, normalize_bounty_sort
 from app.control_chars import contains_control_character
@@ -208,12 +212,27 @@ def wallet_page_context(
     selected_transaction_type = transaction_type.strip() if transaction_type is not None else ""
     if selected_transaction_type.lower() == "all":
         selected_transaction_type = ""
+    available_transaction_types = account_ledger_transaction_types(session, wallet.address)
+    selected_transaction_type = selected_transaction_type.lower()
+    allowed_transaction_types = ACCOUNT_TRANSACTION_TYPES | set(available_transaction_types)
+    if selected_transaction_type and selected_transaction_type not in allowed_transaction_types:
+        static_options = [str(option["value"]) for option in ACCOUNT_TRANSACTION_TYPE_OPTIONS]
+        custom_options = [
+            entry_type
+            for entry_type in available_transaction_types
+            if entry_type not in ACCOUNT_TRANSACTION_TYPES and entry_type != "all"
+        ]
+        allowed = ", ".join([*static_options, *custom_options])
+        raise HTTPException(
+            status_code=400,
+            detail=f"transaction type must be one of: {allowed}",
+        )
     return {
         "wallet": wallet_to_dict(session, wallet),
         "transactions": account_ledger_transactions(
             session, wallet.address, entry_type=selected_transaction_type or None
         ),
-        "transaction_types": account_ledger_transaction_types(session, wallet.address),
+        "transaction_types": available_transaction_types,
         "selected_transaction_type": selected_transaction_type,
     }
 
