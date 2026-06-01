@@ -80,15 +80,20 @@ Inspect treasury proposals:
 curl -s "$API_HOST/api/v1/treasury/status"
 curl -s "$API_HOST/api/v1/treasury/proposals"
 curl -s "$API_HOST/api/v1/treasury/proposals?status=pending&action=pay_bounty&to_account=github%3Aalice"
+curl -s "$API_HOST/api/v1/treasury/proposals?action=pay_bounty&status=pending&bounty_id=<bounty_id>"
 curl -s "$API_HOST/api/v1/treasury/proposals/<proposal_id>"
 ```
 
 Use `to_account` with `status=pending` and `action=pay_bounty` when reconciling
 which delayed payout proposals target one GitHub account or MRWK wallet.
+Use `bounty_id` when you need the proposal slice for one internal MergeWork
+bounty id rather than a GitHub issue number.
 
 Use `/api/v1/treasury/status` before proposing fresh bounty rounds. It reports
 the rolling 24-hour reserve cap, recent reserve usage, pending create-bounty
 reserve, remaining create capacity, and the next capacity release time.
+Use proposal-list filters when you need one queue slice, such as pending
+`pay_bounty` proposals for one internal MergeWork bounty id.
 Use [docs/bounty-lifecycle.md](bounty-lifecycle.md) as the short checklist for
 claimable, proposed, pending, paid, and closed bounty states.
 
