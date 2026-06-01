@@ -160,7 +160,7 @@ def register_bounty_attempt_routes(
     def api_bounty_attempts(
         request: Request,
         bounty_id: str,
-        include_expired: bool = Query(False),
+        include_expired: str | None = Query(None),
         limit: Annotated[int | None, Query(ge=1, le=100)] = None,
     ) -> dict[str, Any]:
         for name in ("include_expired", "limit"):
@@ -174,7 +174,11 @@ def register_bounty_attempt_routes(
             if bounty is None:
                 raise HTTPException(status_code=404, detail="bounty not found")
             listing = list_bounty_attempts(
-                session, bounty, include_expired=include_expired, limit=limit, now=now
+                session,
+                bounty,
+                include_expired=include_expired == "true",
+                limit=limit,
+                now=now,
             )
             return {
                 "bounty_id": bounty_id_int,
