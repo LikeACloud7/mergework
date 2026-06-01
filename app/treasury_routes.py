@@ -10,6 +10,7 @@ from app.control_chars import contains_control_character
 from app.db import session_scope
 from app.ledger.service import LedgerError
 from app.models import TreasuryProposal
+from app.openapi_request_bodies import TREASURY_CHALLENGE_BODY, TREASURY_PROPOSAL_BODY
 from app.path_params import SQLITE_INTEGER_MAX
 from app.treasury import (
     challenge_to_dict,
@@ -152,7 +153,7 @@ def register_treasury_routes(
                 raise HTTPException(status_code=404, detail="proposal not found")
             return proposal_to_dict(proposal)
 
-    @app.post("/api/v1/treasury/proposals")
+    @app.post("/api/v1/treasury/proposals", openapi_extra=TREASURY_PROPOSAL_BODY)
     async def api_create_treasury_proposal(
         request: Request,
         admin_login: str = Depends(require_admin_token),
@@ -193,7 +194,10 @@ def register_treasury_routes(
         except LedgerError as exc:
             raise _proposal_error(exc) from exc
 
-    @app.post("/api/v1/treasury/proposals/{proposal_id}/challenges")
+    @app.post(
+        "/api/v1/treasury/proposals/{proposal_id}/challenges",
+        openapi_extra=TREASURY_CHALLENGE_BODY,
+    )
     async def api_create_treasury_challenge(
         proposal_id: int,
         request: Request,

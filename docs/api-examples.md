@@ -10,6 +10,12 @@ MCP_HOST=https://mcp.mrwk.online
 The legacy-compatible hosts remain available for existing clients:
 `https://api.mrwk.ltclab.site` and `https://mcp.mrwk.ltclab.site`.
 
+Machine-readable REST docs are available at `$API_HOST/openapi.json`,
+`$API_HOST/api/docs`, and `$API_HOST/api/redoc`. Public JSON POST endpoints
+publish `requestBody` schemas for attempt reservations, wallet actions,
+transfers, and treasury challenges so clients can discover payload fields
+without reading source code.
+
 ## Status And Bounties
 
 Check service status and list bounties:
