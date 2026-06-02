@@ -97,6 +97,7 @@ def test_docs_page_marks_static_github_links_as_untrusted(sqlite_url: str) -> No
         "https://api.mrwk.ltclab.site",
         "https://mcp.mrwk.ltclab.site",
         "https://github.com/ramimbo/mergework/discussions/16",
+        "https://github.com/ramimbo/mergework/blob/main/docs/bounty-lifecycle.md",
         "https://github.com/ramimbo/mergework/blob/main/docs/bounty-rules.md",
         "https://github.com/ramimbo/mergework/blob/main/docs/paid-bounties.md",
         "https://github.com/ramimbo/mergework/blob/main/docs/agent-guide.md",
@@ -104,6 +105,11 @@ def test_docs_page_marks_static_github_links_as_untrusted(sqlite_url: str) -> No
         "https://github.com/ramimbo/mergework/blob/main/docs/ledger.md",
     ):
         assert f'href="{url}" rel="nofollow noopener"' in page.text
+    for url in (
+        "/api/v1/bounties/summary",
+        "/api/v1/treasury/proposals",
+    ):
+        assert f'href="{url}"' in page.text
 
 
 def test_ltc_lab_header_marks_github_nav_link_as_untrusted(sqlite_url: str) -> None:

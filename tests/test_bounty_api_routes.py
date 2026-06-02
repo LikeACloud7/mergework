@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.db import create_schema, session_scope
 from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
+from app.path_params import SQLITE_INTEGER_MAX
 from app.treasury import propose_treasury_action
 
 
@@ -354,6 +356,61 @@ def test_bounty_api_filters_by_status(sqlite_url: str) -> None:
     assert invalid.json()["detail"] == "status must be one of: open, paid, closed"
 
 
+def test_bounty_api_search_query_rejects_control_characters(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    list_response = client.get("/api/v1/bounties?q=%C2%85open")
+    summary_response = client.get("/api/v1/bounties/summary?q=open%09")
+
+    assert list_response.status_code == 400
+    assert list_response.json()["detail"] == "q must not contain control characters"
+    assert summary_response.status_code == 400
+    assert summary_response.json()["detail"] == "q must not contain control characters"
+
+
+@pytest.mark.parametrize(
+    ("path", "detail"),
+    [
+        ("/api/v1/bounties?limit=not-an-int&limit=1", "limit must be provided at most once"),
+        ("/api/v1/bounties?sort=bogus&sort=newest", "sort must be provided at most once"),
+        (
+            "/api/v1/bounties/summary?repo=a%2Fb&repo=c%2Fd",
+            "repo must be provided at most once",
+        ),
+        (
+            "/api/v1/bounties/summary?issue_number=abc&issue_number=1",
+            "issue_number must be provided at most once",
+        ),
+        ("/api/v1/bounties?status=bogus&status=open", "status must be provided at most once"),
+        (
+            "/api/v1/bounties/summary?q=first&q=second",
+            "q must be provided at most once",
+        ),
+        (
+            "/api/v1/bounties?availability=bad&availability=all",
+            "availability must be provided at most once",
+        ),
+    ],
+)
+def test_bounty_api_rejects_repeated_scalar_filters(
+    sqlite_url: str, path: str, detail: str
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get(path)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == detail
+
+
 def test_bounty_api_limit_caps_filtered_rows(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
@@ -409,6 +466,44 @@ def test_bounty_api_limit_rejects_out_of_range_values(sqlite_url: str) -> None:
     assert client.get("/api/v1/bounties/summary?limit=0").status_code == 422
     assert client.get("/api/v1/bounties/summary?limit=201").status_code == 422
 
+    controlled_list = client.get("/api/v1/bounties?limit=%C2%8550")
+    controlled_summary = client.get("/api/v1/bounties/summary?limit=50%C2%85")
+    decimal_list = client.get("/api/v1/bounties?limit=50.0")
+    plus_summary = client.get("/api/v1/bounties/summary?limit=%2B50")
+    leading_zero_list = client.get("/api/v1/bounties?limit=050")
+
+    assert controlled_list.status_code == 400
+    assert controlled_list.json()["detail"] == "limit must not contain control characters"
+    assert controlled_summary.status_code == 400
+    assert controlled_summary.json()["detail"] == "limit must not contain control characters"
+    assert decimal_list.status_code == 400
+    assert decimal_list.json()["detail"] == "limit must be a canonical positive integer"
+    assert plus_summary.status_code == 400
+    assert plus_summary.json()["detail"] == "limit must be a canonical positive integer"
+    assert leading_zero_list.status_code == 400
+    assert leading_zero_list.json()["detail"] == "limit must be a canonical positive integer"
+
+
+def test_bounty_api_issue_number_rejects_sqlite_overflow_values(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    oversized_issue_number = SQLITE_INTEGER_MAX + 1
+
+    bounties = client.get(f"/api/v1/bounties?issue_number={oversized_issue_number}")
+    summary = client.get(f"/api/v1/bounties/summary?issue_number={oversized_issue_number}")
+
+    assert bounties.status_code == 422
+    assert summary.status_code == 422
+
+    at_limit_bounties = client.get(f"/api/v1/bounties?issue_number={SQLITE_INTEGER_MAX}")
+    at_limit_summary = client.get(f"/api/v1/bounties/summary?issue_number={SQLITE_INTEGER_MAX}")
+
+    assert at_limit_bounties.status_code == 200
+    assert at_limit_summary.status_code == 200
+
 
 def test_bounty_api_filters_by_exact_repo_and_issue_number(sqlite_url: str) -> None:
     create_schema(sqlite_url)
@@ -450,6 +545,11 @@ def test_bounty_api_filters_by_exact_repo_and_issue_number(sqlite_url: str) -> N
     by_issue = client.get("/api/v1/bounties?issue_number=649")
     summary = client.get("/api/v1/bounties/summary?repo=ramimbo%2Fmergework")
     composed = client.get("/api/v1/bounties?repo=ramimbo%2Fmergework&q=proposed-work")
+    controlled_issue = client.get("/api/v1/bounties?issue_number=%C2%85649")
+    controlled_summary_issue = client.get("/api/v1/bounties/summary?issue_number=649%C2%85")
+    decimal_issue = client.get("/api/v1/bounties?issue_number=649.0")
+    plus_summary_issue = client.get("/api/v1/bounties/summary?issue_number=%2B649")
+    leading_zero_issue = client.get("/api/v1/bounties?issue_number=00649")
 
     assert [row["id"] for row in by_repo.json()] == [other_mergework.id, mergework_649.id]
     assert [row["id"] for row in exact.json()] == [mergework_649.id]
@@ -464,3 +564,20 @@ def test_bounty_api_filters_by_exact_repo_and_issue_number(sqlite_url: str) -> N
     invalid_repo = client.get("/api/v1/bounties?repo=ramimbo%C2%85mergework")
     assert invalid_repo.status_code == 400
     assert invalid_repo.json()["detail"] == "repo must not contain control characters"
+    assert controlled_issue.status_code == 400
+    assert controlled_issue.json()["detail"] == "issue_number must not contain control characters"
+    assert controlled_summary_issue.status_code == 400
+    assert (
+        controlled_summary_issue.json()["detail"]
+        == "issue_number must not contain control characters"
+    )
+    assert decimal_issue.status_code == 400
+    assert decimal_issue.json()["detail"] == "issue_number must be a canonical positive integer"
+    assert plus_summary_issue.status_code == 400
+    assert (
+        plus_summary_issue.json()["detail"] == "issue_number must be a canonical positive integer"
+    )
+    assert leading_zero_issue.status_code == 400
+    assert (
+        leading_zero_issue.json()["detail"] == "issue_number must be a canonical positive integer"
+    )

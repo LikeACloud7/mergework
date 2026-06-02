@@ -107,6 +107,41 @@ def test_bounty_attempts_register_list_duplicate_and_release(sqlite_url: str, mo
         "github:bob",
         "github:alice",
     ]
+    for noncanonical_id in (f"{bounty.id}.0", f"+{bounty.id}", f"%C2%85{bounty.id}"):
+        response = client.get(f"/api/v1/bounties/{noncanonical_id}/attempts")
+        assert response.status_code == 400
+        assert response.json()["detail"] == "bounty id must be a positive integer"
+
+    limited = client.get(f"/api/v1/bounties/{bounty.id}/attempts?limit=1")
+    assert limited.status_code == 200
+    assert [attempt["submitter_account"] for attempt in limited.json()["attempts"]] == [
+        "github:bob"
+    ]
+
+    assert client.get(f"/api/v1/bounties/{bounty.id}/attempts?limit=0").status_code == 422
+    assert client.get(f"/api/v1/bounties/{bounty.id}/attempts?limit=101").status_code == 422
+    noncanonical_limits = {
+        "%C2%851": "limit must not contain control characters",
+        "1.0": "limit must be a canonical positive integer",
+        "%2B1": "limit must be a canonical positive integer",
+        "01": "limit must be a canonical positive integer",
+    }
+    for query, expected_detail in noncanonical_limits.items():
+        response = client.get(f"/api/v1/bounties/{bounty.id}/attempts?limit={query}")
+        assert response.status_code == 400
+        assert response.json()["detail"] == expected_detail
+
+    repeated_limit = client.get(f"/api/v1/bounties/{bounty.id}/attempts?limit=bad&limit=1")
+    assert repeated_limit.status_code == 400
+    assert repeated_limit.json()["detail"] == "limit must be provided at most once"
+
+    repeated_include_expired = client.get(
+        f"/api/v1/bounties/{bounty.id}/attempts?include_expired=bad&include_expired=false"
+    )
+    assert repeated_include_expired.status_code == 400
+    assert (
+        repeated_include_expired.json()["detail"] == "include_expired must be provided at most once"
+    )
 
     wrong_submitter = client.post(
         f"/api/v1/bounty-attempts/{first_attempt['id']}/release",

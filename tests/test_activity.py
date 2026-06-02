@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.db import create_schema, session_scope
 from app.ledger.service import add_ledger_entry, create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
+from app.serializers import public_utc_timestamp
 from app.treasury import propose_treasury_action
 
 
@@ -114,6 +115,7 @@ def test_activity_api_summarizes_proof_backed_bounty_payments(sqlite_url: str) -
     assert payload["recent"][0]["bounty_issue_number"] == 11
     assert payload["recent"][0]["bounty_id"] == second_bounty.id
     assert payload["recent"][0]["bounty_url"] == f"/bounties/{second_bounty.id}"
+    assert payload["recent"][0]["created_at"].endswith("Z")
     assert all("unproved" not in row["submission_url"] for row in payload["recent"])
 
 
@@ -198,6 +200,31 @@ def test_activity_api_filters_accepted_work_by_query(sqlite_url: str) -> None:
         assert invalid_hash_query["recent"] == []
 
 
+def test_activity_query_rejects_control_characters(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    api_response = client.get("/api/v1/activity?q=%C2%85github")
+    page_response = client.get("/activity?q=github%09")
+    masked_api_response = client.get("/api/v1/activity?q=%C2%85github&q=alice")
+    repeated_api_response = client.get("/api/v1/activity?q=github&q=alice")
+    repeated_page_response = client.get("/activity?q=github&q=alice")
+
+    assert api_response.status_code == 400
+    assert api_response.json()["detail"] == "q must not contain control characters"
+    assert page_response.status_code == 400
+    assert page_response.json()["detail"] == "q must not contain control characters"
+    assert masked_api_response.status_code == 400
+    assert masked_api_response.json()["detail"] == "q must not contain control characters"
+    assert repeated_api_response.status_code == 400
+    assert repeated_api_response.json()["detail"] == "q must be provided at most once"
+    assert repeated_page_response.status_code == 400
+    assert repeated_page_response.json()["detail"] == "q must be provided at most once"
+
+
 def test_activity_api_exposes_pending_payouts_separately_from_paid_work(
     sqlite_url: str,
 ) -> None:
@@ -243,8 +270,8 @@ def test_activity_api_exposes_pending_payouts_separately_from_paid_work(
         )
         pending_bounty_id = pending_bounty.id
         proposal_id = proposal.id
-        proposal_proposed_at = proposal.proposed_at.isoformat()
-        proposal_executes_after = proposal.executes_after.isoformat()
+        proposal_proposed_at = public_utc_timestamp(proposal.proposed_at)
+        proposal_executes_after = public_utc_timestamp(proposal.executes_after)
         proof_hash = proof.hash
 
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
@@ -285,6 +312,7 @@ def test_activity_api_exposes_pending_payouts_separately_from_paid_work(
             "executes_after": proposal_executes_after,
         }
     ]
+    assert payload["pending_payouts"][0]["executes_after"].endswith("Z")
     assert by_account["pending_payouts"][0]["proposal_id"] == proposal_id
     assert by_proposal["pending_payouts"][0]["proposal_id"] == proposal_id
     assert by_submission["pending_payouts"][0]["proposal_id"] == proposal_id

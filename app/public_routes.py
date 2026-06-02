@@ -10,13 +10,23 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.accounts import normalized_wallet_address
+from app.accounts import (
+    ACCOUNT_TRANSACTION_TYPE_OPTIONS,
+    ACCOUNT_TRANSACTION_TYPES,
+    normalized_wallet_address,
+)
 from app.bounty_availability import normalize_bounty_availability_filter
 from app.bounty_sorting import BOUNTY_SORT_LABELS, normalize_bounty_sort
+from app.control_chars import contains_control_character
 from app.db import session_scope
 from app.ledger_views import account_ledger_transaction_types, account_ledger_transactions
 from app.models import Wallet
-from app.path_params import proof_hash_from_path
+from app.path_params import SQLITE_INTEGER_MAX, proof_hash_from_path
+from app.query_validation import (
+    reject_control_char_query_param,
+    reject_noncanonical_int_query_param,
+    reject_repeated_query_param,
+)
 from app.serializers import bounty_list_summary, wallet_to_dict
 from app.status import (
     CURRENT_TRANSFER_PATHS,
@@ -169,6 +179,8 @@ def public_bounties_context(
 
 
 def wallets_page_context(session: Session, q: str | None = None) -> dict[str, Any]:
+    if q is not None and contains_control_character(q):
+        raise HTTPException(status_code=400, detail="q must not contain control characters")
     query_text = q.strip() if q is not None else ""
     query = select(Wallet)
     if query_text:
@@ -197,25 +209,46 @@ def wallet_page_context(
     wallet = session.get(Wallet, normalized_address)
     if wallet is None:
         raise HTTPException(status_code=404, detail="wallet not found")
+    if transaction_type is not None and contains_control_character(transaction_type):
+        raise HTTPException(
+            status_code=400, detail="transaction type must not contain control characters"
+        )
     selected_transaction_type = transaction_type.strip() if transaction_type is not None else ""
+    if selected_transaction_type.lower() == "all":
+        selected_transaction_type = ""
+    available_transaction_types = account_ledger_transaction_types(session, wallet.address)
+    selected_transaction_type = selected_transaction_type.lower()
+    allowed_transaction_types = ACCOUNT_TRANSACTION_TYPES | set(available_transaction_types)
+    if selected_transaction_type and selected_transaction_type not in allowed_transaction_types:
+        static_options = [str(option["value"]) for option in ACCOUNT_TRANSACTION_TYPE_OPTIONS]
+        custom_options = [
+            entry_type
+            for entry_type in available_transaction_types
+            if entry_type not in ACCOUNT_TRANSACTION_TYPES and entry_type != "all"
+        ]
+        allowed = ", ".join([*static_options, *custom_options])
+        raise HTTPException(
+            status_code=400,
+            detail=f"transaction type must be one of: {allowed}",
+        )
     return {
         "wallet": wallet_to_dict(session, wallet),
         "transactions": account_ledger_transactions(
             session, wallet.address, entry_type=selected_transaction_type or None
         ),
-        "transaction_types": account_ledger_transaction_types(session, wallet.address),
+        "transaction_types": available_transaction_types,
         "selected_transaction_type": selected_transaction_type,
     }
 
 
 def ledger_entry_page_context(
-    sequence: int, api_ledger_entry: Callable[[int], dict[str, Any]]
+    sequence: str, api_ledger_entry: Callable[[str], dict[str, Any]]
 ) -> dict[str, Any]:
     entry = api_ledger_entry(sequence)
     previous_sequence = entry["sequence"] - 1 if entry["sequence"] > 1 else None
     next_sequence = entry["sequence"] + 1
     try:
-        api_ledger_entry(next_sequence)
+        api_ledger_entry(str(next_sequence))
     except HTTPException as exc:
         if exc.status_code != 404:
             raise
@@ -236,9 +269,9 @@ def register_public_routes(
         [str | None, str | None, str | None, int | None, str | None, int | None, str | None],
         list[dict[str, Any]],
     ],
-    api_bounty: Callable[[int], dict[str, Any]],
+    api_bounty: Callable[[str], dict[str, Any]],
     api_ledger: Callable[[], list[dict[str, Any]]],
-    api_ledger_entry: Callable[[int], dict[str, Any]],
+    api_ledger_entry: Callable[[str], dict[str, Any]],
     api_proof: Callable[[str], dict[str, Any]],
 ) -> None:
     @app.get("/bounties", response_class=HTMLResponse)
@@ -249,9 +282,15 @@ def register_public_routes(
         sort: str | None = Query(None),
         limit: int | None = Query(None, ge=1, le=200),
         repo: str | None = Query(None),
-        issue_number: int | None = Query(None, ge=1),
+        issue_number: int | None = Query(None, ge=1, le=SQLITE_INTEGER_MAX),
         availability: str | None = Query(None),
     ) -> HTMLResponse:
+        for name in ("status", "q", "limit", "sort", "repo", "issue_number", "availability"):
+            reject_repeated_query_param(request, name)
+        for name in ("status", "q", "sort", "repo", "availability"):
+            reject_control_char_query_param(request, name)
+        for name in ("limit", "issue_number"):
+            reject_noncanonical_int_query_param(request, name)
         bounties = list_bounties_by_status(status, q, sort, limit, repo, issue_number, availability)
         return templates.TemplateResponse(
             request,
@@ -269,7 +308,7 @@ def register_public_routes(
         )
 
     @app.get("/bounties/{bounty_id}", response_class=HTMLResponse)
-    def bounty_page(request: Request, bounty_id: int) -> HTMLResponse:
+    def bounty_page(request: Request, bounty_id: str) -> HTMLResponse:
         return templates.TemplateResponse(
             request, "bounty_detail.html", {"bounty": api_bounty(bounty_id)}
         )
@@ -279,13 +318,15 @@ def register_public_routes(
         return templates.TemplateResponse(request, "ledger.html", {"entries": api_ledger()})
 
     @app.get("/ledger/{sequence}", response_class=HTMLResponse)
-    def ledger_entry_page(request: Request, sequence: int) -> HTMLResponse:
+    def ledger_entry_page(request: Request, sequence: str) -> HTMLResponse:
         return templates.TemplateResponse(
             request, "ledger_entry.html", ledger_entry_page_context(sequence, api_ledger_entry)
         )
 
     @app.get("/wallets", response_class=HTMLResponse)
     def wallets_page(request: Request, q: str | None = Query(None)) -> HTMLResponse:
+        reject_control_char_query_param(request, "q")
+        reject_repeated_query_param(request, "q")
         with session_scope(db_url) as session:
             context = wallets_page_context(session, q)
         return templates.TemplateResponse(request, "wallets.html", context)
@@ -296,6 +337,12 @@ def register_public_routes(
         address: str,
         type: str | None = Query(None),  # noqa: A002
     ) -> HTMLResponse:
+        for value in request.query_params.getlist("type"):
+            if contains_control_character(value):
+                raise HTTPException(
+                    status_code=400, detail="transaction type must not contain control characters"
+                )
+        reject_repeated_query_param(request, "type")
         with session_scope(db_url) as session:
             context = wallet_page_context(session, address, type)
         return templates.TemplateResponse(request, "wallet_detail.html", context)

@@ -6,13 +6,20 @@ from typing import Annotated, Any
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from sqlalchemy import select
 
+from app.accounts import normalized_account
 from app.control_chars import contains_control_character
 from app.db import session_scope
 from app.ledger.service import LedgerError
 from app.models import TreasuryProposal
 from app.openapi_request_bodies import TREASURY_CHALLENGE_BODY, TREASURY_PROPOSAL_BODY
-from app.path_params import SQLITE_INTEGER_MAX
+from app.path_params import SQLITE_INTEGER_MAX, positive_proposal_id
+from app.query_validation import (
+    reject_control_char_query_param,
+    reject_noncanonical_int_query_param,
+    reject_repeated_query_param,
+)
 from app.treasury import (
+    TREASURY_ACTIONS,
     challenge_to_dict,
     create_treasury_challenge,
     proposal_to_dict,
@@ -21,13 +28,7 @@ from app.treasury import (
 )
 from app.treasury_executor import execute_treasury_proposal_with_finalization
 
-
-def _positive_proposal_id(proposal_id: int) -> int:
-    if proposal_id <= 0:
-        raise HTTPException(status_code=400, detail="proposal id must be positive")
-    if proposal_id > SQLITE_INTEGER_MAX:
-        raise HTTPException(status_code=400, detail="proposal id is too large")
-    return proposal_id
+TREASURY_PROPOSAL_STATUSES = ("pending", "executed", "blocked")
 
 
 def _proposal_error(exc: LedgerError) -> HTTPException:
@@ -45,6 +46,8 @@ def _optional_query_filter(
     *,
     max_length: int,
     blank_detail: str | None = None,
+    allowed_values: tuple[str, ...] | None = None,
+    lower: bool = False,
 ) -> str | None:
     if value is None:
         return None
@@ -53,8 +56,15 @@ def _optional_query_filter(
     clean = value.strip()
     if not clean:
         raise HTTPException(status_code=400, detail=blank_detail or f"{field} is required")
+    if lower:
+        clean = clean.lower()
     if len(clean) > max_length:
         raise HTTPException(status_code=400, detail=f"{field} is too long")
+    if allowed_values is not None and clean not in allowed_values:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field} must be one of: {', '.join(allowed_values)}",
+        )
     return clean
 
 
@@ -103,20 +113,41 @@ def register_treasury_routes(
 ) -> None:
     @app.get("/api/v1/treasury/proposals")
     def api_treasury_proposals(
+        request: Request,
         limit: Annotated[int, Query(ge=1, le=200)] = 100,
         action: Annotated[str | None, Query(max_length=40)] = None,
         status: Annotated[str | None, Query(max_length=40)] = None,
         to_account: Annotated[str | None, Query(max_length=128)] = None,
         bounty_id: Annotated[int | None, Query(ge=1, le=SQLITE_INTEGER_MAX)] = None,
     ) -> list[dict[str, Any]]:
-        action_filter = _optional_query_filter(action, "action", max_length=40)
-        status_filter = _optional_query_filter(status, "status", max_length=40)
+        for name in ("limit", "action", "status", "to_account", "bounty_id"):
+            reject_repeated_query_param(request, name)
+        for name in ("action", "status", "to_account"):
+            reject_control_char_query_param(request, name)
+        for name in ("limit", "bounty_id"):
+            reject_noncanonical_int_query_param(request, name)
+        action_filter = _optional_query_filter(
+            action,
+            "action",
+            max_length=40,
+            allowed_values=tuple(sorted(TREASURY_ACTIONS)),
+            lower=True,
+        )
+        status_filter = _optional_query_filter(
+            status,
+            "status",
+            max_length=40,
+            allowed_values=TREASURY_PROPOSAL_STATUSES,
+            lower=True,
+        )
         to_account_filter = _optional_query_filter(
             to_account,
             "to_account",
             max_length=128,
             blank_detail="to_account must not be blank",
         )
+        if to_account_filter is not None:
+            to_account_filter = normalized_account(to_account_filter)
         with session_scope(db_url) as session:
             query = select(TreasuryProposal).order_by(TreasuryProposal.id.desc())
             if action_filter is not None:
@@ -145,10 +176,10 @@ def register_treasury_routes(
             return treasury_status(session)
 
     @app.get("/api/v1/treasury/proposals/{proposal_id}")
-    def api_treasury_proposal(proposal_id: int) -> dict[str, Any]:
-        proposal_id = _positive_proposal_id(proposal_id)
+    def api_treasury_proposal(proposal_id: str) -> dict[str, Any]:
+        proposal_id_int = positive_proposal_id(proposal_id)
         with session_scope(db_url) as session:
-            proposal = session.get(TreasuryProposal, proposal_id)
+            proposal = session.get(TreasuryProposal, proposal_id_int)
             if proposal is None:
                 raise HTTPException(status_code=404, detail="proposal not found")
             return proposal_to_dict(proposal)
@@ -179,14 +210,14 @@ def register_treasury_routes(
 
     @app.post("/api/v1/treasury/proposals/{proposal_id}/execute")
     def api_execute_treasury_proposal(
-        proposal_id: int,
+        proposal_id: str,
         admin_login: str = Depends(require_admin_token),
     ) -> dict[str, Any]:
-        proposal_id = _positive_proposal_id(proposal_id)
+        proposal_id_int = positive_proposal_id(proposal_id)
         try:
             return execute_treasury_proposal_with_finalization(
                 db_url,
-                proposal_id=proposal_id,
+                proposal_id=proposal_id_int,
                 executed_by=admin_login,
                 github_issue_token=github_issue_token,
                 public_base_url=public_base_url,
@@ -199,11 +230,11 @@ def register_treasury_routes(
         openapi_extra=TREASURY_CHALLENGE_BODY,
     )
     async def api_create_treasury_challenge(
-        proposal_id: int,
+        proposal_id: str,
         request: Request,
         github_login: str = Depends(require_github_login),
     ) -> dict[str, Any]:
-        proposal_id = _positive_proposal_id(proposal_id)
+        proposal_id_int = positive_proposal_id(proposal_id)
         data = await json_object(request)
         challenge_type = data.get("challenge_type")
         reason = data.get("reason")
@@ -215,7 +246,7 @@ def register_treasury_routes(
             try:
                 challenge = create_treasury_challenge(
                     session,
-                    proposal_id=proposal_id,
+                    proposal_id=proposal_id_int,
                     github_login=github_login,
                     challenge_type=challenge_type,
                     reason=reason,

@@ -13,6 +13,7 @@ from app.ledger.service import (
     pay_bounty,
 )
 from app.main import create_app
+from app.serializers import public_utc_timestamp
 from app.treasury import propose_treasury_action
 
 
@@ -160,7 +161,7 @@ def test_account_routes_expose_pending_payouts_separately_from_paid_work(
     assert account_api["pending_summary"] == {
         "pending_awards": 1,
         "pending_mrwk": "75",
-        "next_executes_after": proposal.executes_after.isoformat(),
+        "next_executes_after": public_utc_timestamp(proposal.executes_after),
     }
     assert accepted_api["summary"] == account_api["accepted_work"]
     assert accepted_api["pending_summary"] == account_api["pending_summary"]
@@ -178,12 +179,14 @@ def test_account_routes_expose_pending_payouts_separately_from_paid_work(
             "issue_url": "https://github.com/ramimbo/mergework/issues/180",
             "submission_url": "https://github.com/ramimbo/mergework/pull/180",
             "accepted_by": "maintainer",
-            "proposed_at": proposal.proposed_at.isoformat(),
-            "executes_after": proposal.executes_after.isoformat(),
+            "proposed_at": public_utc_timestamp(proposal.proposed_at),
+            "executes_after": public_utc_timestamp(proposal.executes_after),
         }
     ]
+    assert account_api["pending_summary"]["next_executes_after"].endswith("Z")
     assert len(accepted_api["accepted_work"]) == 1
     assert accepted_api["accepted_work"][0]["proof_hash"] == proof.hash
+    assert accepted_api["accepted_work"][0]["created_at"].endswith("Z")
     assert "Pending payouts" in page
     assert "Accepted work queued for treasury execution, not proof-backed paid work." in page
     assert f'href="/api/v1/treasury/proposals/{proposal.id}"' in page
@@ -261,6 +264,9 @@ def test_account_page_filters_transactions_by_type(sqlite_url: str) -> None:
     payments = client.get("/accounts/github:alice?tx_type=bounty_payment")
     claims = client.get("/accounts/github:alice?tx_type=github_claim")
     invalid = client.get("/accounts/github:alice?tx_type=bogus")
+    control = client.get("/accounts/github:alice?tx_type=%C2%85bounty_payment")
+    masked_control = client.get("/accounts/github:alice?tx_type=%C2%85bounty_payment&tx_type=all")
+    repeated = client.get("/accounts/github:alice?tx_type=bounty_payment&tx_type=all")
 
     assert all_rows.status_code == 200
     assert "Transaction type filters" in all_rows.text
@@ -280,6 +286,13 @@ def test_account_page_filters_transactions_by_type(sqlite_url: str) -> None:
 
     assert invalid.status_code == 400
     assert "transaction type must be one of" in invalid.text
+
+    assert control.status_code == 400
+    assert control.json()["detail"] == "transaction type must not contain control characters"
+    assert masked_control.status_code == 400
+    assert masked_control.json()["detail"] == "transaction type must not contain control characters"
+    assert repeated.status_code == 400
+    assert repeated.json()["detail"] == "tx_type must be provided at most once"
 
 
 def test_account_api_does_not_advertise_wallet_transfers_for_plain_accounts(

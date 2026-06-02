@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from sqlalchemy import func, or_, select
@@ -31,6 +32,8 @@ from app.serializers import (
     wallet_transfer_to_dict,
 )
 
+MCP_INTEGER_RE = re.compile(r"^(?:0|-?[1-9][0-9]*)$")
+
 
 def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | dict[str, Any]:
     def int_arg(field: str) -> int:
@@ -42,10 +45,9 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
         elif isinstance(value, str):
             if contains_control_character(value):
                 raise ValueError(f"{field} must not contain control characters")
-            clean = value.strip()
-            if clean and clean.lstrip("+-").isdigit():
+            if MCP_INTEGER_RE.fullmatch(value):
                 try:
-                    parsed = int(clean)
+                    parsed = int(value)
                 except ValueError as exc:
                     raise ValueError(f"{field} must be an integer") from exc
             else:

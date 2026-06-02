@@ -8,6 +8,7 @@ from app.db import create_schema, session_scope
 from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
 from app.models import LedgerEntry, Proof
+from app.path_params import SQLITE_INTEGER_MAX
 from app.treasury import propose_treasury_action
 
 
@@ -294,6 +295,51 @@ def test_bounties_page_honors_limit_filter(sqlite_url: str) -> None:
     too_large_limit = client.get("/bounties?limit=201")
     assert too_large_limit.status_code == 422
 
+    controlled_limit = client.get("/bounties?limit=%C2%8550")
+    assert controlled_limit.status_code == 400
+    assert controlled_limit.json()["detail"] == "limit must not contain control characters"
+
+
+def test_bounties_page_rejects_repeated_scalar_filters(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    cases = {
+        "/bounties?limit=not-an-int&limit=10": "limit must be provided at most once",
+        "/bounties?issue_number=bad&issue_number=64": "issue_number must be provided at most once",
+        "/bounties?status=bogus&status=open": "status must be provided at most once",
+        "/bounties?q=first&q=second": "q must be provided at most once",
+        "/bounties?sort=reward&sort=newest": "sort must be provided at most once",
+        "/bounties?repo=ramimbo%2Fmergework&repo=example%2Fother": (
+            "repo must be provided at most once"
+        ),
+        "/bounties?availability=all&availability=effectively_open": (
+            "availability must be provided at most once"
+        ),
+    }
+
+    for path, detail in cases.items():
+        response = client.get(path)
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == detail
+
+
+def test_bounties_page_rejects_sqlite_overflow_issue_number(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    max_issue_number = client.get(f"/bounties?issue_number={SQLITE_INTEGER_MAX}")
+    oversized_issue_number = client.get(f"/bounties?issue_number={SQLITE_INTEGER_MAX + 1}")
+
+    assert max_issue_number.status_code == 200
+    assert oversized_issue_number.status_code == 422
+
 
 def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) -> None:
     create_schema(sqlite_url)
@@ -387,6 +433,15 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
     assert [row["issue_number"] for row in underscore_search.json()] == [66]
 
     source_filter_page = client.get("/bounties?repo=ramimbo%2Fmergework&issue_number=64")
+    controlled_source_filter_page = client.get(
+        "/bounties?repo=ramimbo%2Fmergework&issue_number=%C2%8564"
+    )
+    decimal_source_filter_page = client.get("/bounties?repo=ramimbo%2Fmergework&issue_number=64.0")
+    leading_zero_source_filter_page = client.get(
+        "/bounties?repo=ramimbo%2Fmergework&issue_number=0064"
+    )
+    plus_limit_page = client.get("/bounties?limit=%2B1")
+    leading_zero_limit_page = client.get("/bounties?limit=01")
     assert source_filter_page.status_code == 200
     assert "Source filter: ramimbo/mergework #64." in source_filter_page.text
     assert "Improve public bounty discovery" in source_filter_page.text
@@ -407,6 +462,25 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
     backslash_search = client.get("/api/v1/bounties", params={"q": "\\"})
     assert backslash_search.status_code == 200
     assert [row["issue_number"] for row in backslash_search.json()] == [66]
+    assert controlled_source_filter_page.status_code == 400
+    assert (
+        controlled_source_filter_page.json()["detail"]
+        == "issue_number must not contain control characters"
+    )
+    assert decimal_source_filter_page.status_code == 400
+    assert (
+        decimal_source_filter_page.json()["detail"]
+        == "issue_number must be a canonical positive integer"
+    )
+    assert leading_zero_source_filter_page.status_code == 400
+    assert (
+        leading_zero_source_filter_page.json()["detail"]
+        == "issue_number must be a canonical positive integer"
+    )
+    assert plus_limit_page.status_code == 400
+    assert plus_limit_page.json()["detail"] == "limit must be a canonical positive integer"
+    assert leading_zero_limit_page.status_code == 400
+    assert leading_zero_limit_page.json()["detail"] == "limit must be a canonical positive integer"
 
 
 def test_bounties_page_and_api_sort_public_rows(sqlite_url: str) -> None:
@@ -627,6 +701,12 @@ def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     assert missing_response.status_code == 404
     assert client.get("/api/v1/bounties/0").status_code == 400
     assert client.get("/bounties/0").status_code == 400
+    for noncanonical_id in (f"{bounty.id}.0", f"+{bounty.id}", f"%C2%85{bounty.id}"):
+        api_response = client.get(f"/api/v1/bounties/{noncanonical_id}")
+        assert api_response.status_code == 400
+        assert api_response.json()["detail"] == "bounty id must be a positive integer"
+        page_response = client.get(f"/bounties/{noncanonical_id}")
+        assert page_response.status_code == 400
 
     oversized_bounty_id = "9" * 40
     oversized_api_response = client.get(f"/api/v1/bounties/{oversized_bounty_id}")
@@ -865,6 +945,16 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert f'href="/ledger/{latest_sequence + 1}">Next entry</a>' not in latest_page.text
     assert client.get("/api/v1/ledger/0").status_code == 400
     assert client.get("/ledger/0").status_code == 400
+    for noncanonical_sequence in (
+        f"{payment_sequence}.0",
+        f"+{payment_sequence}",
+        f"%C2%85{payment_sequence}",
+    ):
+        api_response = client.get(f"/api/v1/ledger/{noncanonical_sequence}")
+        assert api_response.status_code == 400
+        assert api_response.json()["detail"] == "ledger sequence must be a positive integer"
+        page_response = client.get(f"/ledger/{noncanonical_sequence}")
+        assert page_response.status_code == 400
 
     oversized_sequence = "9" * 40
     oversized_api_response = client.get(f"/api/v1/ledger/{oversized_sequence}")

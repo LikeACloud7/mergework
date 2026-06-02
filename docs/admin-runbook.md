@@ -142,6 +142,13 @@ on the proposal and confirm the issue has both `mrwk:bounty` and the
 or partial, use the manual fallback rules above after confirming the public
 bounty row exists.
 
+The production treasury executor also finalizes fully paid bounty issues. It
+only acts on bounty rows whose stored status is `paid`; it must not close rounds
+that are merely full because pending payout proposals consume effective
+capacity. Successful paid-issue finalization adds `mrwk:paid`, posts a concise
+filled-and-paid comment when needed, closes the GitHub issue, and records a
+local finalization marker so later executor passes do not repeat the comment.
+
 ## Accept Work
 
 ### PR Bounties
@@ -274,6 +281,28 @@ The command only reads PRs and issues; it does not close PRs, label issues, or
 post comments. It reports missing bounty references, closed or exhausted bounty
 references, dirty or unknown merge state, `mrwk:needs-info`, and likely duplicate
 PR scope within the same bounty issue.
+
+### Proposed Work Triage
+
+Use the read-only proposed-work triage report when maintainers need to review
+the intake queue before creating, rejecting, or consolidating future bounties:
+
+```bash
+python scripts/proposed_work_triage.py --repo ramimbo/mergework --format markdown
+```
+
+For deterministic review or incident write-ups, use an offline fixture instead:
+
+```bash
+python scripts/proposed_work_triage.py --input proposed-work-fixture.json --format json
+```
+
+The report lists proposed-work issues, missing `proposed-work` labels, missing
+template sections, vague or rejected proposals, already-routed items, likely
+related groups, and #649 pending-versus-proof-backed payment status when that
+public data is present in the input or available from the public API. Use
+`--api-host` only for another public MergeWork API host. It does not label,
+comment, edit issues, create bounties, accept work, or pay claims.
 
 For reviewer-specific review-bounty preflight, generate a candidate report with
 the reviewer login:

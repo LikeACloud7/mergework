@@ -187,7 +187,7 @@ work.
 List active attempts for a bounty:
 
 ```bash
-curl -s "$API_HOST/api/v1/bounties/<bounty_id>/attempts"
+curl -s "$API_HOST/api/v1/bounties/<bounty_id>/attempts?limit=25"
 ```
 
 The list response returns the bounty id, advisory warnings, and active attempt reservations:
