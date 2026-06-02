@@ -66,9 +66,14 @@ Inspect one bounty, accepted-work activity, a ledger page, and a proof:
 curl -s "$API_HOST/api/v1/bounties/<bounty_id>"
 curl -s "$API_HOST/api/v1/bounties/<bounty_id>/attempts"
 curl -s "$API_HOST/api/v1/activity"
+curl -s "$API_HOST/api/v1/activity?account=github%3A<login>"
 curl -s "$API_HOST/api/v1/ledger?limit=10"
 curl -s "$API_HOST/api/v1/proofs/<proof_hash>"
 ```
+
+Use `account=` for an exact account activity slice. Use `q=` when you need
+broader matching across proof hashes, proposal ids, bounty issues, repos, or
+submission URLs.
 
 Look up a single ledger entry by sequence number:
 

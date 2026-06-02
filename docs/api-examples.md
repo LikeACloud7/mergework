@@ -301,13 +301,17 @@ Read accepted-work activity summarized from proof-backed bounty payments:
 ```bash
 curl -s "$API_HOST/api/v1/activity"
 curl -s "$API_HOST/api/v1/activity?q=p3xill"
+curl -s "$API_HOST/api/v1/activity?account=github%3Ap3xill"
 ```
 
-The optional `q` parameter filters proof-backed and pending activity rows by
-account, amount, submission URL, proof hash, proposal id, bounty repo, bounty
-issue URL, internal bounty id, or GitHub issue number. In other words, the
-same search can match bounty repo, bounty issue URL, proposal, proof, or
-submission evidence. The response groups
+Use `account=github:<login>` or `account=mrwk1...` for an exact account-scoped
+activity view. The optional `q` parameter can still be used for broader
+free-text matching, or combined with `account` to search within one account's
+activity rows. `q` filters proof-backed and pending activity rows by account,
+amount, submission URL, proof hash, proposal id, bounty repo, bounty issue URL,
+internal bounty id, or GitHub issue number. In other words, the same search can
+match bounty repo, bounty issue URL, proposal, proof, or submission evidence.
+The response groups
 matching proof-backed bounty payments into `totals`, contributor rollups, and
 the most recent payment rows. Accepted-but-not-yet-executed `pay_bounty`
 proposals appear separately in `pending_totals` and `pending_payouts`; they are
