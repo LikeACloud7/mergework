@@ -19,6 +19,7 @@ from app.openapi_request_bodies import (
     WALLET_REGISTER_BODY,
     WALLET_TRANSFER_BODY,
 )
+from app.path_params import reject_path_whitespace_padding
 from app.serializers import ledger_to_dict, wallet_to_dict, wallet_transfer_to_dict
 
 JsonObjectLoader = Callable[[Request], Awaitable[dict[str, Any]]]
@@ -66,6 +67,7 @@ def register_wallet_api_routes(
 
     @app.get("/api/v1/wallets/{address}")
     def api_wallet(address: str) -> dict[str, Any]:
+        reject_path_whitespace_padding(address, "MRWK wallet address")
         address = normalized_wallet_address(address)
         with session_scope(db_url) as session:
             wallet = session.get(Wallet, address)

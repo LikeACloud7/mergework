@@ -9,6 +9,17 @@ HEX_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 POSITIVE_INTEGER_RE = re.compile(r"^[0-9]+$")
 
 
+def reject_path_whitespace_padding(value: str, field: str) -> None:
+    """Reject leading or trailing path whitespace before identifier normalization."""
+    if any(ord(char) < 32 or 127 <= ord(char) < 160 for char in value):
+        return
+    if value.strip() and value != value.strip():
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field} must not contain leading or trailing whitespace",
+        )
+
+
 def issue_number_search_value(query: str) -> int | None:
     """Return a bounded GitHub issue number from a plain numeric search query."""
     clean = query.removeprefix("#")

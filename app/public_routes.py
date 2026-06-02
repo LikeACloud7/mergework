@@ -21,7 +21,7 @@ from app.control_chars import contains_control_character
 from app.db import session_scope
 from app.ledger_views import account_ledger_transaction_types, account_ledger_transactions
 from app.models import Wallet
-from app.path_params import SQLITE_INTEGER_MAX, proof_hash_from_path
+from app.path_params import SQLITE_INTEGER_MAX, proof_hash_from_path, reject_path_whitespace_padding
 from app.query_validation import (
     reject_control_char_query_param,
     reject_noncanonical_int_query_param,
@@ -337,6 +337,7 @@ def register_public_routes(
         address: str,
         type: str | None = Query(None),  # noqa: A002
     ) -> HTMLResponse:
+        reject_path_whitespace_padding(address, "MRWK wallet address")
         for value in request.query_params.getlist("type"):
             if contains_control_character(value):
                 raise HTTPException(

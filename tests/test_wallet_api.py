@@ -373,6 +373,30 @@ def test_wallet_api_malformed_register_requests_return_4xx(sqlite_url: str) -> N
     assert non_object.json()["detail"] == "json body must be an object"
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/wallets/%20{address}",
+        "/api/v1/wallets/{address}%20",
+        "/wallets/%20{address}",
+        "/wallets/{address}%20",
+    ],
+)
+def test_wallet_lookup_rejects_path_whitespace_padding(sqlite_url: str, path: str) -> None:
+    create_schema(sqlite_url)
+    _, public_hex, address = _keypair()
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    _register_wallet(client, public_hex)
+
+    response = client.get(path.format(address=address))
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]
+        == "MRWK wallet address must not contain leading or trailing whitespace"
+    )
+
+
 def test_wallet_lookup_rejects_invalid_addresses_before_lookup(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))

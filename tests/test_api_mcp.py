@@ -2141,7 +2141,6 @@ def test_github_account_views_normalize_mixed_case_logins(sqlite_url: str) -> No
     account_cases = (
         ("github:Alice", "/api/v1/accounts/github:Alice", "/accounts/github:Alice"),
         ("GitHub:Alice", "/api/v1/accounts/GitHub:Alice", "/accounts/GitHub:Alice"),
-        (" GitHub:Alice ", "/api/v1/accounts/%20GitHub:Alice%20", "/accounts/%20GitHub:Alice%20"),
     )
     for mcp_account, api_path, page_path in account_cases:
         account_api = client.get(api_path).json()
@@ -2164,6 +2163,24 @@ def test_github_account_views_normalize_mixed_case_logins(sqlite_url: str) -> No
         assert f"/proofs/{proof.hash}" in account
         assert 'href="https://github.com/alice">@alice</a>' in account
         assert "github:alice: 50 MRWK" in balance["result"]["content"][0]["text"]
+
+    padded_api = client.get("/api/v1/accounts/%20GitHub:Alice%20")
+    padded_page = client.get("/accounts/%20GitHub:Alice%20")
+    padded_mcp = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "get_balance", "arguments": {"account": " GitHub:Alice "}},
+        },
+    ).json()
+
+    assert padded_api.status_code == 400
+    assert padded_api.json()["detail"] == "account must not contain leading or trailing whitespace"
+    assert padded_page.status_code == 400
+    assert padded_page.json()["detail"] == "account must not contain leading or trailing whitespace"
+    assert "github:alice: 50 MRWK" in padded_mcp["result"]["content"][0]["text"]
 
 
 def test_ledger_page_highlights_bounty_payment_and_release(sqlite_url: str) -> None:
