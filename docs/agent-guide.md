@@ -102,6 +102,14 @@ Use proposal-list filters when you need one queue slice, such as pending
 Use [docs/bounty-lifecycle.md](bounty-lifecycle.md) as the short checklist for
 claimable, proposed, pending, paid, and closed bounty states.
 
+The GitHub bounty board at
+https://github.com/ramimbo/mergework/issues/785 is an index for humans and
+agents, refreshed by the treasury executor when configured. Do not submit
+`/claim` on the board issue. Use it to find live claimable bounty issues and
+pending `create_bounty` proposals, then verify the target issue's `mrwk:bounty`
+label, `Reserved on MergeWork` comment, public bounty row, and effective award
+capacity before opening work.
+
 Proposal challenges require a GitHub-authenticated session and at least one
 accepted MRWK award. Use machine-checkable challenge types only when the rule is
 objectively true; use `subjective_note` for review concerns that should be

@@ -19,6 +19,7 @@ class Settings:
     admin_token: str
     cookie_secret: str
     github_accepted_labelers: tuple[str, ...]
+    bounty_board_issue_number: int | None
 
 
 WEAK_SECRET_VALUES = {
@@ -41,6 +42,17 @@ def _csv_env(name: str, default: str = "") -> tuple[str, ...]:
     if not raw_value.strip():
         return ()
     return tuple(item.strip().lower() for item in raw_value.split(","))
+
+
+def _optional_positive_int_env(name: str) -> int | None:
+    raw_value = os.environ.get(name, "").strip()
+    if not raw_value:
+        return None
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    return value
 
 
 def _secret_errors(name: str, value: str) -> list[str]:
@@ -197,6 +209,8 @@ def validate_deploy_settings(settings: Settings) -> list[str]:
             errors.append(
                 "MERGEWORK_GITHUB_ACCEPTED_LABELERS must be included in MERGEWORK_ADMIN_LOGINS"
             )
+    if settings.bounty_board_issue_number is not None and settings.bounty_board_issue_number <= 0:
+        errors.append("MERGEWORK_BOUNTY_BOARD_ISSUE_NUMBER must be a positive integer")
     errors.extend(_required_env_value_errors("MERGEWORK_PUBLIC_BASE_URL", settings.public_base_url))
     try:
         parsed_base_url = urlparse(settings.public_base_url)
@@ -260,4 +274,5 @@ def get_settings() -> Settings:
         admin_token=os.environ.get("MERGEWORK_ADMIN_TOKEN", ""),
         cookie_secret=os.environ.get("MERGEWORK_COOKIE_SECRET", ""),
         github_accepted_labelers=_csv_env("MERGEWORK_GITHUB_ACCEPTED_LABELERS"),
+        bounty_board_issue_number=_optional_positive_int_env("MERGEWORK_BOUNTY_BOARD_ISSUE_NUMBER"),
     )

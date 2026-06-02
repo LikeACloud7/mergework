@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import select
 
 from app.db import session_scope
+from app.github_bounty_board import refresh_bounty_board_issue
 from app.github_issue_finalization import finalize_created_bounty_issue, finalize_paid_bounty_issue
 from app.ledger.service import LedgerError
 from app.models import Bounty, TreasuryProposal, utc_now
@@ -19,6 +20,7 @@ from app.treasury import (
 
 Finalizer = Callable[..., dict[str, Any]]
 PaidIssueFinalizer = Callable[..., dict[str, Any]]
+BountyBoardRefresher = Callable[..., dict[str, Any]]
 PAID_ISSUE_FINALIZED_STATUSES = {"updated", "closed", "already_finalized"}
 
 
@@ -189,8 +191,10 @@ def execute_due_treasury_proposals(
     public_base_url: str,
     executed_by: str = "treasury-executor",
     limit: int = 25,
+    bounty_board_issue_number: int | None = None,
     finalizer: Finalizer | None = None,
     paid_issue_finalizer: PaidIssueFinalizer | None = None,
+    bounty_board_refresher: BountyBoardRefresher | None = None,
 ) -> dict[str, Any]:
     proposal_ids = due_treasury_proposal_ids(db_url, limit=limit)
     results: list[dict[str, Any]] = []
@@ -240,6 +244,25 @@ def execute_due_treasury_proposals(
         limit=limit,
         finalizer=paid_issue_finalizer,
     )
+    if bounty_board_issue_number is None:
+        bounty_board_report = {
+            "status": "skipped",
+            "reason": "bounty board issue number not configured",
+        }
+    else:
+        issue_refresher = bounty_board_refresher or refresh_bounty_board_issue
+        try:
+            bounty_board_report = issue_refresher(
+                db_url,
+                github_token=github_issue_token,
+                public_base_url=public_base_url,
+                issue_number=bounty_board_issue_number,
+            )
+        except Exception as exc:
+            bounty_board_report = {
+                "status": "failed",
+                "reason": f"github bounty board refresh failed: {type(exc).__name__}",
+            }
     return {
         "type": "treasury_executor_run",
         "attempted": len(proposal_ids),
@@ -247,4 +270,5 @@ def execute_due_treasury_proposals(
         "failed": failed,
         "results": results,
         "paid_issue_finalization": paid_issue_report,
+        "bounty_board": bounty_board_report,
     }

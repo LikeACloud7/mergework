@@ -426,3 +426,76 @@ def test_executor_continues_after_failed_due_proposal(sqlite_url: str) -> None:
         assert good_proposal is not None
         assert bad_proposal.status == "pending"
         assert good_proposal.status == "executed"
+
+
+def test_executor_refreshes_bounty_board_when_configured(sqlite_url: str) -> None:
+    _init_db(sqlite_url)
+    refresher_calls: list[dict[str, object]] = []
+
+    def fake_bounty_board_refresher(
+        db_url: str,
+        *,
+        github_token: str,
+        public_base_url: str,
+        issue_number: int | None,
+    ) -> dict[str, object]:
+        refresher_calls.append(
+            {
+                "db_url": db_url,
+                "github_token": github_token,
+                "public_base_url": public_base_url,
+                "issue_number": issue_number,
+            }
+        )
+        return {"status": "updated", "issue_number": issue_number}
+
+    report = execute_due_treasury_proposals(
+        sqlite_url,
+        github_issue_token="github-issue-token",
+        public_base_url="https://mrwk.example",
+        executed_by="treasury-executor",
+        bounty_board_issue_number=785,
+        bounty_board_refresher=fake_bounty_board_refresher,
+    )
+
+    assert report["attempted"] == 0
+    assert report["bounty_board"] == {"status": "updated", "issue_number": 785}
+    assert refresher_calls == [
+        {
+            "db_url": sqlite_url,
+            "github_token": "github-issue-token",
+            "public_base_url": "https://mrwk.example",
+            "issue_number": 785,
+        }
+    ]
+
+
+def test_executor_skips_bounty_board_refresh_without_issue_number(sqlite_url: str) -> None:
+    _init_db(sqlite_url)
+    refresher_calls = 0
+
+    def fake_bounty_board_refresher(
+        db_url: str,
+        *,
+        github_token: str,
+        public_base_url: str,
+        issue_number: int | None,
+    ) -> dict[str, object]:
+        nonlocal refresher_calls
+        refresher_calls += 1
+        return {"status": "updated", "issue_number": issue_number}
+
+    report = execute_due_treasury_proposals(
+        sqlite_url,
+        github_issue_token="github-issue-token",
+        public_base_url="https://mrwk.example",
+        executed_by="treasury-executor",
+        bounty_board_issue_number=None,
+        bounty_board_refresher=fake_bounty_board_refresher,
+    )
+
+    assert report["bounty_board"] == {
+        "status": "skipped",
+        "reason": "bounty board issue number not configured",
+    }
+    assert refresher_calls == 0
