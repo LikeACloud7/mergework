@@ -138,7 +138,10 @@ def pending_create_bounty_comment_body(
         raise ValueError("pending bounty comment requires a create_bounty proposal")
     if str(proposal.get("status") or "") != "pending":
         raise ValueError("pending bounty comment requires a pending proposal")
-    proposal_id = int(str(proposal.get("id") or "0"))
+    try:
+        proposal_id = int(str(proposal.get("id") or "0"))
+    except ValueError:
+        raise ValueError("pending bounty comment requires a positive proposal id") from None
     if proposal_id <= 0:
         raise ValueError("pending bounty comment requires a positive proposal id")
     executes_after = str(proposal.get("executes_after") or "").strip()
