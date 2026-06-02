@@ -129,9 +129,20 @@ instead of full bounty rows:
   "open_awards": 2,
   "open_pool_mrwk": "50",
   "effective_open_awards": 1,
-  "effective_open_pool_mrwk": "25"
+  "effective_open_pool_mrwk": "25",
+  "availability_state_counts": {
+    "pending_payouts_partial": 1
+  },
+  "pending_payout_awards": 1,
+  "reduced_capacity_bounties": 1,
+  "effectively_unavailable_bounties": 0
 }
 ```
+
+Use `availability_state_counts`, `pending_payout_awards`,
+`reduced_capacity_bounties`, and `effectively_unavailable_bounties` to explain
+why effective capacity is lower than raw award capacity without fetching every
+bounty row.
 
 Read a single bounty with its internal `id` from `/api/v1/bounties`:
 

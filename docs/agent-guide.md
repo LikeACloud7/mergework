@@ -56,6 +56,10 @@ curl -s "$API_HOST/api/v1/bounties/summary?q=docs"
 curl -s "$API_HOST/api/v1/bounties/summary?repo=ramimbo%2Fmergework&issue_number=649"
 ```
 
+Read `availability_state_counts`, `pending_payout_awards`,
+`reduced_capacity_bounties`, and `effectively_unavailable_bounties` when raw
+summary capacity is higher than effective capacity.
+
 When your workflow starts from a GitHub issue URL, prefer exact
 `repo=owner/name` and `issue_number=N` filters on `/api/v1/bounties` or
 `/api/v1/bounties/summary`. Use `q` only for broader text discovery.

@@ -121,6 +121,10 @@ def test_bounties_summary_api_matches_public_list_filters(sqlite_url: str) -> No
         "open_pool_mrwk": "50",
         "effective_open_awards": 2,
         "effective_open_pool_mrwk": "50",
+        "availability_state_counts": {"open": 1},
+        "pending_payout_awards": 0,
+        "reduced_capacity_bounties": 0,
+        "effectively_unavailable_bounties": 0,
     }
 
     paid_summary = client.get("/api/v1/bounties/summary?status=paid&q=discovery").json()
@@ -130,6 +134,10 @@ def test_bounties_summary_api_matches_public_list_filters(sqlite_url: str) -> No
         "open_pool_mrwk": "0",
         "effective_open_awards": 0,
         "effective_open_pool_mrwk": "0",
+        "availability_state_counts": {},
+        "pending_payout_awards": 0,
+        "reduced_capacity_bounties": 0,
+        "effectively_unavailable_bounties": 0,
     }
 
     invalid = client.get("/api/v1/bounties/summary?status=bogus")

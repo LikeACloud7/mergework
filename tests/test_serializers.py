@@ -63,6 +63,62 @@ def test_bounty_serializers_preserve_public_capacity_fields(sqlite_url: str) -> 
         "open_pool_mrwk": "100",
         "effective_open_awards": 4,
         "effective_open_pool_mrwk": "100",
+        "availability_state_counts": {"open": 1},
+        "pending_payout_awards": 0,
+        "reduced_capacity_bounties": 0,
+        "effectively_unavailable_bounties": 0,
+    }
+
+
+def test_bounty_list_summary_breaks_down_availability_states() -> None:
+    summary = bounty_list_summary(
+        [
+            {
+                "reward_mrwk": "25",
+                "awards_remaining": 3,
+                "effective_awards_remaining": 3,
+                "availability_state": "open",
+                "pending_payout_awards": 0,
+            },
+            {
+                "reward_mrwk": "40",
+                "awards_remaining": 2,
+                "effective_awards_remaining": 1,
+                "availability_state": "pending_payouts_partial",
+                "pending_payout_awards": 1,
+            },
+            {
+                "reward_mrwk": "10",
+                "awards_remaining": 2,
+                "effective_awards_remaining": 0,
+                "availability_state": "pending_payouts_full",
+                "pending_payout_awards": 2,
+            },
+            {
+                "reward_mrwk": "15",
+                "awards_remaining": 1,
+                "effective_awards_remaining": 0,
+                "availability_state": "pending_close",
+                "pending_payout_awards": 0,
+            },
+        ]
+    )
+
+    assert summary == {
+        "bounties_shown": 4,
+        "open_awards": 8,
+        "open_pool_mrwk": "190",
+        "effective_open_awards": 4,
+        "effective_open_pool_mrwk": "115",
+        "availability_state_counts": {
+            "open": 1,
+            "pending_payouts_partial": 1,
+            "pending_payouts_full": 1,
+            "pending_close": 1,
+        },
+        "pending_payout_awards": 3,
+        "reduced_capacity_bounties": 3,
+        "effectively_unavailable_bounties": 2,
     }
 
 
