@@ -56,6 +56,7 @@ def test_bounty_serializers_preserve_public_capacity_fields(sqlite_url: str) -> 
     assert requirements["expected_artifact"] == "focused PR, issue, report, or evidence URL"
     assert requirements["reference_formats"] == ["Bounty #320", "Refs #320"]
     assert requirements["claim_command"] == "/claim"
+    assert bounty_data["created_at"].endswith("Z")
     assert bounty_list_summary([bounty_data]) == {
         "bounties_shown": 1,
         "open_awards": 4,
@@ -336,12 +337,42 @@ def test_activity_serializers_skip_malformed_public_proofs(sqlite_url: str) -> N
 
     assert activity == {
         "totals": {"accepted_awards": 0, "accepted_mrwk": "0", "contributors": 0},
+        "pending_totals": {"pending_awards": 0, "pending_mrwk": "0"},
         "query": "",
         "contributors": [],
+        "pending_payouts": [],
         "recent": [],
     }
     assert summary == empty_accepted_summary()
     assert accepted_work == []
+
+
+def test_bounty_award_serializer_uses_explicit_utc_timestamp(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=321,
+            issue_url="https://github.com/ramimbo/mergework/issues/321",
+            title="Public bounty award history",
+            reward_mrwk="40",
+            acceptance="Award history timestamps should be explicit UTC.",
+        )
+        pay_bounty(
+            session,
+            bounty_id=bounty.id,
+            to_account="github:tatelyman",
+            submission_url="https://github.com/ramimbo/mergework/pull/321",
+            accepted_by="ramimbo",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+
+        awards = bounty_awards_to_dict(session, bounty.id)
+
+    assert len(awards) == 1
+    assert awards[0]["created_at"].endswith("Z")
 
 
 def test_bounty_award_serializer_skips_malformed_public_proofs(sqlite_url: str) -> None:
