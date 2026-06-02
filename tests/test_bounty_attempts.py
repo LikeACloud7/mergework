@@ -111,6 +111,11 @@ def test_bounty_attempts_register_list_duplicate_and_release(sqlite_url: str, mo
         response = client.get(f"/api/v1/bounties/{noncanonical_id}/attempts")
         assert response.status_code == 400
         assert response.json()["detail"] == "bounty id must be a positive integer"
+    leading_zero_response = client.get(f"/api/v1/bounties/0{bounty.id}/attempts")
+    assert leading_zero_response.status_code == 400
+    assert (
+        leading_zero_response.json()["detail"] == "bounty id must be a canonical positive integer"
+    )
 
     limited = client.get(f"/api/v1/bounties/{bounty.id}/attempts?limit=1")
     assert limited.status_code == 200
