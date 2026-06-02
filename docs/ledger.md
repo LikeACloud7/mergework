@@ -75,6 +75,29 @@ Public ledger state and proof hashes make future snapshot, bridge, or
 onchain-claim experiments auditable if maintainers and contributors decide to
 explore them.
 
+The read-only Phase 2A snapshot exporter is the first boring foundation for
+that path. It exports deterministic JSON from committed ledger entries only:
+
+```bash
+python scripts/export_ledger_snapshot.py > ledger-snapshot.json
+python scripts/export_ledger_snapshot.py --schema > ledger-snapshot.schema.json
+```
+
+The snapshot includes schema/version metadata, a generated UTC timestamp, source
+metadata, the latest ledger sequence and entry hash, the fixed genesis supply in
+integer microunits, deterministically sorted account balances in integer
+microunits, credited/debited/net supply totals, hash-chain verification, and
+fixed-supply conservation verification.
+
+Snapshot `proposal_validation` is intentionally `partial`: the exporter verifies
+committed ledger entries, the hash chain, and fixed-supply conservation, but it
+does not replay every historical treasury proposal, challenge, or governance
+rule. Pending treasury proposals are not committed ledger state.
+
+This snapshot is read-only infrastructure. It is not a bridge, exchange,
+off-ramp, custody path, relayer, redemption mechanism, price signal, or live
+external-value claim.
+
 ## Wallets and Sending
 
 MRWK supports native wallet addresses and signed transfers inside the ledger.
