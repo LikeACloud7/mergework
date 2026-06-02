@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from typing import Any
+from urllib.request import Request
 
 from app.db import create_schema, session_scope
 from app.ledger.service import (
@@ -19,6 +21,178 @@ from app.webhooks.github import handle_github_webhook, verify_github_signature
 def _signature(secret: str, body: bytes) -> str:
     digest = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     return f"sha256={digest}"
+
+
+class _FakeResponse:
+    def __init__(self, body: dict[str, Any]) -> None:
+        self._body = body
+
+    def __enter__(self) -> _FakeResponse:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return json.dumps(self._body).encode()
+
+
+def _proposed_work_body() -> str:
+    return "\n\n".join(
+        [
+            "## Proposed work\n\nHandle a focused contributor-flow problem.",
+            "## Problem\n\nCLI-created proposed-work issues miss the intake label.",
+            "## Current evidence\n\nIssue #786 had no label after creation.",
+            "## Proposed scope\n\nAdd the intake label when the issue is clearly proposed work.",
+            "## Expected value\n\nMaintainers and agents can find intake issues.",
+            "## Acceptance / verification notes\n\nWebhook tests cover the behavior.",
+            "## Duplicate search\n\nNo existing automation covers this.",
+            "## Out of scope\n\nNo bounty, payout, or mrwk:bounty label changes.",
+        ]
+    )
+
+
+def test_issue_webhook_adds_proposed_work_label_for_template_shaped_issue(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    body = json.dumps(
+        {
+            "action": "opened",
+            "issue": {
+                "number": 786,
+                "title": "Proposed work: handle activity account filter explicitly",
+                "body": _proposed_work_body(),
+                "html_url": "https://github.com/ramimbo/mergework/issues/786",
+                "labels": [],
+                "user": {"login": "contributor"},
+            },
+            "repository": {"full_name": "ramimbo/mergework"},
+            "sender": {"login": "contributor"},
+        },
+        separators=(",", ":"),
+    ).encode()
+    requests: list[Request] = []
+
+    def fake_opener(request: Request, timeout: float) -> _FakeResponse:
+        requests.append(request)
+        return _FakeResponse({})
+
+    result = handle_github_webhook(
+        sqlite_url,
+        {
+            "X-GitHub-Delivery": "delivery-proposed-work-opened",
+            "X-GitHub-Event": "issues",
+            "X-Hub-Signature-256": _signature("secret", body),
+        },
+        body,
+        "secret",
+        github_issue_token="github-issue-token",
+        opener=fake_opener,
+    )
+
+    assert result == {"status": "proposed_work_labeled", "label": "proposed-work"}
+    assert len(requests) == 1
+    assert requests[0].full_url == (
+        "https://api.github.com/repos/ramimbo/mergework/issues/786/labels"
+    )
+    assert requests[0].headers["Authorization"] == "Bearer github-issue-token"
+    assert json.loads((requests[0].data or b"").decode()) == {"labels": ["proposed-work"]}
+    with session_scope(sqlite_url) as session:
+        event = session.get(WebhookEvent, "delivery-proposed-work-opened")
+        assert event is not None
+        assert event.processed_status == "proposed_work_labeled"
+
+
+def test_issue_webhook_skips_proposed_work_label_without_github_token(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    body = json.dumps(
+        {
+            "action": "opened",
+            "issue": {
+                "number": 786,
+                "title": "Proposed work: handle activity account filter explicitly",
+                "body": _proposed_work_body(),
+                "html_url": "https://github.com/ramimbo/mergework/issues/786",
+                "labels": [],
+                "user": {"login": "contributor"},
+            },
+            "repository": {"full_name": "ramimbo/mergework"},
+            "sender": {"login": "contributor"},
+        },
+        separators=(",", ":"),
+    ).encode()
+    calls = 0
+
+    def fake_opener(request: Request, timeout: float) -> _FakeResponse:
+        nonlocal calls
+        calls += 1
+        return _FakeResponse({})
+
+    result = handle_github_webhook(
+        sqlite_url,
+        {
+            "X-GitHub-Delivery": "delivery-proposed-work-no-token",
+            "X-GitHub-Event": "issues",
+            "X-Hub-Signature-256": _signature("secret", body),
+        },
+        body,
+        "secret",
+        github_issue_token="",
+        opener=fake_opener,
+    )
+
+    assert result == {
+        "status": "proposed_work_label_skipped",
+        "reason": "github issue token not configured",
+    }
+    assert calls == 0
+    with session_scope(sqlite_url) as session:
+        event = session.get(WebhookEvent, "delivery-proposed-work-no-token")
+        assert event is not None
+        assert event.processed_status == "proposed_work_label_skipped"
+
+
+def test_issue_webhook_does_not_label_non_template_issue(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    body = json.dumps(
+        {
+            "action": "opened",
+            "issue": {
+                "number": 787,
+                "title": "Question about claims",
+                "body": "Can I claim this?",
+                "html_url": "https://github.com/ramimbo/mergework/issues/787",
+                "labels": [],
+                "user": {"login": "contributor"},
+            },
+            "repository": {"full_name": "ramimbo/mergework"},
+            "sender": {"login": "contributor"},
+        },
+        separators=(",", ":"),
+    ).encode()
+    calls = 0
+
+    def fake_opener(request: Request, timeout: float) -> _FakeResponse:
+        nonlocal calls
+        calls += 1
+        return _FakeResponse({})
+
+    result = handle_github_webhook(
+        sqlite_url,
+        {
+            "X-GitHub-Delivery": "delivery-non-proposed-work",
+            "X-GitHub-Event": "issues",
+            "X-Hub-Signature-256": _signature("secret", body),
+        },
+        body,
+        "secret",
+        github_issue_token="github-issue-token",
+        opener=fake_opener,
+    )
+
+    assert result == {"status": "ignored"}
+    assert calls == 0
 
 
 def test_github_signature_verification() -> None:

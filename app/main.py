@@ -355,7 +355,12 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
             "X-Hub-Signature-256": headers.get("x-hub-signature-256", ""),
         }
         result = handle_github_webhook(
-            db_url, normalized, body, secret, settings.github_accepted_labelers
+            db_url,
+            normalized,
+            body,
+            secret,
+            accepted_labelers=settings.github_accepted_labelers,
+            github_issue_token=settings.github_issue_token,
         )
         code = 401 if result["status"] == "unauthorized" else 200
         return JSONResponse(result, status_code=code)
