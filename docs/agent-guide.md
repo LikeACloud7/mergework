@@ -187,6 +187,21 @@ The public app flow is `/auth/github/login?next=/me`.
 Before describing payout or transfer behavior, check the current transfer paths
 in [docs/ledger.md](ledger.md#current-transfer-paths).
 
+## Ledger Snapshots
+
+For read-only Phase 2A ledger reconciliation, use the local snapshot exporter:
+
+```bash
+python scripts/export_ledger_snapshot.py > ledger-snapshot.json
+python scripts/export_ledger_snapshot.py --schema > ledger-snapshot.schema.json
+```
+
+Snapshots include committed ledger balances in integer microunits, hash-chain
+verification, fixed-supply conservation verification, and
+`proposal_validation: "partial"`. They do not replay every historical treasury
+proposal or include pending proposals as committed ledger state, and they are
+not a bridge, exchange, off-ramp, redemption mechanism, or price signal.
+
 ## MCP Endpoint
 
 The MCP JSON-RPC endpoint is `POST /mcp`.
