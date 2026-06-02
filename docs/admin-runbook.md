@@ -120,6 +120,8 @@ Enable it only in the production `.env`:
 MERGEWORK_TREASURY_EXECUTOR_ENABLED=1
 MERGEWORK_TREASURY_EXECUTOR_INTERVAL_SECONDS=300
 MERGEWORK_TREASURY_EXECUTOR_BATCH_LIMIT=25
+MERGEWORK_BOUNTY_BOARD_ISSUE_NUMBER=785
+MERGEWORK_BOUNTY_BOARD_REFRESH_INTERVAL_SECONDS=60
 ```
 
 Deploy or restart the service with Docker Compose after editing production
@@ -148,6 +150,17 @@ that are merely full because pending payout proposals consume effective
 capacity. Successful paid-issue finalization adds `mrwk:paid`, posts a concise
 filled-and-paid comment when needed, closes the GitHub issue, and records a
 local finalization marker so later executor passes do not repeat the comment.
+
+When `MERGEWORK_BOUNTY_BOARD_ISSUE_NUMBER` is set, each executor pass also
+refreshes that issue's bounty-board marker block. The board is an index only:
+it must not use a `MRWK bounty:` title, must not receive `mrwk:bounty`, and must
+separate claimable live bounties from pending `create_bounty` proposals.
+The service also runs a board-only refresh on
+`MERGEWORK_BOUNTY_BOARD_REFRESH_INTERVAL_SECONDS`, defaulting to 60 seconds with
+a 30-second minimum. That path reads current bounty and treasury state and only
+patches GitHub when the marker block changes, so the board stays fresh without
+requiring the full treasury proposal executor to run every minute. The displayed
+state timestamp changes only when the displayed state changes.
 
 ## Accept Work
 

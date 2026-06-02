@@ -19,6 +19,7 @@ def _settings(**overrides: object) -> Settings:
         "admin_token": "admin-14dcaab83bb245f2bfb5d5c21a9bb55b",
         "cookie_secret": "cookie-27fd1c41324a4bdcb2e4014adc3a6108",
         "github_accepted_labelers": ("alice",),
+        "bounty_board_issue_number": None,
     }
     values.update(overrides)
     return Settings(**values)  # type: ignore[arg-type]
@@ -26,6 +27,18 @@ def _settings(**overrides: object) -> Settings:
 
 def test_deploy_readiness_accepts_strong_configuration() -> None:
     assert validate_deploy_settings(_settings()) == []
+
+
+def test_get_settings_parses_bounty_board_issue_number(monkeypatch) -> None:
+    monkeypatch.setenv("MERGEWORK_BOUNTY_BOARD_ISSUE_NUMBER", "785")
+
+    assert get_settings().bounty_board_issue_number == 785
+
+
+def test_deploy_readiness_rejects_invalid_bounty_board_issue_number() -> None:
+    errors = validate_deploy_settings(_settings(bounty_board_issue_number=0))
+
+    assert "MERGEWORK_BOUNTY_BOARD_ISSUE_NUMBER must be a positive integer" in errors
 
 
 def test_deploy_readiness_rejects_missing_or_placeholder_secrets() -> None:
