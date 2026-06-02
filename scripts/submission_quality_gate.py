@@ -619,6 +619,12 @@ def _load_input(path: str) -> dict[str, Any]:
     return data
 
 
+def _require_non_empty_path(parser: argparse.ArgumentParser, option_name: str, value: str) -> str:
+    if not value.strip():
+        parser.error(f"{option_name} must be a non-empty path")
+    return value
+
+
 def format_text(result: dict[str, Any]) -> str:
     lines = [f"Submission quality gate: {result['status'].upper()}"]
     if result.get("load_warning"):
@@ -654,10 +660,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--format", choices=["json", "text"], default="text")
     args = parser.parse_args(argv)
 
-    if args.input:
-        data = _load_input(args.input)
+    if args.input is not None:
+        data = _load_input(_require_non_empty_path(parser, "--input", args.input))
     else:
-        with open(args.text_file, encoding="utf-8") as handle:
+        text_file = _require_non_empty_path(parser, "--text-file", args.text_file)
+        with open(text_file, encoding="utf-8") as handle:
             data = _load_live_context(
                 args.repo,
                 handle.read(),

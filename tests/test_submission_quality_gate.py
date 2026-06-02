@@ -645,6 +645,30 @@ def test_submission_quality_gate_cli_returns_failure_exit(capsys, tmp_path) -> N
     assert json.loads(capsys.readouterr().out)["status"] == "fail"
 
 
+@pytest.mark.parametrize(
+    ("source_args", "expected_message"),
+    (
+        (["--input", ""], "--input must be a non-empty path"),
+        (["--input", "   "], "--input must be a non-empty path"),
+        (["--text-file", ""], "--text-file must be a non-empty path"),
+        (["--text-file", "   "], "--text-file must be a non-empty path"),
+    ),
+)
+def test_submission_quality_gate_rejects_empty_source_paths(
+    source_args: list[str],
+    expected_message: str,
+    capsys,
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main([*source_args, "--format", "json"])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert expected_message in captured.err
+    assert "Traceback" not in captured.err
+    assert captured.out == ""
+
+
 def test_submission_quality_gate_live_mode_warns_when_github_unavailable(
     monkeypatch, capsys, tmp_path
 ) -> None:
