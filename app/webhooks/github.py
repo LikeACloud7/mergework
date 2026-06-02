@@ -36,13 +36,14 @@ GITHUB_ISSUE_URL_RE = re.compile(
     rf"https://github\.com/(?P<repo>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/issues/(?P<number>\d+){ISSUE_NUMBER_BOUNDARY}",
     re.IGNORECASE,
 )
-PROPOSED_WORK_REQUIRED_BODY_TEXT = (
-    "problem",
-    "expected value",
-    "duplicate search",
-    "out of scope",
+PROPOSED_WORK_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(?P<heading>.+?)\s*#*\s*$", re.MULTILINE)
+PROPOSED_WORK_REQUIRED_HEADINGS = (
+    ("problem",),
+    ("expected value",),
+    ("duplicate search",),
+    ("out of scope",),
 )
-PROPOSED_WORK_BODY_ALTERNATES = (
+PROPOSED_WORK_HEADING_ALTERNATES = (
     ("evidence", "current evidence"),
     ("proposed work", "proposed scope"),
     ("acceptance", "verification"),
@@ -191,6 +192,24 @@ def _issue_has_label(issue: dict[str, Any], label: str) -> bool:
     return False
 
 
+def _normalized_markdown_headings(body: str) -> tuple[str, ...]:
+    headings: list[str] = []
+    for match in PROPOSED_WORK_HEADING_RE.finditer(body):
+        heading = match.group("heading").rstrip("#").strip()
+        normalized = re.sub(r"\s+", " ", heading).casefold().strip(" :")
+        if normalized:
+            headings.append(normalized)
+    return tuple(headings)
+
+
+def _has_markdown_heading(headings: tuple[str, ...], alternatives: tuple[str, ...]) -> bool:
+    for heading in headings:
+        for alternative in alternatives:
+            if heading == alternative or heading.startswith(f"{alternative} "):
+                return True
+    return False
+
+
 def _looks_like_proposed_work_issue(issue: dict[str, Any]) -> bool:
     title = _clean_webhook_string(issue.get("title"))
     if title is None or not title.lower().startswith("proposed work:"):
@@ -198,10 +217,13 @@ def _looks_like_proposed_work_issue(issue: dict[str, Any]) -> bool:
     body = issue.get("body")
     if not isinstance(body, str):
         return False
-    normalized = body.casefold()
-    return all(text in normalized for text in PROPOSED_WORK_REQUIRED_BODY_TEXT) and all(
-        any(text in normalized for text in alternatives)
-        for alternatives in PROPOSED_WORK_BODY_ALTERNATES
+    headings = _normalized_markdown_headings(body)
+    return all(
+        _has_markdown_heading(headings, alternatives)
+        for alternatives in PROPOSED_WORK_REQUIRED_HEADINGS
+    ) and all(
+        _has_markdown_heading(headings, alternatives)
+        for alternatives in PROPOSED_WORK_HEADING_ALTERNATES
     )
 
 
@@ -261,25 +283,11 @@ def _handle_proposed_work_issue_label(
             payload={"labels": [PROPOSED_WORK_LABEL]},
         )
     except HTTPError as exc:
-        _record_event(
-            database_url,
-            delivery_id,
-            event_type,
-            payload_hash,
-            "proposed_work_label_failed",
-        )
         return {
             "status": "proposed_work_label_failed",
             "reason": f"github label update failed: HTTP {exc.code}",
         }
     except (OSError, ValueError) as exc:
-        _record_event(
-            database_url,
-            delivery_id,
-            event_type,
-            payload_hash,
-            "proposed_work_label_failed",
-        )
         return {
             "status": "proposed_work_label_failed",
             "reason": f"github label update failed: {type(exc).__name__}",

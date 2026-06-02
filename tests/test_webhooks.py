@@ -104,6 +104,128 @@ def test_issue_webhook_adds_proposed_work_label_for_template_shaped_issue(
         assert event.processed_status == "proposed_work_labeled"
 
 
+def test_issue_webhook_deduplicates_proposed_work_label_delivery(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    body = json.dumps(
+        {
+            "action": "opened",
+            "issue": {
+                "number": 786,
+                "title": "Proposed work: handle activity account filter explicitly",
+                "body": _proposed_work_body(),
+                "html_url": "https://github.com/ramimbo/mergework/issues/786",
+                "labels": [],
+                "user": {"login": "contributor"},
+            },
+            "repository": {"full_name": "ramimbo/mergework"},
+            "sender": {"login": "contributor"},
+        },
+        separators=(",", ":"),
+    ).encode()
+    headers = {
+        "X-GitHub-Delivery": "delivery-proposed-work-replay",
+        "X-GitHub-Event": "issues",
+        "X-Hub-Signature-256": _signature("secret", body),
+    }
+    requests: list[Request] = []
+
+    def fake_opener(request: Request, timeout: float) -> _FakeResponse:
+        requests.append(request)
+        return _FakeResponse({})
+
+    first = handle_github_webhook(
+        sqlite_url,
+        headers,
+        body,
+        "secret",
+        github_issue_token="github-issue-token",
+        opener=fake_opener,
+    )
+    replay = handle_github_webhook(
+        sqlite_url,
+        headers,
+        body,
+        "secret",
+        github_issue_token="github-issue-token",
+        opener=fake_opener,
+    )
+
+    assert first == {"status": "proposed_work_labeled", "label": "proposed-work"}
+    assert replay == {
+        "status": "duplicate",
+        "processed_status": "proposed_work_labeled",
+    }
+    assert len(requests) == 1
+    with session_scope(sqlite_url) as session:
+        assert session.query(WebhookEvent).count() == 1
+
+
+def test_issue_webhook_retries_proposed_work_label_after_post_failure(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    body = json.dumps(
+        {
+            "action": "opened",
+            "issue": {
+                "number": 786,
+                "title": "Proposed work: handle activity account filter explicitly",
+                "body": _proposed_work_body(),
+                "html_url": "https://github.com/ramimbo/mergework/issues/786",
+                "labels": [],
+                "user": {"login": "contributor"},
+            },
+            "repository": {"full_name": "ramimbo/mergework"},
+            "sender": {"login": "contributor"},
+        },
+        separators=(",", ":"),
+    ).encode()
+    headers = {
+        "X-GitHub-Delivery": "delivery-proposed-work-failed-retry",
+        "X-GitHub-Event": "issues",
+        "X-Hub-Signature-256": _signature("secret", body),
+    }
+    calls = 0
+
+    def fake_opener(request: Request, timeout: float) -> _FakeResponse:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OSError("temporary failure")
+        return _FakeResponse({})
+
+    first = handle_github_webhook(
+        sqlite_url,
+        headers,
+        body,
+        "secret",
+        github_issue_token="github-issue-token",
+        opener=fake_opener,
+    )
+    with session_scope(sqlite_url) as session:
+        assert session.get(WebhookEvent, "delivery-proposed-work-failed-retry") is None
+
+    retry = handle_github_webhook(
+        sqlite_url,
+        headers,
+        body,
+        "secret",
+        github_issue_token="github-issue-token",
+        opener=fake_opener,
+    )
+
+    assert first == {
+        "status": "proposed_work_label_failed",
+        "reason": "github label update failed: OSError",
+    }
+    assert retry == {"status": "proposed_work_labeled", "label": "proposed-work"}
+    assert calls == 2
+    with session_scope(sqlite_url) as session:
+        event = session.get(WebhookEvent, "delivery-proposed-work-failed-retry")
+        assert event is not None
+        assert event.processed_status == "proposed_work_labeled"
+
+
 def test_issue_webhook_skips_proposed_work_label_without_github_token(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     body = json.dumps(
@@ -182,6 +304,54 @@ def test_issue_webhook_does_not_label_non_template_issue(sqlite_url: str) -> Non
         sqlite_url,
         {
             "X-GitHub-Delivery": "delivery-non-proposed-work",
+            "X-GitHub-Event": "issues",
+            "X-Hub-Signature-256": _signature("secret", body),
+        },
+        body,
+        "secret",
+        github_issue_token="github-issue-token",
+        opener=fake_opener,
+    )
+
+    assert result == {"status": "ignored"}
+    assert calls == 0
+
+
+def test_issue_webhook_ignores_proposed_work_title_without_template_headings(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    body = json.dumps(
+        {
+            "action": "opened",
+            "issue": {
+                "number": 787,
+                "title": "Proposed work: question about the intake flow",
+                "body": (
+                    "This asks about the problem, expected value, duplicate search, "
+                    "out of scope, evidence, proposed scope, and verification notes "
+                    "without using the proposed-work template headings."
+                ),
+                "html_url": "https://github.com/ramimbo/mergework/issues/787",
+                "labels": [],
+                "user": {"login": "contributor"},
+            },
+            "repository": {"full_name": "ramimbo/mergework"},
+            "sender": {"login": "contributor"},
+        },
+        separators=(",", ":"),
+    ).encode()
+    calls = 0
+
+    def fake_opener(request: Request, timeout: float) -> _FakeResponse:
+        nonlocal calls
+        calls += 1
+        return _FakeResponse({})
+
+    result = handle_github_webhook(
+        sqlite_url,
+        {
+            "X-GitHub-Delivery": "delivery-proposed-work-prose-only",
             "X-GitHub-Event": "issues",
             "X-Hub-Signature-256": _signature("secret", body),
         },
