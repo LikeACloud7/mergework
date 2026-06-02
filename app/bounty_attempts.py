@@ -15,7 +15,7 @@ from app.ledger.service import CONTROL_CHAR_RE, LedgerError, validate_public_url
 from app.models import Bounty, BountyAttempt
 from app.openapi_request_bodies import OPTIONAL_ATTEMPT_BODY, OPTIONAL_ATTEMPT_RELEASE_BODY
 from app.query_validation import (
-    reject_control_char_query_param,
+    reject_noncanonical_bool_query_param,
     reject_noncanonical_int_query_param,
     reject_repeated_query_param,
 )
@@ -160,12 +160,12 @@ def register_bounty_attempt_routes(
     def api_bounty_attempts(
         request: Request,
         bounty_id: str,
-        include_expired: bool = Query(False),
+        include_expired: str | None = Query(None),
         limit: Annotated[int | None, Query(ge=1, le=100)] = None,
     ) -> dict[str, Any]:
         for name in ("include_expired", "limit"):
             reject_repeated_query_param(request, name)
-        reject_control_char_query_param(request, "include_expired")
+        reject_noncanonical_bool_query_param(request, "include_expired")
         reject_noncanonical_int_query_param(request, "limit")
         bounty_id_int = positive_bounty_id(bounty_id)
         now = _utc_now()
@@ -174,7 +174,11 @@ def register_bounty_attempt_routes(
             if bounty is None:
                 raise HTTPException(status_code=404, detail="bounty not found")
             listing = list_bounty_attempts(
-                session, bounty, include_expired=include_expired, limit=limit, now=now
+                session,
+                bounty,
+                include_expired=include_expired == "true",
+                limit=limit,
+                now=now,
             )
             return {
                 "bounty_id": bounty_id_int,
