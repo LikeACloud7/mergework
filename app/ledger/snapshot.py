@@ -4,7 +4,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ledger.service import (
@@ -122,16 +122,9 @@ def ledger_snapshot(
     generated = generated_at or datetime.now(UTC)
     entries = list(session.scalars(select(LedgerEntry).order_by(LedgerEntry.sequence)).all())
     latest_entry = entries[-1] if entries else None
-    credited_microunits = int(
-        session.scalar(select(func.coalesce(func.sum(LedgerEntry.amount_microunits), 0))) or 0
-    )
-    debited_microunits = int(
-        session.scalar(
-            select(func.coalesce(func.sum(LedgerEntry.amount_microunits), 0)).where(
-                LedgerEntry.from_account.is_not(None)
-            )
-        )
-        or 0
+    credited_microunits = sum(entry.amount_microunits for entry in entries)
+    debited_microunits = sum(
+        entry.amount_microunits for entry in entries if entry.from_account is not None
     )
     net_supply_microunits = credited_microunits - debited_microunits
     return {

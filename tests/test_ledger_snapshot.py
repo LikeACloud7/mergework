@@ -20,6 +20,7 @@ from app.ledger.snapshot import (
     ledger_snapshot_schema_json,
 )
 from app.models import LedgerEntry
+from scripts.export_ledger_snapshot import read_only_session_scope
 
 
 def test_ledger_snapshot_exports_deterministic_integer_balances(sqlite_url: str) -> None:
@@ -60,8 +61,13 @@ def test_ledger_snapshot_exports_deterministic_integer_balances(sqlite_url: str)
             source_host="https://mrwk.example",
         )
 
+    first_json = ledger_snapshot_json(first)
+    second_json = ledger_snapshot_json(second)
+
     assert first == second
-    assert json.loads(ledger_snapshot_json(first)) == first
+    assert first_json == second_json
+    assert first_json.endswith("\n")
+    assert json.loads(first_json) == first
     assert first["schema"] == LEDGER_SNAPSHOT_SCHEMA
     assert first["schema_version"] == LEDGER_SNAPSHOT_SCHEMA_VERSION
     assert first["generated_at"] == "2026-06-02T12:00:00.000000Z"
@@ -143,6 +149,16 @@ def test_ledger_snapshot_handles_empty_ledger(sqlite_url: str) -> None:
         "hash_chain_ok": True,
         "supply_conservation_ok": False,
     }
+
+
+def test_exporter_read_only_session_rolls_back_writes(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+
+    with read_only_session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    with session_scope(sqlite_url) as session:
+        assert session.get(LedgerEntry, 1) is None
 
 
 def test_ledger_snapshot_schema_is_deterministic_json() -> None:
