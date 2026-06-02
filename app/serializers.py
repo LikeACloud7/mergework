@@ -10,6 +10,11 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.bounty_attempts import (
+    active_bounty_attempt_counts,
+    bounty_attempt_summary,
+    bounty_attempt_summary_from_count,
+)
 from app.config import get_settings
 from app.ledger.reconciliation import AcceptedPayoutCheck
 from app.ledger.service import format_mrwk, get_balance
@@ -29,6 +34,7 @@ def bounty_to_dict(
     bounty: Bounty,
     session: Session | None = None,
     pending_proposals: PendingBountyProposals | None = None,
+    attempt_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Serialize a bounty row for public API and page consumers."""
     awards_remaining = max(0, bounty.max_awards - bounty.awards_paid)
@@ -52,7 +58,13 @@ def bounty_to_dict(
         pending_payouts=pending_payouts,
         pending_close=pending_close,
     )
-    return {
+    if attempt_summary is None and session is not None:
+        attempt_summary = bounty_attempt_summary(
+            session,
+            bounty,
+            pending_proposals=(pending_payouts, pending_close),
+        )
+    payload = {
         "id": bounty.id,
         "repo": bounty.repo,
         "issue_number": bounty.issue_number,
@@ -81,6 +93,9 @@ def bounty_to_dict(
         "acceptance": bounty.acceptance,
         "created_at": public_utc_timestamp(bounty.created_at),
     }
+    if attempt_summary is not None:
+        payload.update(attempt_summary)
+    return payload
 
 
 def bounties_to_dict(
@@ -91,13 +106,24 @@ def bounties_to_dict(
         return [bounty_to_dict(bounty) for bounty in bounties]
 
     pending_by_bounty = _pending_bounty_proposals_by_bounty_id(session)
-    return [
-        bounty_to_dict(
-            bounty,
-            pending_proposals=pending_by_bounty.get(bounty.id, ([], None)),
+    attempt_counts = active_bounty_attempt_counts(
+        session, [bounty.id for bounty in bounties], datetime.now(UTC)
+    )
+    payloads: list[dict[str, Any]] = []
+    for bounty in bounties:
+        pending_proposals = pending_by_bounty.get(bounty.id, ([], None))
+        payloads.append(
+            bounty_to_dict(
+                bounty,
+                pending_proposals=pending_proposals,
+                attempt_summary=bounty_attempt_summary_from_count(
+                    bounty,
+                    attempt_counts.get(bounty.id, 0),
+                    pending_proposals=pending_proposals,
+                ),
+            )
         )
-        for bounty in bounties
-    ]
+    return payloads
 
 
 def bounty_awards_to_dict(session: Session, bounty_id: int) -> list[dict[str, Any]]:

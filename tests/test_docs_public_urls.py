@@ -262,6 +262,10 @@ def test_api_examples_document_bounty_list_response_shape() -> None:
     assert '"reserved_mrwk": "500"' in examples
     assert '"awards_paid": 4' in examples
     assert '"awards_remaining": 1' in examples
+    assert '"active_attempt_count": 0' in examples
+    assert '"active_attempt_warnings": []' in examples
+    assert '"attempt_endpoint": "/api/v1/bounties/36/attempts"' in examples
+    assert "overlap signals" in examples
     assert '"bounties_shown": 1' in examples
     assert '"open_awards": 2' in examples
     assert '"open_pool_mrwk": "50"' in examples
