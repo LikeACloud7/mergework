@@ -690,12 +690,17 @@ def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     assert "Confirm the source issue is still open" in response.text
     assert bounty.id != bounty.issue_number
     assert "link the source issue as <strong>Bounty #4</strong>" in response.text
+    assert (
+        "attempts are advisory only and do not reserve MRWK, acceptance, or payment"
+        in response.text
+    )
     assert "1 award still open for distinct accepted work." in response.text
     assert (
         'href="https://github.com/ramimbo/mergework/issues/4" rel="nofollow noopener"'
         in response.text
     )
     assert f'href="/api/v1/bounties/{bounty.id}"' in response.text
+    assert f'href="/api/v1/bounties/{bounty.id}/attempts"' in response.text
 
     missing_response = client.get("/api/v1/bounties/999")
     assert missing_response.status_code == 404
