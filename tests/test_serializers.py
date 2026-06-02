@@ -50,6 +50,12 @@ def test_bounty_serializers_preserve_public_capacity_fields(sqlite_url: str) -> 
     assert bounty_data["available_mrwk"] == "100"
     assert bounty_data["reserved_mrwk"] == "100"
     assert bounty_data["awards_remaining"] == 4
+    requirements = bounty_data["submission_requirements"]
+    assert requirements["submission_mode"] == "pr_or_evidence"
+    assert requirements["submission_url_kind"] == "github_pr_or_public_evidence_url"
+    assert requirements["expected_artifact"] == "focused PR, issue, report, or evidence URL"
+    assert requirements["reference_formats"] == ["Bounty #320", "Refs #320"]
+    assert requirements["claim_command"] == "/claim"
     assert bounty_data["created_at"].endswith("Z")
     assert bounty_list_summary([bounty_data]) == {
         "bounties_shown": 1,
@@ -58,6 +64,45 @@ def test_bounty_serializers_preserve_public_capacity_fields(sqlite_url: str) -> 
         "effective_open_awards": 4,
         "effective_open_pool_mrwk": "100",
     }
+
+
+def test_bounty_serializer_marks_proposed_work_issue_submission_mode(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=649,
+            issue_url="https://github.com/ramimbo/mergework/issues/649",
+            title="MRWK bounty: accepted proposed-work requests, round 1",
+            reward_mrwk="50",
+            max_awards=20,
+            acceptance=(
+                "Accepted work is a new proposed-work issue in ramimbo/mergework. "
+                "Payment review uses the proposed-work issue URL as submission_url "
+                "through pay_bounty after maintainer acceptance."
+            ),
+        )
+
+        requirements = bounty_to_dict(bounty)["submission_requirements"]
+
+    assert requirements["submission_mode"] == "issue"
+    assert requirements["submission_url_kind"] == "github_issue"
+    assert requirements["expected_artifact"] == "new proposed-work GitHub issue URL"
+    assert requirements["attempt_endpoint_applicability"] == ("not_required_for_issue_submission")
+    assert requirements["reference_formats"] == [
+        "Bounty #649",
+        "Refs #649",
+        "Linked bounty: #649",
+    ]
+    assert requirements["claim_command"] == "/claim #649"
+    assert "new proposed-work GitHub issue URL" in requirements["evidence_required"]
+    next_action_ids = [action["id"] for action in requirements["next_actions"]]
+    assert "open_proposed_work_issue" in next_action_ids
+    assert "link_bounty_issue" in next_action_ids
 
 
 def test_bounties_to_dict_preloads_pending_proposals_once(sqlite_url: str) -> None:

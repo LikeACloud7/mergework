@@ -1588,6 +1588,10 @@ def test_mcp_submit_work_proof_returns_structured_generic_guidance(sqlite_url: s
             "evidence, and wait for a maintainer to apply mrwk:accepted."
         ),
         "submission_requirements": {
+            "submission_mode": "pr_or_evidence",
+            "submission_url_kind": "github_pr_or_public_evidence_url",
+            "expected_artifact": "focused PR, issue, report, or evidence URL",
+            "attempt_endpoint_applicability": "recommended_before_submission",
             "reference_formats": ["Bounty #<issue_number>", "Refs #<issue_number>"],
             "claim_command": "/claim",
             "attempt_endpoint": "/api/v1/bounties/<bounty_id>/attempts",

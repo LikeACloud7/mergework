@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.models import Bounty
 from app.serializers import bounty_to_dict
-
-SubmissionAvailability = Literal["open", "full", "closed", "unknown"]
+from app.submission_requirements import (
+    SubmissionAvailability,
+    work_proof_submission_requirements,
+)
 
 
 def work_proof_guidance(bounty: Bounty, session: Session | None = None) -> str:
@@ -45,93 +47,6 @@ def work_proof_guidance(bounty: Bounty, session: Session | None = None) -> str:
             ),
         ]
     )
-
-
-def work_proof_submission_requirements(
-    *,
-    bounty_id: int | None,
-    issue_number: int | None,
-    availability: SubmissionAvailability,
-) -> dict[str, Any]:
-    issue_ref = str(issue_number) if issue_number is not None else "<issue_number>"
-    bounty_ref = str(bounty_id) if bounty_id is not None else "<bounty_id>"
-    if availability == "open":
-        first_action = {
-            "id": "confirm_award_slot",
-            "required": True,
-            "text": "Confirm this bounty is open and has at least one award slot remaining.",
-        }
-    elif availability == "full":
-        first_action = {
-            "id": "watch_for_award_slot",
-            "required": True,
-            "text": (
-                "This bounty is open but has no award slots remaining; check for new "
-                "capacity before submitting new work."
-            ),
-        }
-    elif availability == "closed":
-        first_action = {
-            "id": "choose_open_bounty",
-            "required": True,
-            "text": "Do not open or claim new work for this bounty unless a maintainer reopens it.",
-        }
-    else:
-        first_action = {
-            "id": "select_bounty",
-            "required": True,
-            "text": "Select a concrete open bounty before submitting work proof.",
-        }
-    return {
-        "reference_formats": [f"Bounty #{issue_ref}", f"Refs #{issue_ref}"],
-        "claim_command": "/claim",
-        "attempt_endpoint": f"/api/v1/bounties/{bounty_ref}/attempts",
-        "evidence_required": [
-            "focused PR, issue, report, or evidence URL",
-            "short verification summary",
-            "tests, command output, screenshots, or reproduction steps when relevant",
-        ],
-        "acceptance_trigger": "maintainer_mrwk_accepted_label_or_admin_payout",
-        "public_metadata_must_avoid": [
-            "private keys",
-            "seed material",
-            "secrets",
-            "deployment credentials",
-            "private vulnerability details",
-            "price claims",
-        ],
-        "next_actions": [
-            first_action,
-            {
-                "id": "check_duplicate_scope",
-                "required": True,
-                "text": "Confirm no active claim or duplicate PR already covers the same scope.",
-            },
-            {
-                "id": "keep_scope_focused",
-                "required": True,
-                "text": "Keep changes directly tied to one bounty issue.",
-            },
-            {
-                "id": "include_bounty_reference",
-                "required": True,
-                "text": f"Include Bounty #{issue_ref} or Refs #{issue_ref} in the submission.",
-            },
-            {
-                "id": "include_review_evidence",
-                "required": True,
-                "text": "Include reviewable validation evidence before claiming.",
-            },
-            {
-                "id": "wait_for_maintainer_acceptance",
-                "required": True,
-                "text": (
-                    "Payment requires mrwk:accepted or an admin payout; merge or CI "
-                    "alone is not acceptance."
-                ),
-            },
-        ],
-    }
 
 
 def _submission_availability(bounty_data: dict[str, Any]) -> SubmissionAvailability:
@@ -183,6 +98,8 @@ def work_proof_guidance_json(bounty: Bounty, session: Session | None = None) -> 
             bounty_id=bounty_data["id"],
             issue_number=bounty_data["issue_number"],
             availability=submission_availability,
+            title=bounty_data["title"],
+            acceptance=bounty_data["acceptance"],
         ),
         "safety_rules": [
             "Do not include private keys, seed material, secrets, deployment "

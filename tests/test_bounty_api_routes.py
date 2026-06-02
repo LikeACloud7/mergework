@@ -40,6 +40,41 @@ def test_bounty_api_reports_multi_award_capacity(sqlite_url: str) -> None:
     assert bounty["pending_payout_awards"] == 0
     assert bounty["pending_close_proposal"] is None
     assert bounty["availability_state"] == "open"
+    assert bounty["submission_requirements"]["submission_mode"] == "pr_or_evidence"
+    assert bounty["submission_requirements"]["expected_artifact"] == (
+        "focused PR, issue, report, or evidence URL"
+    )
+
+
+def test_bounty_api_reports_issue_submission_requirements(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=649,
+            issue_url="https://github.com/ramimbo/mergework/issues/649",
+            title="MRWK bounty: accepted proposed-work requests, round 1",
+            reward_mrwk="50",
+            max_awards=20,
+            acceptance=(
+                "Accepted work is a new proposed-work issue in ramimbo/mergework. "
+                "Payment review uses the proposed-work issue URL as submission_url."
+            ),
+        )
+        bounty_id = bounty.id
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    requirements = client.get(f"/api/v1/bounties/{bounty_id}").json()["submission_requirements"]
+
+    assert requirements["submission_mode"] == "issue"
+    assert requirements["submission_url_kind"] == "github_issue"
+    assert requirements["expected_artifact"] == "new proposed-work GitHub issue URL"
+    assert requirements["claim_command"] == "/claim #649"
+    assert requirements["attempt_endpoint"] == f"/api/v1/bounties/{bounty_id}/attempts"
+    assert requirements["attempt_endpoint_applicability"] == ("not_required_for_issue_submission")
 
 
 def test_bounty_api_reports_pending_payout_effective_capacity(sqlite_url: str) -> None:

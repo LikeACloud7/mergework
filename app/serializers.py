@@ -19,6 +19,10 @@ from app.config import get_settings
 from app.ledger.reconciliation import AcceptedPayoutCheck
 from app.ledger.service import format_mrwk, get_balance
 from app.models import Bounty, LedgerEntry, Proof, TreasuryProposal, Wallet, WalletTransfer
+from app.submission_requirements import (
+    SubmissionAvailability,
+    work_proof_submission_requirements,
+)
 
 PendingBountyProposals = tuple[list[dict[str, Any]], dict[str, Any] | None]
 
@@ -88,6 +92,16 @@ def bounty_to_dict(
             effective_awards_remaining=effective_awards_remaining,
             pending_payouts=pending_payouts,
             pending_close=pending_close,
+        ),
+        "submission_requirements": work_proof_submission_requirements(
+            bounty_id=bounty.id,
+            issue_number=bounty.issue_number,
+            availability=_submission_availability(
+                status=bounty.status,
+                effective_awards_remaining=effective_awards_remaining,
+            ),
+            title=bounty.title,
+            acceptance=bounty.acceptance,
         ),
         "status": bounty.status,
         "acceptance": bounty.acceptance,
@@ -352,6 +366,14 @@ def _availability_note(
     if awards_remaining <= 0:
         return "No awards remain available for new submissions."
     return f"{_plural_awards(effective_awards_remaining)} effectively available."
+
+
+def _submission_availability(
+    *, status: str, effective_awards_remaining: int
+) -> SubmissionAvailability:
+    if status == "open":
+        return "open" if effective_awards_remaining > 0 else "full"
+    return "closed"
 
 
 def payout_reconciliation_to_dict(check: AcceptedPayoutCheck) -> dict[str, Any]:

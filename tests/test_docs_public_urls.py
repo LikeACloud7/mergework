@@ -266,6 +266,9 @@ def test_api_examples_document_bounty_list_response_shape() -> None:
     assert '"active_attempt_warnings": []' in examples
     assert '"attempt_endpoint": "/api/v1/bounties/36/attempts"' in examples
     assert "overlap signals" in examples
+    assert '"submission_mode": "pr_or_evidence"' in examples
+    assert '"submission_mode": "issue"' in examples
+    assert "new proposed-work GitHub issue URL" in examples
     assert '"bounties_shown": 1' in examples
     assert '"open_awards": 2' in examples
     assert '"open_pool_mrwk": "50"' in examples
