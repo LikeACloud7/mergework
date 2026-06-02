@@ -165,8 +165,10 @@ def test_review_bounty_candidates_classifies_review_states(tmp_path, capsys) -> 
     (
         (["--input", ""], "--input must be a non-empty value"),
         (["--input", "   "], "--input must be a non-empty value"),
+        (["--input", " tests/fixtures/missing.json "], "--input must not include"),
         (["--repo", ""], "--repo must be a non-empty value"),
         (["--repo", "   "], "--repo must be a non-empty value"),
+        (["--repo", " ramimbo/mergework "], "--repo must not include"),
     ),
 )
 def test_review_bounty_candidates_rejects_empty_source_args(
