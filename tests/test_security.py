@@ -252,6 +252,25 @@ def test_admin_page_renders_safe_webhook_events_for_cookie_admin(
     assert too_large.status_code == 422
 
 
+def test_admin_webhook_events_api_rejects_repeated_status_filter(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create_schema(sqlite_url)
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(
+        create_app(database_url=sqlite_url, webhook_secret="secret"),
+        base_url="https://testserver",
+    )
+
+    response = client.get(
+        "/api/v1/admin/webhook-events?status=missing_submitter&status=paid",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "status must be provided at most once"
+
+
 def test_admin_page_calls_out_pending_create_proposals_when_they_limit_capacity(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
