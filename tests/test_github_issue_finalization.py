@@ -10,6 +10,7 @@ from app.github_issue_finalization import (
     LIVE_BOUNTY_STATUS_BLOCK_START,
     finalize_created_bounty_issue,
     finalize_paid_bounty_issue,
+    pending_create_bounty_comment_body,
 )
 
 
@@ -25,6 +26,25 @@ class _FakeResponse:
 
     def read(self) -> bytes:
         return json.dumps(self._body).encode()
+
+
+def test_pending_create_bounty_comment_includes_execution_time_without_open_claims() -> None:
+    body = pending_create_bounty_comment_body(
+        {
+            "id": 125,
+            "action": "create_bounty",
+            "status": "pending",
+            "executes_after": "2026-06-03T11:41:52Z",
+        }
+    )
+
+    assert "Status: pending `create_bounty` proposal. This issue is not claimable yet." in body
+    assert "Proposal: https://api.mrwk.online/api/v1/treasury/proposals/125" in body
+    assert "Earliest execution: 2026-06-03T11:41:52Z" in body
+    assert "`mrwk:bounty`" in body
+    assert "claims-open comment" in body
+    assert "Reserved on MergeWork:" not in body
+    assert "Claims are now open" not in body
 
 
 def test_finalize_created_bounty_issue_adds_label_and_claims_open_comment() -> None:
