@@ -244,11 +244,13 @@ def register_bounty_api_routes(
 
     @app.get("/api/v1/admin/webhook-events")
     def api_admin_webhook_events(
+        request: Request,
         status: str | None = Query(None),
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
         admin_login: str = Depends(require_admin_token),
     ) -> list[dict[str, Any]]:
         del admin_login
+        reject_repeated_query_param(request, "status")
         with session_scope(db_url) as session:
             try:
                 return webhook_events_to_dict(list_webhook_events(session, status, limit))

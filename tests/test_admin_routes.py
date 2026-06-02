@@ -91,3 +91,50 @@ def test_admin_webhook_page_rejects_c1_control_status_before_normalizing(
 
     assert response.status_code == 400
     assert response.json()["detail"] == "webhook_status must not contain control characters"
+
+
+def test_admin_webhook_page_rejects_repeated_status_filter(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "test-cookie-secret")
+    create_schema(sqlite_url)
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get(
+        "/admin?webhook_status=missing_submitter&webhook_status=paid",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "webhook_status must be provided at most once"
+
+
+def test_admin_page_rejects_noncanonical_proposal_id_query(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    monkeypatch.setenv("MERGEWORK_COOKIE_SECRET", "test-cookie-secret")
+    create_schema(sqlite_url)
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    for query in ("proposal_id=01", "proposal_id=%2B1", "proposal_id=1.0", "proposal_id=%C2%851"):
+        response = client.get(
+            f"/admin?{query}",
+            headers={"x-mergework-admin-token": "admin-token-for-tests"},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"].startswith("proposal_id must ")
+
+    repeated = client.get(
+        "/admin?proposal_id=bad&proposal_id=1",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+    )
+    valid = client.get(
+        "/admin?proposal_id=1",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+    )
+
+    assert repeated.status_code == 400
+    assert repeated.json()["detail"] == "proposal_id must be provided at most once"
+    assert valid.status_code == 200
