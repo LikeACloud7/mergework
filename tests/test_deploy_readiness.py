@@ -27,7 +27,7 @@ def _settings(**overrides: object) -> Settings:
 
 def _deploy_ready_env(**overrides: str) -> dict[str, str]:
     env = {
-        **os.environ,
+        **{key: value for key, value in os.environ.items() if not key.startswith("MERGEWORK_")},
         "MERGEWORK_DATABASE_URL": "sqlite:////srv/mergework/data/mergework.sqlite3",
         "MERGEWORK_PUBLIC_BASE_URL": "https://staging.mrwk.example.test",
         "MERGEWORK_GITHUB_WEBHOOK_SECRET": "webhook-8efc3925bb8746b8a8fd3392c4c48e32",
@@ -470,6 +470,15 @@ def test_deploy_readiness_script_runs_directly_from_source() -> None:
     result = _run_deploy_ready(_deploy_ready_env())
 
     assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "Deploy readiness check passed."
+
+
+def test_deploy_readiness_subprocess_env_ignores_parent_mergework_values(monkeypatch) -> None:
+    monkeypatch.setenv("MERGEWORK_TREASURY_EXECUTOR_BATCH_LIMIT", "0")
+
+    result = _run_deploy_ready(_deploy_ready_env())
+
+    assert result.returncode == 0, result.stdout
     assert result.stdout.strip() == "Deploy readiness check passed."
 
 
