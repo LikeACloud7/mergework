@@ -200,6 +200,99 @@ def test_activity_api_filters_accepted_work_by_query(sqlite_url: str) -> None:
         assert invalid_hash_query["recent"] == []
 
 
+def test_activity_api_filters_by_exact_account(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        paid_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=166,
+            issue_url="https://github.com/ramimbo/mergework/issues/166",
+            title="Account scoped activity bounty",
+            reward_mrwk="25",
+            max_awards=2,
+            acceptance="Activity account filters should scope paid work.",
+        )
+        pending_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=167,
+            issue_url="https://github.com/ramimbo/mergework/issues/167",
+            title="Account scoped pending bounty",
+            reward_mrwk="75",
+            acceptance="Activity account filters should scope pending work.",
+        )
+        alice_proof = pay_bounty(
+            session,
+            bounty_id=paid_bounty.id,
+            to_account="github:alice",
+            submission_url="https://github.com/ramimbo/mergework/pull/166",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        pay_bounty(
+            session,
+            bounty_id=paid_bounty.id,
+            to_account="github:bob",
+            submission_url="https://github.com/ramimbo/mergework/pull/168",
+            accepted_by="maintainer",
+            verifier_result={"label": "mrwk:accepted"},
+        )
+        proposal = propose_treasury_action(
+            session,
+            action="pay_bounty",
+            payload={
+                "bounty_id": pending_bounty.id,
+                "to_account": "github:alice",
+                "submission_url": "https://github.com/ramimbo/mergework/pull/167",
+                "accepted_by": "maintainer",
+            },
+            proposed_by="maintainer",
+        )
+        proposal_id = proposal.id
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    scoped = client.get("/api/v1/activity?account=GitHub:Alice").json()
+    scoped_with_query = client.get("/api/v1/activity?account=github:alice&q=pull%2F166").json()
+    missing = client.get("/api/v1/activity?account=github:carol").json()
+
+    assert scoped["account"] == "github:alice"
+    assert scoped["query"] == ""
+    assert scoped["totals"] == {
+        "accepted_awards": 1,
+        "accepted_mrwk": "25",
+        "contributors": 1,
+    }
+    assert scoped["pending_totals"] == {
+        "pending_awards": 1,
+        "pending_mrwk": "75",
+    }
+    assert [row["account"] for row in scoped["contributors"]] == ["github:alice"]
+    assert [row["proof_hash"] for row in scoped["recent"]] == [alice_proof.hash]
+    assert [row["proposal_id"] for row in scoped["pending_payouts"]] == [proposal_id]
+
+    assert scoped_with_query["account"] == "github:alice"
+    assert scoped_with_query["query"] == "pull/166"
+    assert scoped_with_query["recent"][0]["proof_hash"] == alice_proof.hash
+    assert scoped_with_query["pending_payouts"] == []
+
+    assert missing["account"] == "github:carol"
+    assert missing["totals"] == {
+        "accepted_awards": 0,
+        "accepted_mrwk": "0",
+        "contributors": 0,
+    }
+    assert missing["pending_totals"] == {
+        "pending_awards": 0,
+        "pending_mrwk": "0",
+    }
+    assert missing["contributors"] == []
+    assert missing["pending_payouts"] == []
+    assert missing["recent"] == []
+
+
 def test_activity_query_rejects_control_characters(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
@@ -212,6 +305,11 @@ def test_activity_query_rejects_control_characters(sqlite_url: str) -> None:
     masked_api_response = client.get("/api/v1/activity?q=%C2%85github&q=alice")
     repeated_api_response = client.get("/api/v1/activity?q=github&q=alice")
     repeated_page_response = client.get("/activity?q=github&q=alice")
+    account_control_response = client.get("/api/v1/activity?account=%C2%85github:alice")
+    repeated_account_response = client.get(
+        "/api/v1/activity?account=github:alice&account=github:bob"
+    )
+    invalid_account_response = client.get("/api/v1/activity?account=github%3A%20")
 
     assert api_response.status_code == 400
     assert api_response.json()["detail"] == "q must not contain control characters"
@@ -223,6 +321,14 @@ def test_activity_query_rejects_control_characters(sqlite_url: str) -> None:
     assert repeated_api_response.json()["detail"] == "q must be provided at most once"
     assert repeated_page_response.status_code == 400
     assert repeated_page_response.json()["detail"] == "q must be provided at most once"
+    assert account_control_response.status_code == 400
+    assert account_control_response.json()["detail"] == (
+        "account must not contain control characters"
+    )
+    assert repeated_account_response.status_code == 400
+    assert repeated_account_response.json()["detail"] == "account must be provided at most once"
+    assert invalid_account_response.status_code == 400
+    assert invalid_account_response.json()["detail"] == "github login must be valid"
 
 
 def test_activity_api_exposes_pending_payouts_separately_from_paid_work(

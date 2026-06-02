@@ -496,7 +496,9 @@ def _pending_activity_row_matches(row: dict[str, Any], query: str) -> bool:
     }
 
 
-def pending_activity_rows(session: Session, query: str | None = None) -> list[dict[str, Any]]:
+def pending_activity_rows(
+    session: Session, query: str | None = None, *, account: str | None = None
+) -> list[dict[str, Any]]:
     """Return pending accepted work without treating it as proof-backed activity."""
     search_query = _activity_search_query(query)
     proposals = session.scalars(
@@ -528,13 +530,19 @@ def pending_activity_rows(session: Session, query: str | None = None) -> list[di
     for proposal, payload, bounty_id in parsed:
         bounty = bounty_by_id.get(bounty_id) if bounty_id is not None else None
         row = _pending_activity_row(proposal, payload, bounty)
-        if row["account"] is None or not _pending_activity_row_matches(row, search_query):
+        if row["account"] is None:
+            continue
+        if account is not None and row["account"] != account:
+            continue
+        if not _pending_activity_row_matches(row, search_query):
             continue
         pending.append(row)
     return pending
 
 
-def activity_to_dict(session: Session, query: str | None = None) -> dict[str, Any]:
+def activity_to_dict(
+    session: Session, query: str | None = None, *, account: str | None = None
+) -> dict[str, Any]:
     """Build the public activity feed and contributor totals."""
     search_query = _activity_search_query(query)
     rows = session.execute(
@@ -550,6 +558,8 @@ def activity_to_dict(session: Session, query: str | None = None) -> dict[str, An
             continue
         row = _activity_row(entry, proof)
         if row is None or row["account"] is None:
+            continue
+        if account is not None and row["account"] != account:
             continue
         if not _activity_row_matches(row, search_query):
             continue
@@ -589,12 +599,12 @@ def activity_to_dict(session: Session, query: str | None = None) -> dict[str, An
     for row in recent:
         del row["amount_microunits"]
 
-    pending_payouts = pending_activity_rows(session, search_query)
+    pending_payouts = pending_activity_rows(session, search_query, account=account)
     pending_microunits = sum(int(row["amount_microunits"]) for row in pending_payouts)
     for row in pending_payouts:
         del row["amount_microunits"]
 
-    return {
+    activity = {
         "totals": {
             "accepted_awards": len(recent),
             "accepted_mrwk": format_mrwk(total_microunits),
@@ -609,6 +619,9 @@ def activity_to_dict(session: Session, query: str | None = None) -> dict[str, An
         "pending_payouts": pending_payouts[:100],
         "recent": recent[:100],
     }
+    if account is not None:
+        activity["account"] = account
+    return activity
 
 
 def account_accepted_summary(session: Session, account: str) -> dict[str, Any]:
