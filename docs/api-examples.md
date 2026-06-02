@@ -671,9 +671,14 @@ curl -s -X POST "$MCP_HOST/mcp" \
   -d '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"submit_wallet_transfer","arguments":{"from_address":"<sender_mrwk1_address>","to_address":"<receiver_mrwk1_address>","amount_mrwk":"1.5","nonce":3,"memo":"agent payout consolidation","signature_hex":"<128 lowercase hex chars>"}}}'
 ```
 
-Successful MCP transfer responses wrap a JSON-string transfer object in the
-first content block. Parse `result.content[0].text` to read the transfer hash,
-ledger sequence, addresses, amount, nonce, memo, and timestamp:
+Successful MCP tools that return JSON objects or lists include the
+backward-compatible JSON string in `result.content[0].text` and the parsed
+payload in `result.structuredContent`. Prefer `structuredContent` when present;
+fall back to text for human-readable responses such as balances and not-found
+messages.
+
+Successful MCP transfer responses expose the transfer hash, ledger sequence,
+addresses, amount, nonce, memo, and timestamp in that JSON payload:
 
 ```json
 {
@@ -690,8 +695,8 @@ ledger sequence, addresses, amount, nonce, memo, and timestamp:
 }
 ```
 
-The `get_proof` MCP response uses JSON-RPC content blocks. The first content
-block is a JSON string with proof metadata plus the stored public proof payload:
+The `get_proof` MCP response includes proof metadata plus the stored public
+proof payload as both JSON text and parsed `structuredContent`:
 
 ```json
 {
@@ -715,7 +720,7 @@ created from a GitHub bounty claim.
 Call `get_ledger_entry` with the immutable ledger sequence returned by
 `/api/v1/ledger`, `/api/v1/activity`, `get_bounty` award rows, or `get_proof`.
 The MCP response wraps the same ledger-entry shape as
-`/api/v1/ledger/<sequence>` in `result.content[0].text`:
+`/api/v1/ledger/<sequence>` in JSON text and `structuredContent`:
 
 ```bash
 curl -s -X POST "$MCP_HOST/mcp" \
