@@ -50,8 +50,8 @@ def _optional_positive_int_env(name: str) -> int | None:
         return None
     try:
         value = int(raw_value)
-    except ValueError:
-        return 0
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
     return value
 
 

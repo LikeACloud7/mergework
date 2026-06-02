@@ -41,6 +41,17 @@ def test_deploy_readiness_rejects_invalid_bounty_board_issue_number() -> None:
     assert "MERGEWORK_BOUNTY_BOARD_ISSUE_NUMBER must be a positive integer" in errors
 
 
+def test_get_settings_rejects_malformed_bounty_board_issue_number(monkeypatch) -> None:
+    monkeypatch.setenv("MERGEWORK_BOUNTY_BOARD_ISSUE_NUMBER", "notanumber")
+
+    try:
+        get_settings()
+    except ValueError as exc:
+        assert str(exc) == "MERGEWORK_BOUNTY_BOARD_ISSUE_NUMBER must be an integer"
+    else:
+        raise AssertionError("expected malformed bounty board issue number to fail")
+
+
 def test_deploy_readiness_rejects_missing_or_placeholder_secrets() -> None:
     errors = validate_deploy_settings(
         _settings(
