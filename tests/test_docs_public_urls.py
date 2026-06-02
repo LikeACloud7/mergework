@@ -153,6 +153,31 @@ def test_bounty_issue_template_does_not_auto_mark_issue_live() -> None:
     assert "Do not add the live bounty label from this template" in template
 
 
+def test_security_report_template_routes_private_details_safely() -> None:
+    template = Path(".github/ISSUE_TEMPLATE/security-report.yml").read_text(encoding="utf-8")
+    lowered = template.lower()
+
+    assert "security" in _issue_template_labels(template)
+    assert "mrwk:bounty" not in _issue_template_labels(template)
+    assert "do not paste exploit details here" in lowered
+    assert "follow security.md for private reporting" in lowered
+    assert "public-safe summary" in lowered
+    assert _template_field_is_required(template, "summary")
+
+
+def test_bug_report_template_requires_actionable_repro_fields() -> None:
+    template = Path(".github/ISSUE_TEMPLATE/bug.yml").read_text(encoding="utf-8")
+    lowered = template.lower()
+
+    assert "bug" in _issue_template_labels(template)
+    assert "mrwk:bounty" not in _issue_template_labels(template)
+    assert "expected behavior" in lowered
+    assert "actual behavior" in lowered
+    assert "reproduction" in lowered
+    for field_id in ("expected", "actual", "reproduce"):
+        assert _template_field_is_required(template, field_id)
+
+
 def test_issue_template_labels_parse_inline_and_block_styles() -> None:
     assert _issue_template_labels('labels: ["proposed-work", "docs"]') == {
         "proposed-work",

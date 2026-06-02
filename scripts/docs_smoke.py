@@ -133,6 +133,8 @@ REQUIRED_PUBLIC_PHRASES = {
 }
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 DOCS_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/docs.yml"
+SECURITY_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/security-report.yml"
+BUG_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/bug.yml"
 PR_TEMPLATE = ".github/pull_request_template.md"
 
 
@@ -233,6 +235,49 @@ def main() -> int:
     elif "expected pr size:" not in pr_template.read_text(encoding="utf-8").lower():
         print("pull request template must ask for expected PR size")
         ok = False
+    security_issue_template = ROOT / SECURITY_ISSUE_TEMPLATE
+    if not security_issue_template.exists():
+        print(f"missing security issue template: {SECURITY_ISSUE_TEMPLATE}")
+        ok = False
+    else:
+        security_template = security_issue_template.read_text(encoding="utf-8").lower()
+        for phrase in [
+            "do not paste exploit details here",
+            "follow security.md for private reporting",
+            "public-safe summary",
+        ]:
+            if phrase not in security_template:
+                print(f"security issue template missing required phrase: {phrase}")
+                ok = False
+        if "security" not in _issue_template_labels(security_template):
+            print("security issue template must auto-apply the security label")
+            ok = False
+        if not _template_field_is_required(security_template, "summary"):
+            print("security issue template summary field must be required")
+            ok = False
+        if "mrwk:bounty" in _issue_template_labels(security_template):
+            print("security issue template must not auto-apply mrwk:bounty")
+            ok = False
+    bug_issue_template = ROOT / BUG_ISSUE_TEMPLATE
+    if not bug_issue_template.exists():
+        print(f"missing bug issue template: {BUG_ISSUE_TEMPLATE}")
+        ok = False
+    else:
+        bug_template = bug_issue_template.read_text(encoding="utf-8").lower()
+        if "bug" not in _issue_template_labels(bug_template):
+            print("bug issue template must auto-apply the bug label")
+            ok = False
+        for field_id in ("expected", "actual", "reproduce"):
+            if not _template_field_is_required(bug_template, field_id):
+                print(f"bug issue template {field_id} field must be required")
+                ok = False
+        for phrase in ["expected behavior", "actual behavior", "reproduction"]:
+            if phrase not in bug_template:
+                print(f"bug issue template missing required phrase: {phrase}")
+                ok = False
+        if "mrwk:bounty" in _issue_template_labels(bug_template):
+            print("bug issue template must not auto-apply mrwk:bounty")
+            ok = False
     bounty_issue_template = ROOT / ".github/ISSUE_TEMPLATE/bounty.yml"
     if not bounty_issue_template.exists():
         print("missing bounty issue template: .github/ISSUE_TEMPLATE/bounty.yml")
