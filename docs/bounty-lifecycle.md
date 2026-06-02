@@ -90,6 +90,9 @@ issue-comment work:
 ## Short Examples
 
 - A `proposed-work` issue with a suggested reward is not claimable.
+- CLI/API-created proposed-work issues may receive the `proposed-work` intake
+  label automatically when the title and body clearly match the proposed-work
+  template. That label still does not make the issue claimable.
 - An issue with a pending create_bounty proposal is not claimable.
 - An issue with `mrwk:bounty`, `Reserved on MergeWork`, and an open public
   bounty row is claimable while awards remain.

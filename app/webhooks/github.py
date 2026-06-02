@@ -4,7 +4,11 @@ import hashlib
 import hmac
 import json
 import re
+from collections.abc import Callable
 from typing import Any
+from urllib.error import HTTPError
+from urllib.parse import quote
+from urllib.request import Request, urlopen
 
 from app.db import session_scope
 from app.ledger.service import (
@@ -16,6 +20,8 @@ from app.ledger.service import (
 from app.models import Bounty, WebhookEvent
 
 ACCEPTED_LABEL = "mrwk:accepted"
+PROPOSED_WORK_LABEL = "proposed-work"
+PROPOSED_WORK_ACTIONS = {"opened", "edited", "reopened"}
 ISSUE_NUMBER_BOUNDARY = r"(?![A-Za-z0-9_-])"
 MAX_SQLITE_INTEGER = 2**63 - 1
 CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
@@ -29,6 +35,18 @@ LINKED_ISSUE_RE = re.compile(
 GITHUB_ISSUE_URL_RE = re.compile(
     rf"https://github\.com/(?P<repo>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/issues/(?P<number>\d+){ISSUE_NUMBER_BOUNDARY}",
     re.IGNORECASE,
+)
+PROPOSED_WORK_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(?P<heading>.+?)\s*#*\s*$", re.MULTILINE)
+PROPOSED_WORK_REQUIRED_HEADINGS = (
+    ("problem",),
+    ("expected value",),
+    ("duplicate search",),
+    ("out of scope",),
+)
+PROPOSED_WORK_HEADING_ALTERNATES = (
+    ("evidence", "current evidence"),
+    ("proposed work", "proposed scope"),
+    ("acceptance", "verification", "possible acceptance criteria"),
 )
 
 
@@ -125,6 +143,163 @@ def _github_issue_number(value: Any) -> int | None:
     ):
         return None
     return value
+
+
+def _github_issue_api_base(repo: str, issue_number: int) -> str:
+    owner_part, name_part = repo.split("/", 1)
+    owner = quote(owner_part, safe="")
+    name = quote(name_part, safe="")
+    return f"https://api.github.com/repos/{owner}/{name}/issues/{issue_number}"
+
+
+def _github_request(url: str, github_token: str, payload: dict[str, Any]) -> Request:
+    return Request(
+        url,
+        data=json.dumps(payload, separators=(",", ":")).encode(),
+        method="POST",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {github_token}",
+            "Content-Type": "application/json",
+            "User-Agent": "MergeWork",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+
+
+def _post_github_json(
+    *,
+    opener: Callable[..., Any],
+    url: str,
+    github_token: str,
+    payload: dict[str, Any],
+) -> None:
+    request = _github_request(url, github_token, payload)
+    with opener(request, timeout=10) as response:
+        response.read()
+
+
+def _issue_has_label(issue: dict[str, Any], label: str) -> bool:
+    labels = issue.get("labels")
+    if not isinstance(labels, list):
+        return False
+    for item in labels:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        if isinstance(name, str) and name.lower() == label.lower():
+            return True
+    return False
+
+
+def _normalized_markdown_headings(body: str) -> tuple[str, ...]:
+    headings: list[str] = []
+    for match in PROPOSED_WORK_HEADING_RE.finditer(body):
+        heading = match.group("heading").rstrip("#").strip()
+        normalized = re.sub(r"\s+", " ", heading).casefold().strip(" :")
+        if normalized:
+            headings.append(normalized)
+    return tuple(headings)
+
+
+def _has_markdown_heading(headings: tuple[str, ...], alternatives: tuple[str, ...]) -> bool:
+    for heading in headings:
+        for alternative in alternatives:
+            if heading == alternative or heading.startswith(f"{alternative} "):
+                return True
+    return False
+
+
+def _looks_like_proposed_work_issue(issue: dict[str, Any]) -> bool:
+    title = _clean_webhook_string(issue.get("title"))
+    if title is None or not title.lower().startswith("proposed work:"):
+        return False
+    body = issue.get("body")
+    if not isinstance(body, str):
+        return False
+    headings = _normalized_markdown_headings(body)
+    return all(
+        _has_markdown_heading(headings, alternatives)
+        for alternatives in PROPOSED_WORK_REQUIRED_HEADINGS
+    ) and all(
+        _has_markdown_heading(headings, alternatives)
+        for alternatives in PROPOSED_WORK_HEADING_ALTERNATES
+    )
+
+
+def _handle_proposed_work_issue_label(
+    database_url: str,
+    payload: dict[str, Any],
+    event_type: str,
+    delivery_id: str,
+    payload_hash: str,
+    github_issue_token: str,
+    opener: Callable[..., Any],
+) -> dict[str, Any] | None:
+    if event_type != "issues" or payload.get("action") not in PROPOSED_WORK_ACTIONS:
+        return None
+    issue = _payload_object(payload, "issue")
+    if not issue or "pull_request" in issue or not _looks_like_proposed_work_issue(issue):
+        return None
+    if _issue_has_label(issue, PROPOSED_WORK_LABEL):
+        return _record_status(
+            database_url,
+            delivery_id,
+            event_type,
+            payload_hash,
+            "proposed_work_label_present",
+        )
+    repo_name = _payload_object(payload, "repository").get("full_name")
+    repo = _clean_webhook_string(repo_name)
+    issue_number = _github_issue_number(issue.get("number"))
+    if isinstance(repo_name, str) and CONTROL_CHAR_RE.search(repo_name):
+        return _record_status(
+            database_url,
+            delivery_id,
+            event_type,
+            payload_hash,
+            "malformed_repository",
+        )
+    if not repo or issue_number is None:
+        return _record_status(database_url, delivery_id, event_type, payload_hash, "missing_issue")
+    clean_token = github_issue_token.strip()
+    if not clean_token:
+        _record_event(
+            database_url,
+            delivery_id,
+            event_type,
+            payload_hash,
+            "proposed_work_label_skipped",
+        )
+        return {
+            "status": "proposed_work_label_skipped",
+            "reason": "github issue token not configured",
+        }
+    try:
+        _post_github_json(
+            opener=opener,
+            url=f"{_github_issue_api_base(repo, issue_number)}/labels",
+            github_token=clean_token,
+            payload={"labels": [PROPOSED_WORK_LABEL]},
+        )
+    except HTTPError as exc:
+        return {
+            "status": "proposed_work_label_failed",
+            "reason": f"github label update failed: HTTP {exc.code}",
+        }
+    except (OSError, ValueError) as exc:
+        return {
+            "status": "proposed_work_label_failed",
+            "reason": f"github label update failed: {type(exc).__name__}",
+        }
+    _record_event(
+        database_url,
+        delivery_id,
+        event_type,
+        payload_hash,
+        "proposed_work_labeled",
+    )
+    return {"status": "proposed_work_labeled", "label": PROPOSED_WORK_LABEL}
 
 
 def _bounty_accepts_awards(bounty: Bounty) -> bool:
@@ -288,6 +463,8 @@ def handle_github_webhook(
     body: bytes,
     webhook_secret: str,
     accepted_labelers: tuple[str, ...] = (),
+    github_issue_token: str = "",
+    opener: Callable[..., Any] = urlopen,
 ) -> dict[str, Any]:
     signature = headers.get("X-Hub-Signature-256")
     if not verify_github_signature(body, signature, webhook_secret):
@@ -313,6 +490,17 @@ def handle_github_webhook(
     if not isinstance(payload, dict):
         _record_event(database_url, delivery_id, event_type, hashed, "invalid_payload")
         return {"status": "invalid_payload"}
+    proposed_work_result = _handle_proposed_work_issue_label(
+        database_url,
+        payload,
+        event_type,
+        delivery_id,
+        hashed,
+        github_issue_token,
+        opener,
+    )
+    if proposed_work_result is not None:
+        return proposed_work_result
     if event_type in {"issues", "pull_request"}:
         return _handle_accepted_issue_label(
             database_url, payload, event_type, delivery_id, hashed, accepted_labelers
