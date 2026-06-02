@@ -5,11 +5,14 @@ import hmac
 import ipaddress
 import json
 import os
+import re
 import sys
 import time
 from urllib.parse import urlparse
 
 import httpx
+
+_REPO_SLUG_RE = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
 
 
 def _required_env(name: str) -> str:
@@ -61,6 +64,22 @@ def _validate_http_url(url: str) -> None:
         raise RuntimeError(f"{url} must use http or https")
 
 
+def _dry_run_repo() -> str:
+    repo = os.environ.get("MERGEWORK_DRY_RUN_REPO", "ramimbo/mergework").strip()
+    if not repo:
+        raise RuntimeError("MERGEWORK_DRY_RUN_REPO is required")
+    if not _REPO_SLUG_RE.fullmatch(repo):
+        raise RuntimeError("MERGEWORK_DRY_RUN_REPO must be a GitHub repo slug in owner/name form")
+    return repo
+
+
+def _dry_run_contributor() -> str:
+    contributor = os.environ.get("MERGEWORK_DRY_RUN_CONTRIBUTOR", "mergework-dry-run").strip()
+    if not contributor:
+        raise RuntimeError("MERGEWORK_DRY_RUN_CONTRIBUTOR is required")
+    return contributor
+
+
 def _enforce_staging_target(base_url: str) -> None:
     parsed = urlparse(base_url)
     host = parsed.hostname or ""
@@ -84,8 +103,8 @@ def main() -> int:
         _enforce_staging_target(base_url)
         admin_token = _required_env("MERGEWORK_ADMIN_TOKEN")
         webhook_secret = _required_env("MERGEWORK_GITHUB_WEBHOOK_SECRET")
-        repo = os.environ.get("MERGEWORK_DRY_RUN_REPO", "ramimbo/mergework").strip()
-        contributor = os.environ.get("MERGEWORK_DRY_RUN_CONTRIBUTOR", "mergework-dry-run").strip()
+        repo = _dry_run_repo()
+        contributor = _dry_run_contributor()
         labeler = _required_env("MERGEWORK_GITHUB_ACCEPTED_LABELERS").split(",", 1)[0].strip()
         issue_number = int(time.time() * 1000)
         issue_url = f"https://github.com/{repo}/issues/{issue_number}"
