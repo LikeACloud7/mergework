@@ -52,6 +52,23 @@ def _proposed_work_body() -> str:
     )
 
 
+def _proposed_work_issue_form_body() -> str:
+    return "\n\n".join(
+        [
+            "### Related bounty or source issue\n\nBounty #722",
+            "### Problem\n\nCLI-created proposed-work issues miss the intake label.",
+            "### Evidence\n\nIssue #786 had no label after creation.",
+            "### Proposed work\n\nAdd the intake label when the issue is clearly proposed work.",
+            "### Expected value\n\nMaintainers and agents can find intake issues.",
+            "### Reference tier\n\n100-500 MRWK: useful issue, test, docs page, small bugfix",
+            "### Possible acceptance criteria\n\nWebhook tests cover the behavior.",
+            "### Evidence or tests required\n\nRun the webhook tests.",
+            "### Duplicate search\n\nNo existing automation covers this.",
+            "### Out of scope\n\nNo bounty, payout, or mrwk:bounty label changes.",
+        ]
+    )
+
+
 def test_issue_webhook_adds_proposed_work_label_for_template_shaped_issue(
     sqlite_url: str,
 ) -> None:
@@ -100,6 +117,53 @@ def test_issue_webhook_adds_proposed_work_label_for_template_shaped_issue(
     assert json.loads((requests[0].data or b"").decode()) == {"labels": ["proposed-work"]}
     with session_scope(sqlite_url) as session:
         event = session.get(WebhookEvent, "delivery-proposed-work-opened")
+        assert event is not None
+        assert event.processed_status == "proposed_work_labeled"
+
+
+def test_issue_webhook_adds_proposed_work_label_for_issue_form_headings(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    body = json.dumps(
+        {
+            "action": "opened",
+            "issue": {
+                "number": 786,
+                "title": "Proposed work: handle activity account filter explicitly",
+                "body": _proposed_work_issue_form_body(),
+                "html_url": "https://github.com/ramimbo/mergework/issues/786",
+                "labels": [],
+                "user": {"login": "contributor"},
+            },
+            "repository": {"full_name": "ramimbo/mergework"},
+            "sender": {"login": "contributor"},
+        },
+        separators=(",", ":"),
+    ).encode()
+    requests: list[Request] = []
+
+    def fake_opener(request: Request, timeout: float) -> _FakeResponse:
+        requests.append(request)
+        return _FakeResponse({})
+
+    result = handle_github_webhook(
+        sqlite_url,
+        {
+            "X-GitHub-Delivery": "delivery-proposed-work-issue-form",
+            "X-GitHub-Event": "issues",
+            "X-Hub-Signature-256": _signature("secret", body),
+        },
+        body,
+        "secret",
+        github_issue_token="github-issue-token",
+        opener=fake_opener,
+    )
+
+    assert result == {"status": "proposed_work_labeled", "label": "proposed-work"}
+    assert len(requests) == 1
+    with session_scope(sqlite_url) as session:
+        event = session.get(WebhookEvent, "delivery-proposed-work-issue-form")
         assert event is not None
         assert event.processed_status == "proposed_work_labeled"
 

@@ -46,7 +46,7 @@ PROPOSED_WORK_REQUIRED_HEADINGS = (
 PROPOSED_WORK_HEADING_ALTERNATES = (
     ("evidence", "current evidence"),
     ("proposed work", "proposed scope"),
-    ("acceptance", "verification"),
+    ("acceptance", "verification", "possible acceptance criteria"),
 )
 
 
