@@ -1104,3 +1104,35 @@ def test_submission_quality_gate_treats_incomplete_api_bounty_as_unverified(
         "status": "warn",
         "message": "referenced bounty #319 payability could not be verified",
     } in result["checks"]
+
+
+def test_maintainer_activity_check_rejects_negative_threshold() -> None:
+    """A negative max_maintainer_age_days must produce a clear invalid-threshold
+    warning, not a misleading stale-activity warning.
+
+    Regression for #809: a negative window made same-day maintainer activity
+    look stale because the time delta always exceeds a negative timedelta.
+    """
+    from datetime import UTC, datetime
+
+    from scripts.submission_quality_gate import _maintainer_activity_check
+
+    now = datetime(2026, 6, 2, 12, 0, 0, tzinfo=UTC)
+    bounty = {
+        "last_maintainer_activity_at": "2026-06-02T12:00:00Z",
+        "max_maintainer_age_days": -1,
+    }
+    result = _maintainer_activity_check(319, bounty, now)
+    assert result is not None
+    assert result["status"] == "warn"
+    assert "invalid maintainer activity threshold" in result["message"]
+    assert "must be >= 0" in result["message"]
+
+
+def test_quality_gate_cli_rejects_negative_max_maintainer_age_days(tmp_path, capsys) -> None:
+    fixture = tmp_path / "input.json"
+    fixture.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--input", str(fixture), "--max-maintainer-age-days", "-1"])
+    assert excinfo.value.code == 2
+    assert "must be >= 0" in capsys.readouterr().err
