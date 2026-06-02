@@ -10,6 +10,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.config import get_settings
 from app.ledger.reconciliation import AcceptedPayoutCheck
 from app.ledger.service import format_mrwk, get_balance
 from app.models import Bounty, LedgerEntry, Proof, TreasuryProposal, Wallet, WalletTransfer
@@ -373,6 +374,13 @@ def _bounty_detail_url(bounty_id: int | None) -> str | None:
     return f"/bounties/{bounty_id}" if bounty_id is not None else None
 
 
+def _public_page_url(path: str | None, public_base_url: str | None = None) -> str | None:
+    if path is None:
+        return None
+    base_url = public_base_url if public_base_url is not None else get_settings().public_base_url
+    return f"{base_url.rstrip('/')}{path}"
+
+
 def _proof_payload(proof: Proof) -> dict[str, Any] | None:
     try:
         data = json.loads(proof.public_json)
@@ -647,6 +655,7 @@ def account_accepted_summary(session: Session, account: str) -> dict[str, Any]:
         accepted.append(row)
 
     latest = accepted[0] if accepted else None
+    public_base_url = get_settings().public_base_url if latest else None
     return {
         "accepted_awards": len(accepted),
         "accepted_mrwk": format_mrwk(total_microunits),
@@ -654,6 +663,9 @@ def account_accepted_summary(session: Session, account: str) -> dict[str, Any]:
         "latest_submission_url": latest["submission_url"] if latest else None,
         "latest_proof_hash": latest["proof_hash"] if latest else None,
         "latest_proof_url": latest["proof_url"] if latest else None,
+        "latest_proof_public_url": (
+            _public_page_url(str(latest["proof_url"]), public_base_url) if latest else None
+        ),
     }
 
 
@@ -670,6 +682,7 @@ def accepted_work_for_account(session: Session, account: str) -> list[dict[str, 
         .order_by(LedgerEntry.sequence.desc())
     ).all()
     accepted_work: list[dict[str, Any]] = []
+    public_base_url = get_settings().public_base_url if rows else None
     for proof, entry in rows:
         data = _proof_payload(proof)
         if data is None:
@@ -679,19 +692,25 @@ def accepted_work_for_account(session: Session, account: str) -> list[dict[str, 
         issue_url = None
         if isinstance(repo, str) and isinstance(issue_number, int):
             issue_url = f"https://github.com/{repo}/issues/{issue_number}"
+        ledger_url = f"/ledger/{entry.sequence}"
+        proof_url = f"/proofs/{proof.hash}"
+        bounty_url = _bounty_detail_url(proof.bounty_id)
         accepted_work.append(
             {
                 "ledger_sequence": entry.sequence,
-                "ledger_url": f"/ledger/{entry.sequence}",
+                "ledger_url": ledger_url,
+                "ledger_public_url": _public_page_url(ledger_url, public_base_url),
                 "proof_hash": proof.hash,
-                "proof_url": f"/proofs/{proof.hash}",
+                "proof_url": proof_url,
+                "proof_public_url": _public_page_url(proof_url, public_base_url),
                 "amount_mrwk": format_mrwk(entry.amount_microunits),
                 "submission_url": data.get("submission_url"),
                 "issue_url": issue_url,
                 "repo": repo,
                 "issue_number": issue_number,
                 "bounty_id": proof.bounty_id,
-                "bounty_url": _bounty_detail_url(proof.bounty_id),
+                "bounty_url": bounty_url,
+                "bounty_public_url": _public_page_url(bounty_url, public_base_url),
                 "accepted_by": data.get("accepted_by"),
                 "created_at": public_utc_timestamp(entry.created_at),
             }
@@ -774,6 +793,7 @@ def empty_accepted_summary() -> dict[str, Any]:
         "latest_submission_url": None,
         "latest_proof_hash": None,
         "latest_proof_url": None,
+        "latest_proof_public_url": None,
     }
 
 

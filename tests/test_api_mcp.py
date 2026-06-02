@@ -1988,6 +1988,7 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
         "latest_submission_url": "https://github.com/ramimbo/mergework/pull/3",
         "latest_proof_hash": proof.hash,
         "latest_proof_url": f"/proofs/{proof.hash}",
+        "latest_proof_public_url": f"https://mrwk.online/proofs/{proof.hash}",
     }
     assert accepted_work_api["summary"] == account_api["accepted_work"]
     accepted_work = accepted_work_api["accepted_work"]
@@ -1996,8 +1997,10 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
     assert accepted_work[0] | {"created_at": "<checked>"} == {
         "ledger_sequence": 3,
         "ledger_url": "/ledger/3",
+        "ledger_public_url": "https://mrwk.online/ledger/3",
         "proof_hash": proof.hash,
         "proof_url": f"/proofs/{proof.hash}",
+        "proof_public_url": f"https://mrwk.online/proofs/{proof.hash}",
         "amount_mrwk": "25",
         "submission_url": "https://github.com/ramimbo/mergework/pull/3",
         "issue_url": "https://github.com/ramimbo/mergework/issues/2",
@@ -2005,6 +2008,7 @@ def test_explorer_links_ledger_proof_and_account(sqlite_url: str) -> None:
         "issue_number": 2,
         "bounty_id": bounty.id,
         "bounty_url": f"/bounties/{bounty.id}",
+        "bounty_public_url": f"https://mrwk.online/bounties/{bounty.id}",
         "accepted_by": "maintainer",
         "created_at": "<checked>",
     }
@@ -2067,6 +2071,7 @@ def test_account_api_keeps_schema_when_accepted_work_proof_is_malformed(
         "latest_submission_url": None,
         "latest_proof_hash": None,
         "latest_proof_url": None,
+        "latest_proof_public_url": None,
     }
 
 
