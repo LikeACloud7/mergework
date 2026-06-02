@@ -122,6 +122,19 @@ def test_admin_webhook_events_api_rejects_c1_control_status(monkeypatch):
     assert resp.json()["detail"] == "webhook_status must not contain control characters"
 
 
+def test_admin_webhook_events_api_rejects_repeated_status(monkeypatch):
+    monkeypatch.setenv("MERGEWORK_ADMIN_TOKEN", "admin-token-for-tests")
+    client = TestClient(create_app(webhook_secret="secret"))
+
+    resp = client.get(
+        "/api/v1/admin/webhook-events?status=paid&status=closed",
+        headers={"x-mergework-admin-token": "admin-token-for-tests"},
+    )
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "status must be provided at most once"
+
+
 @pytest.mark.parametrize(
     ("query", "detail"),
     [
