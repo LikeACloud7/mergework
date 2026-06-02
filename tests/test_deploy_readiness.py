@@ -498,6 +498,20 @@ def test_deploy_readiness_accepts_documented_treasury_executor_envs() -> None:
     assert result.stdout.strip() == "Deploy readiness check passed."
 
 
+def test_deploy_readiness_accepts_treasury_executor_minimum_bounds() -> None:
+    result = _run_deploy_ready(
+        _deploy_ready_env(
+            MERGEWORK_TREASURY_EXECUTOR_ENABLED="1",
+            MERGEWORK_TREASURY_EXECUTOR_INTERVAL_SECONDS="15",
+            MERGEWORK_TREASURY_EXECUTOR_BATCH_LIMIT="1",
+            MERGEWORK_BOUNTY_BOARD_REFRESH_INTERVAL_SECONDS="30",
+        )
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "Deploy readiness check passed."
+
+
 @pytest.mark.parametrize(
     ("name", "value", "expected_error"),
     [
