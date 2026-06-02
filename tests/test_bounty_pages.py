@@ -707,6 +707,15 @@ def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
         assert api_response.json()["detail"] == "bounty id must be a positive integer"
         page_response = client.get(f"/bounties/{noncanonical_id}")
         assert page_response.status_code == 400
+    leading_zero_bounty_id = f"0{bounty.id}"
+    leading_zero_api_response = client.get(f"/api/v1/bounties/{leading_zero_bounty_id}")
+    assert leading_zero_api_response.status_code == 400
+    assert (
+        leading_zero_api_response.json()["detail"]
+        == "bounty id must be a canonical positive integer"
+    )
+    leading_zero_page_response = client.get(f"/bounties/{leading_zero_bounty_id}")
+    assert leading_zero_page_response.status_code == 400
 
     oversized_bounty_id = "9" * 40
     oversized_api_response = client.get(f"/api/v1/bounties/{oversized_bounty_id}")
@@ -955,6 +964,15 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
         assert api_response.json()["detail"] == "ledger sequence must be a positive integer"
         page_response = client.get(f"/ledger/{noncanonical_sequence}")
         assert page_response.status_code == 400
+    leading_zero_sequence = f"0{payment_sequence}"
+    leading_zero_api_response = client.get(f"/api/v1/ledger/{leading_zero_sequence}")
+    assert leading_zero_api_response.status_code == 400
+    assert (
+        leading_zero_api_response.json()["detail"]
+        == "ledger sequence must be a canonical positive integer"
+    )
+    leading_zero_page_response = client.get(f"/ledger/{leading_zero_sequence}")
+    assert leading_zero_page_response.status_code == 400
 
     oversized_sequence = "9" * 40
     oversized_api_response = client.get(f"/api/v1/ledger/{oversized_sequence}")

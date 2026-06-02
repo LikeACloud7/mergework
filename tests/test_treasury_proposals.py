@@ -118,6 +118,11 @@ def test_admin_bounty_creation_creates_public_delayed_proposal(
         noncanonical_detail = client.get(f"/api/v1/treasury/proposals/{noncanonical_id}")
         assert noncanonical_detail.status_code == 400
         assert noncanonical_detail.json()["detail"] == "proposal id must be a positive integer"
+    leading_zero_detail = client.get(f"/api/v1/treasury/proposals/0{body['id']}")
+    assert leading_zero_detail.status_code == 400
+    assert (
+        leading_zero_detail.json()["detail"] == "proposal id must be a canonical positive integer"
+    )
 
 
 def test_admin_bounty_creation_rejects_control_character_reward_amount(

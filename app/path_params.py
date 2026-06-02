@@ -25,6 +25,10 @@ def positive_path_int(value: int | str, field: str) -> int:
     if isinstance(value, str):
         if not POSITIVE_INTEGER_RE.fullmatch(value):
             raise HTTPException(status_code=400, detail=f"{field} must be a positive integer")
+        if len(value) > 1 and value.startswith("0"):
+            raise HTTPException(
+                status_code=400, detail=f"{field} must be a canonical positive integer"
+            )
         try:
             parsed = int(value)
         except ValueError as exc:
