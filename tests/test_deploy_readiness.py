@@ -4,6 +4,8 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 from app.config import Settings, get_settings, validate_deploy_settings
 
 
@@ -496,11 +498,12 @@ def test_deploy_readiness_accepts_documented_treasury_executor_envs() -> None:
     assert result.stdout.strip() == "Deploy readiness check passed."
 
 
-def test_deploy_readiness_rejects_enabled_treasury_executor_invalid_envs() -> None:
-    cases = [
+@pytest.mark.parametrize(
+    ("name", "value", "expected_error"),
+    [
         (
             "MERGEWORK_TREASURY_EXECUTOR_INTERVAL_SECONDS",
-            "0",
+            "14",
             "MERGEWORK_TREASURY_EXECUTOR_INTERVAL_SECONDS must be at least 15",
         ),
         (
@@ -513,19 +516,21 @@ def test_deploy_readiness_rejects_enabled_treasury_executor_invalid_envs() -> No
             "29",
             "MERGEWORK_BOUNTY_BOARD_REFRESH_INTERVAL_SECONDS must be at least 30",
         ),
-    ]
-
-    for name, value, expected_error in cases:
-        result = _run_deploy_ready(
-            _deploy_ready_env(
-                MERGEWORK_TREASURY_EXECUTOR_ENABLED="1",
-                **{name: value},
-            )
+    ],
+)
+def test_deploy_readiness_rejects_enabled_treasury_executor_invalid_envs(
+    name: str, value: str, expected_error: str
+) -> None:
+    result = _run_deploy_ready(
+        _deploy_ready_env(
+            MERGEWORK_TREASURY_EXECUTOR_ENABLED="1",
+            **{name: value},
         )
+    )
 
-        assert result.returncode == 1, result.stdout
-        assert "Deploy readiness check failed:" in result.stdout
-        assert f"- {expected_error}" in result.stdout
+    assert result.returncode == 1, result.stdout
+    assert "Deploy readiness check failed:" in result.stdout
+    assert f"- {expected_error}" in result.stdout
 
 
 def test_deploy_readiness_rejects_loopback_public_base_url() -> None:
