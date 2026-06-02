@@ -566,3 +566,28 @@ def test_run_gh_rejects_mutating_commands_before_subprocess(monkeypatch) -> None
             assert "only permits read-only gh commands" in str(exc)
         else:  # pragma: no cover - defensive assertion
             raise AssertionError(f"expected read-only guard for {args}")
+
+
+def test_proposed_work_triage_rejects_non_positive_limit(capsys) -> None:
+    """A --limit below 1 must fail loudly instead of slicing to a misleading size.
+
+    Regression for #809: `--limit 0`/`-1` previously returned status=ok with a
+    silently truncated issue list via Python slice semantics.
+    """
+    import pytest
+
+    for bad in ("0", "-1"):
+        with pytest.raises(SystemExit) as excinfo:
+            main(["--repo", "ramimbo/mergework", "--format", "json", "--limit", bad])
+        assert excinfo.value.code == 2
+        err = capsys.readouterr().err
+        assert "must be >= 1" in err
+
+
+def test_proposed_work_triage_rejects_non_integer_limit(capsys) -> None:
+    import pytest
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--repo", "ramimbo/mergework", "--format", "json", "--limit", "abc"])
+    assert excinfo.value.code == 2
+    assert "expected an integer" in capsys.readouterr().err

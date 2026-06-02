@@ -11,6 +11,23 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+
+def _positive_int(value: str) -> int:
+    """Argparse type that rejects --limit values below 1.
+
+    A non-positive limit silently changes result size via Python slice
+    semantics (e.g. ``[:0]`` returns nothing, ``[:-1]`` drops the last row),
+    producing a successful but misleading report instead of a clear error.
+    """
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError(f"expected an integer, got {value!r}") from None
+    if parsed < 1:
+        raise argparse.ArgumentTypeError(f"must be >= 1, got {parsed}")
+    return parsed
+
+
 REQUIRED_TEMPLATE_SECTIONS = {
     "problem": ("problem", "current problem"),
     "evidence": ("evidence", "current evidence"),
@@ -470,7 +487,7 @@ def main(argv: list[str] | None = None) -> int:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--input", type=Path, help="Offline JSON fixture with issues/payments")
     source.add_argument("--repo", help="GitHub repo for read-only gh live mode")
-    parser.add_argument("--limit", type=int, default=50)
+    parser.add_argument("--limit", type=_positive_int, default=50)
     parser.add_argument("--format", choices=("json", "markdown"), default="markdown")
     parser.add_argument("--api-host", default=DEFAULT_API_HOST)
     args = parser.parse_args(argv)

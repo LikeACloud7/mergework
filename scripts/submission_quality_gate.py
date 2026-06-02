@@ -17,6 +17,23 @@ if __package__ in {None, ""}:
 
 from scripts.bounty_refs import BOUNTY_REF_RE, GITHUB_LINKED_ISSUE_RE, LEADING_BOUNTY_REF_RE
 
+
+def _non_negative_int(value: str) -> int:
+    """Argparse type that rejects negative --max-maintainer-age-days values.
+
+    A negative threshold makes any maintainer activity look stale (the delta
+    always exceeds a negative window), so the gate emits a misleading
+    "stale activity" warning instead of flagging the invalid input.
+    """
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError(f"expected an integer, got {value!r}") from None
+    if parsed < 0:
+        raise argparse.ArgumentTypeError(f"must be >= 0, got {parsed}")
+    return parsed
+
+
 EVIDENCE_RE = re.compile(
     r"\b(pytest|ruff|mypy|validation|verified|test evidence|checks? passed)\b",
     re.IGNORECASE,
@@ -157,6 +174,13 @@ def _maintainer_activity_check(
             "maintainer_activity",
             "warn",
             f"recent maintainer activity for bounty #{bounty_ref} could not be verified",
+        )
+    if max_age_days < 0:
+        return _check(
+            "maintainer_activity",
+            "warn",
+            f"invalid maintainer activity threshold for bounty #{bounty_ref}: "
+            f"max_maintainer_age_days must be >= 0, got {max_age_days}",
         )
     delta = now - last_activity
     age_days = max(0, int(delta.total_seconds() // 86400))
@@ -647,7 +671,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--api-host", default=DEFAULT_API_HOST)
     parser.add_argument(
         "--max-maintainer-age-days",
-        type=int,
+        type=_non_negative_int,
         default=DEFAULT_MAX_MAINTAINER_AGE_DAYS,
         help="Warn when the referenced bounty has no maintainer activity within this many days.",
     )
