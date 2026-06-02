@@ -17,6 +17,7 @@ REQUIRED = [
     "docs/admin-runbook.md",
     "SECURITY.md",
     "CODE_OF_CONDUCT.md",
+    "docs/AGENTS.md",
 ]
 BANNED_PUBLIC_PHRASES = [
     "guaranteed market value",
@@ -122,6 +123,12 @@ REQUIRED_PUBLIC_PHRASES = {
         ),
         "A security bounty is paid only after a public proof or ledger entry exists.",
         "Public comments should link the redacted proof",
+    ],
+    "docs/AGENTS.md": [
+        "Before documenting a bounty as claimable, confirm `mrwk:bounty`",
+        "remaining effective award capacity",
+        "Do not submit or encourage `/claim`",
+        "pending `pay_bounty` proposals as accepted-for-review",
     ],
 }
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
@@ -266,11 +273,17 @@ def main() -> int:
             'labels: ["proposed-work"]',
             "not a live mrwk bounty",
             "do not submit `/claim`",
+            "id: related_bounty_or_source",
+            "related bounty or source issue",
+            "link the intake bounty, source issue, pr, discussion, api route, docs page",
             "id: duplicate_search",
         ]:
             if phrase not in proposed_template:
                 print(f"proposed work issue template missing required phrase: {phrase}")
                 ok = False
+        if not _template_field_is_required(proposed_template, "related_bounty_or_source"):
+            print("proposed work issue template related_bounty_or_source field must be required")
+            ok = False
         if "mrwk:bounty" in proposed_template:
             print("proposed work issue template must not mention or apply mrwk:bounty")
             ok = False
