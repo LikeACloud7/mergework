@@ -40,6 +40,11 @@ from app.serializers import (
     payout_reconciliation_to_dict,
 )
 from app.treasury import proposal_to_dict, propose_treasury_action
+from app.work_discovery import (
+    DEFAULT_WORK_DISCOVERY_LIMIT,
+    MAX_WORK_DISCOVERY_LIMIT,
+    work_discovery_to_dict,
+)
 
 
 def _payout_response_from_proof(proof: Proof, *, status: str) -> dict[str, Any]:
@@ -241,6 +246,19 @@ def register_bounty_api_routes(
                 availability=availability,
             )
         )
+
+    @app.get("/api/v1/work-discovery")
+    def api_work_discovery(
+        request: Request,
+        limit: Annotated[
+            int,
+            Query(ge=1, le=MAX_WORK_DISCOVERY_LIMIT),
+        ] = DEFAULT_WORK_DISCOVERY_LIMIT,
+    ) -> dict[str, Any]:
+        reject_repeated_query_param(request, "limit")
+        reject_noncanonical_int_query_param(request, "limit")
+        with session_scope(db_url) as session:
+            return work_discovery_to_dict(session, limit=limit)
 
     @app.get("/api/v1/admin/webhook-events")
     def api_admin_webhook_events(

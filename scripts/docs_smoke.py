@@ -53,6 +53,9 @@ REQUIRED_PUBLIC_PHRASES = {
         ("creating or releasing an attempt requires the GitHub-authenticated browser session"),
         "Proposed work requests are intake issues, not live bounties",
         "wait for `mrwk:bounty`",
+        "GET /api/v1/work-discovery",
+        "claimable_now",
+        "opening_soon",
         "Use [docs/bounty-lifecycle.md](bounty-lifecycle.md) as the short checklist",
     ],
     "docs/bounty-lifecycle.md": [
@@ -106,6 +109,8 @@ REQUIRED_PUBLIC_PHRASES = {
         "effective_awards_remaining` is zero",
         "availability_state` is not",
         "pending payout proposals as proof-backed paid work",
+        "/api/v1/work-discovery",
+        "live bounty rows from pending create-bounty proposals",
         ("Treasury and reserve balances change as bounties are reserved, paid, and released."),
     ],
     "docs/admin-runbook.md": [
