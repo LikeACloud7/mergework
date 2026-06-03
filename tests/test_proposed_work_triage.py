@@ -765,8 +765,6 @@ def test_proposed_work_triage_rejects_non_integer_limit(capsys) -> None:
 
 
 def test_proposed_work_triage_rejects_invalid_api_host(capsys) -> None:
-    import pytest
-
     for bad in ("", "   ", "/relative", "ftp://api.example.test"):
         with pytest.raises(SystemExit) as excinfo:
             main(["--repo", "ramimbo/mergework", "--api-host", bad])
