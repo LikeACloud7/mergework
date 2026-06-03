@@ -11,6 +11,12 @@ def _post_schema(openapi: dict, path: str) -> dict:
     return openapi["paths"][path]["post"]["requestBody"]["content"]["application/json"]["schema"]
 
 
+def _post_response_schema(openapi: dict, path: str, status: str = "200") -> dict:
+    return openapi["paths"][path]["post"]["responses"][status]["content"]["application/json"][
+        "schema"
+    ]
+
+
 def _assert_properties(schema: dict, expected: Iterable[str]) -> None:
     assert set(expected).issubset(schema["properties"])
 
@@ -88,7 +94,12 @@ def test_public_post_openapi_request_bodies_publish_stable_constraints(
     ttl_any_of = attempt_props["ttl_seconds"]["anyOf"]
     assert {"type": "integer", "minimum": 60, "maximum": 604800} in ttl_any_of
     assert any(
-        schema.get("type") == "string" and schema.get("pattern") == "^[0-9]+$"
+        schema.get("type") == "string"
+        and schema.get("pattern")
+        == (
+            r"^(?:[6-9][0-9]|[1-9][0-9]{2,5}|[1-5][0-9]{6}|"
+            r"60[0-3][0-9]{3}|604[0-7][0-9]{2}|604800)$"
+        )
         for schema in ttl_any_of
     )
 
@@ -105,6 +116,164 @@ def test_public_post_openapi_request_bodies_publish_stable_constraints(
 
     transfer_props = _post_schema(openapi, "/api/v1/transfers")["properties"]
     assert transfer_props["signature_hex"]["pattern"] == "^[0-9a-f]{128}$"
+
+
+def test_public_post_openapi_request_bodies_match_runtime_amount_and_ttl_bounds(
+    sqlite_url: str,
+) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    openapi = client.get("/openapi.json").json()
+
+    transfer_props = _post_schema(openapi, "/api/v1/transfers")["properties"]
+    amount_schema = transfer_props["amount_mrwk"]
+    assert amount_schema["pattern"] == r"^(?=.*[1-9])\d+(?:\.\d{1,6})?$"
+    assert "positive" in amount_schema["description"].lower()
+    assert "six" in amount_schema["description"].lower()
+
+    attempt_props = _post_schema(openapi, "/api/v1/bounties/{bounty_id}/attempts")["properties"]
+    ttl_string_schema = next(
+        schema for schema in attempt_props["ttl_seconds"]["anyOf"] if schema.get("type") == "string"
+    )
+    assert ttl_string_schema["pattern"] != "^[0-9]+$"
+    assert ttl_string_schema["pattern"] == (
+        r"^(?:[6-9][0-9]|[1-9][0-9]{2,5}|[1-5][0-9]{6}|"
+        r"60[0-3][0-9]{3}|604[0-7][0-9]{2}|604800)$"
+    )
+
+
+def test_public_post_openapi_response_schemas_expose_wallet_transfer_and_attempt_fields(
+    sqlite_url: str,
+) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    openapi = client.get("/openapi.json").json()
+
+    wallet_schema = _post_response_schema(openapi, "/api/v1/wallets/register")
+    _assert_properties(
+        wallet_schema,
+        {
+            "address",
+            "public_key_hex",
+            "label",
+            "github_login",
+            "balance_mrwk",
+            "nonce",
+            "next_nonce",
+            "created_at",
+        },
+    )
+    link_wallet_schema = _post_response_schema(openapi, "/api/v1/wallets/link-github")
+    _assert_properties(
+        link_wallet_schema,
+        {
+            "address",
+            "public_key_hex",
+            "label",
+            "github_login",
+            "balance_mrwk",
+            "nonce",
+            "next_nonce",
+            "created_at",
+        },
+    )
+
+    claim_schema = _post_response_schema(openapi, "/api/v1/github/claim")
+    _assert_properties(
+        claim_schema,
+        {
+            "sequence",
+            "type",
+            "from",
+            "to",
+            "amount_mrwk",
+            "reference",
+            "previous_hash",
+            "entry_hash",
+            "proof_hash",
+            "created_at",
+        },
+    )
+
+    transfer_schema = _post_response_schema(openapi, "/api/v1/transfers")
+    _assert_properties(
+        transfer_schema,
+        {
+            "hash",
+            "type",
+            "ledger_sequence",
+            "from_address",
+            "to_address",
+            "amount_mrwk",
+            "nonce",
+            "memo",
+            "created_at",
+        },
+    )
+
+    registered_attempt_schema = _post_response_schema(
+        openapi, "/api/v1/bounties/{bounty_id}/attempts", "201"
+    )
+    _assert_properties(registered_attempt_schema, {"status", "attempt", "warnings"})
+    _assert_properties(
+        registered_attempt_schema["properties"]["attempt"],
+        {
+            "id",
+            "bounty_id",
+            "submitter_account",
+            "source_url",
+            "status",
+            "expires_at",
+            "created_at",
+            "updated_at",
+        },
+    )
+
+    conflict_schema = _post_response_schema(openapi, "/api/v1/bounties/{bounty_id}/attempts", "409")
+    _assert_properties(conflict_schema, {"status", "attempt", "bounty_id", "warnings"})
+
+    release_schema = _post_response_schema(openapi, "/api/v1/bounty-attempts/{attempt_id}/release")
+    _assert_properties(release_schema, {"status", "attempt"})
+
+
+def test_public_post_openapi_response_schemas_expose_treasury_fields(sqlite_url: str) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    openapi = client.get("/openapi.json").json()
+
+    proposal_schema = _post_response_schema(openapi, "/api/v1/treasury/proposals")
+    _assert_properties(
+        proposal_schema,
+        {
+            "id",
+            "type",
+            "action",
+            "status",
+            "payload_hash",
+            "payload",
+            "proposed_by",
+            "executed_by",
+            "proposed_at",
+            "executes_after",
+            "executed_at",
+            "executed_ledger_sequence",
+            "result",
+            "challenges",
+        },
+    )
+
+    challenge_schema = _post_response_schema(
+        openapi, "/api/v1/treasury/proposals/{proposal_id}/challenges"
+    )
+    _assert_properties(
+        challenge_schema,
+        {
+            "id",
+            "proposal_id",
+            "challenger_account",
+            "challenge_type",
+            "status",
+            "reason",
+            "created_at",
+        },
+    )
 
 
 def test_attempt_openapi_request_bodies_remain_optional(sqlite_url: str) -> None:
