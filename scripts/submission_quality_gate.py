@@ -15,6 +15,7 @@ from urllib.request import urlopen
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from scripts.api_host_args import public_api_host
 from scripts.bounty_refs import BOUNTY_REF_RE, GITHUB_LINKED_ISSUE_RE, LEADING_BOUNTY_REF_RE
 
 
@@ -767,7 +768,7 @@ def main(argv: list[str] | None = None) -> int:
     source.add_argument("--input", help="Read gate input from a JSON fixture file.")
     source.add_argument("--text-file", help="Read submission text and live context with gh.")
     parser.add_argument("--repo", default="ramimbo/mergework")
-    parser.add_argument("--api-host", default=DEFAULT_API_HOST)
+    parser.add_argument("--api-host", default=DEFAULT_API_HOST, type=public_api_host)
     parser.add_argument(
         "--max-maintainer-age-days",
         type=_non_negative_int,
