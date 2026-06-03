@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+
+EXPECTED_TTL_STRING_PATTERN = (
+    r"^(?:[6-9][0-9]|[1-9][0-9]{2,4}|[1-5][0-9]{5}|"
+    r"60[0-3][0-9]{3}|604[0-7][0-9]{2}|604800)$"
+)
 
 
 def _post_schema(openapi: dict, path: str) -> dict:
@@ -94,12 +100,7 @@ def test_public_post_openapi_request_bodies_publish_stable_constraints(
     ttl_any_of = attempt_props["ttl_seconds"]["anyOf"]
     assert {"type": "integer", "minimum": 60, "maximum": 604800} in ttl_any_of
     assert any(
-        schema.get("type") == "string"
-        and schema.get("pattern")
-        == (
-            r"^(?:[6-9][0-9]|[1-9][0-9]{2,5}|[1-5][0-9]{6}|"
-            r"60[0-3][0-9]{3}|604[0-7][0-9]{2}|604800)$"
-        )
+        schema.get("type") == "string" and schema.get("pattern") == EXPECTED_TTL_STRING_PATTERN
         for schema in ttl_any_of
     )
 
@@ -135,10 +136,38 @@ def test_public_post_openapi_request_bodies_match_runtime_amount_and_ttl_bounds(
         schema for schema in attempt_props["ttl_seconds"]["anyOf"] if schema.get("type") == "string"
     )
     assert ttl_string_schema["pattern"] != "^[0-9]+$"
-    assert ttl_string_schema["pattern"] == (
-        r"^(?:[6-9][0-9]|[1-9][0-9]{2,5}|[1-5][0-9]{6}|"
-        r"60[0-3][0-9]{3}|604[0-7][0-9]{2}|604800)$"
+    assert ttl_string_schema["pattern"] == EXPECTED_TTL_STRING_PATTERN
+
+
+def test_public_post_openapi_ttl_string_pattern_matches_runtime_bounds(
+    sqlite_url: str,
+) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+    openapi = client.get("/openapi.json").json()
+
+    attempt_props = _post_schema(openapi, "/api/v1/bounties/{bounty_id}/attempts")["properties"]
+    ttl_string_schema = next(
+        schema for schema in attempt_props["ttl_seconds"]["anyOf"] if schema.get("type") == "string"
     )
+    pattern = ttl_string_schema["pattern"]
+
+    for value in (
+        "60",
+        "99",
+        "100",
+        "99999",
+        "100000",
+        "599999",
+        "600000",
+        "603999",
+        "604000",
+        "604799",
+        "604800",
+    ):
+        assert re.fullmatch(pattern, value), value
+
+    for value in ("0", "59", "604801", "999999", "1000000", "5999999"):
+        assert re.fullmatch(pattern, value) is None, value
 
 
 def test_public_post_openapi_response_schemas_expose_wallet_transfer_and_attempt_fields(
