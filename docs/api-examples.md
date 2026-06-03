@@ -12,9 +12,9 @@ The legacy-compatible hosts remain available for existing clients:
 
 Machine-readable REST docs are available at `$API_HOST/openapi.json`,
 `$API_HOST/api/docs`, and `$API_HOST/api/redoc`. Public JSON POST endpoints
-publish `requestBody` schemas for attempt reservations, wallet actions,
-transfers, and treasury challenges so clients can discover payload fields
-without reading source code.
+publish request and response schemas for attempt reservations, wallet actions,
+transfers, and treasury challenges so clients can discover payload and result
+fields without reading source code.
 
 ## Status And Bounties
 
