@@ -83,6 +83,17 @@ def test_call_mcp_tool_rejects_c1_status_before_normalizing(sqlite_url: str) -> 
         call_mcp_tool(sqlite_url, "list_bounties", {"status": "\u0085open"})
 
 
+def test_call_mcp_tool_rejects_c1_work_proof_format_before_normalizing(
+    sqlite_url: str,
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    with pytest.raises(ValueError, match="format must not contain control characters"):
+        call_mcp_tool(sqlite_url, "submit_work_proof", {"format": "\u0085json"})
+
+
 def test_call_mcp_tool_rejects_c1_nonce_before_integer_parsing(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
