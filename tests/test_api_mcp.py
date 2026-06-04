@@ -283,6 +283,64 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     assert "structuredContent" not in balance["result"]
 
 
+def test_mcp_initialize_returns_server_capabilities(sqlite_url: str) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "test-client", "version": "0.1.0"},
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "error" not in payload
+    assert payload["jsonrpc"] == "2.0"
+    assert payload["id"] == 1
+    result = payload["result"]
+    assert result["protocolVersion"] == "2025-06-18"
+    assert result["capabilities"] == {"tools": {"listChanged": False}}
+    assert result["serverInfo"] == {"name": "mergework", "version": "0.1.0"}
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"jsonrpc": "2.0", "id": 2, "method": "initialize"},
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "initialize",
+            "params": {"protocolVersion": 123},
+        },
+        {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "initialize",
+            "params": {"protocolVersion": "invalid-version"},
+        },
+    ],
+)
+def test_mcp_initialize_defaults_unsupported_protocol_versions(
+    sqlite_url: str, payload: dict[str, object]
+) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post("/mcp", json=payload)
+
+    assert response.status_code == 200
+    result = response.json()["result"]
+    assert result["protocolVersion"] == "2025-06-18"
+
+
 def test_mcp_list_bounty_attempts_reports_active_and_expired(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     now = datetime.now(UTC)

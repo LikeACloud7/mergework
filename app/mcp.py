@@ -10,6 +10,8 @@ from fastapi.responses import JSONResponse
 from app.ledger.service import LedgerError
 
 MCPToolHandler = Callable[[str, str, dict[str, Any]], str | dict[str, Any]]
+MCP_PROTOCOL_VERSION = "2025-06-18"
+MCP_SERVER_INFO = {"name": "mergework", "version": "0.1.0"}
 
 MCP_TOOLS: list[dict[str, Any]] = [
     {
@@ -89,6 +91,25 @@ def _jsonrpc_error(response_id: Any, code: int, message: str) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": response_id, "error": {"code": code, "message": message}}
 
 
+def _initialize_response(response_id: Any, params: Any) -> dict[str, Any]:
+    protocol_version = MCP_PROTOCOL_VERSION
+    if (
+        isinstance(params, dict)
+        and isinstance(params.get("protocolVersion"), str)
+        and params["protocolVersion"] == MCP_PROTOCOL_VERSION
+    ):
+        protocol_version = params["protocolVersion"]
+    return {
+        "jsonrpc": "2.0",
+        "id": response_id,
+        "result": {
+            "protocolVersion": protocol_version,
+            "capabilities": {"tools": {"listChanged": False}},
+            "serverInfo": MCP_SERVER_INFO,
+        },
+    }
+
+
 def _structured_json_payload(text: str) -> dict[str, Any] | list[Any] | None:
     try:
         payload = json.loads(text)
@@ -139,6 +160,9 @@ async def handle_mcp_request(
 
     response_id = payload.get("id")
     method = payload.get("method")
+    if method == "initialize":
+        return _initialize_response(response_id, payload.get("params"))
+
     if method == "tools/list":
         return {"jsonrpc": "2.0", "id": response_id, "result": {"tools": MCP_TOOLS}}
 
