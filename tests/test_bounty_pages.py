@@ -418,9 +418,26 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
     assert oversized_issue_search.status_code == 200
     assert oversized_issue_search.json() == []
 
-    digit_limit_issue_search = client.get("/api/v1/bounties", params={"q": "9" * 5000})
+    digit_limit_issue_search = client.get("/api/v1/bounties", params={"q": "9" * 500})
     assert digit_limit_issue_search.status_code == 200
     assert digit_limit_issue_search.json() == []
+
+    digit_limit_issue_page = client.get("/bounties", params={"q": "9" * 500})
+    assert digit_limit_issue_page.status_code == 200
+    assert "No bounties match these filters." in digit_limit_issue_page.text
+    assert 'href="/bounties">Clear filters</a>' in digit_limit_issue_page.text
+
+    oversized_query = "9" * 501
+    oversized_query_search = client.get("/api/v1/bounties", params={"q": oversized_query})
+    oversized_query_summary = client.get("/api/v1/bounties/summary", params={"q": oversized_query})
+    oversized_query_page = client.get("/bounties", params={"q": oversized_query})
+
+    assert oversized_query_search.status_code == 400
+    assert oversized_query_search.json()["detail"] == "q must be at most 500 characters"
+    assert oversized_query_summary.status_code == 400
+    assert oversized_query_summary.json()["detail"] == "q must be at most 500 characters"
+    assert oversized_query_page.status_code == 400
+    assert oversized_query_page.json()["detail"] == "q must be at most 500 characters"
 
     oversized_issue_page = client.get("/bounties", params={"q": "9" * 40})
     assert oversized_issue_page.status_code == 200

@@ -411,6 +411,29 @@ def test_bounty_api_search_query_rejects_control_characters(sqlite_url: str) -> 
     assert summary_response.json()["detail"] == "q must not contain control characters"
 
 
+def test_bounty_api_search_query_rejects_oversized_values(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    accepted_query = "a" * 500
+    oversized_query = "a" * 501
+
+    list_boundary = client.get("/api/v1/bounties", params={"q": accepted_query})
+    summary_boundary = client.get("/api/v1/bounties/summary", params={"q": accepted_query})
+    list_oversized = client.get("/api/v1/bounties", params={"q": oversized_query})
+    summary_oversized = client.get("/api/v1/bounties/summary", params={"q": oversized_query})
+
+    assert list_boundary.status_code == 200
+    assert summary_boundary.status_code == 200
+    assert list_oversized.status_code == 400
+    assert list_oversized.json()["detail"] == "q must be at most 500 characters"
+    assert summary_oversized.status_code == 400
+    assert summary_oversized.json()["detail"] == "q must be at most 500 characters"
+
+
 @pytest.mark.parametrize(
     ("path", "detail"),
     [

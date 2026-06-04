@@ -41,6 +41,8 @@ from app.serializers import (
 )
 from app.treasury import proposal_to_dict, propose_treasury_action
 
+BOUNTY_SEARCH_QUERY_MAX_LENGTH = 500
+
 
 def _payout_response_from_proof(proof: Proof, *, status: str) -> dict[str, Any]:
     data = json.loads(proof.public_json)
@@ -145,6 +147,11 @@ def register_bounty_api_routes(
                 if contains_control_character(query_text):
                     raise HTTPException(
                         status_code=400, detail="q must not contain control characters"
+                    )
+                if len(query_text) > BOUNTY_SEARCH_QUERY_MAX_LENGTH:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"q must be at most {BOUNTY_SEARCH_QUERY_MAX_LENGTH} characters",
                     )
                 normalized_query = query_text.strip()
                 if normalized_query:
