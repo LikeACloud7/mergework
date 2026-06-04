@@ -447,6 +447,7 @@ body:
 """
 
     assert not _template_field_is_required(template, "evidence")
+    assert _template_field_is_required(template, "evidence_extra")
 
 
 def test_contributing_names_docs_smoke_for_public_docs_changes() -> None:
