@@ -1445,6 +1445,7 @@ def test_mcp_get_proof_returns_public_proof_details(sqlite_url: str) -> None:
     assert payload["hash"] == proof.hash
     assert payload["kind"] == "bounty_payment"
     assert payload["ledger_sequence"] == proof.ledger_sequence
+    assert payload["created_at"] == public_utc_timestamp(proof.created_at)
     assert payload["proof"]["repo"] == "ramimbo/mergework"
     assert payload["proof"]["submission_url"] == "https://github.com/ramimbo/mergework/pull/37"
     assert payload["proof"]["accepted_by"] == "maintainer"
