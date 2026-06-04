@@ -152,11 +152,12 @@ def work_discovery_to_dict(
     claimable_now, not_claimable = _scan_open_bounty_buckets(session, limit=capped_limit)
 
     if len(not_claimable) < capped_limit:
+        remaining_not_claimable = capped_limit - len(not_claimable)
         terminal_bounties = session.scalars(
             select(Bounty)
             .where(Bounty.status != "open")
             .order_by(Bounty.id.desc())
-            .limit(capped_limit)
+            .limit(remaining_not_claimable)
         ).all()
         terminal_rows = bounties_to_dict(terminal_bounties, session=session)
         for row in terminal_rows:
