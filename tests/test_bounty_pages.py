@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from fastapi.testclient import TestClient
 
@@ -182,6 +183,10 @@ def test_bounties_page_shows_effective_capacity_after_pending_payout(
     assert page.status_code == 200
     assert "Effectively open" in page.text
     assert "Effectively available" in page.text
+    assert "Capacity reduced" in page.text
+    assert "Effectively unavailable" in page.text
+    assert re.search(r"Capacity reduced</span>\s*<strong>1</strong>", page.text)
+    assert re.search(r"Effectively unavailable</span>\s*<strong>0</strong>", page.text)
     assert "50 MRWK still available before pending proposals" in page.text
     assert "25 MRWK effectively available" in page.text
     assert "1 award covered by pending payout proposal" in page.text
@@ -228,6 +233,8 @@ def test_bounties_page_shows_effective_capacity_after_pending_close(
     detail = client.get(f"/bounties/{bounty_id}")
 
     assert page.status_code == 200
+    assert re.search(r"Capacity reduced</span>\s*<strong>1</strong>", page.text)
+    assert re.search(r"Effectively unavailable</span>\s*<strong>1</strong>", page.text)
     assert "90 MRWK still available before pending proposals" in page.text
     assert "0 MRWK effectively available" in page.text
     assert "A pending close proposal would make this bounty unavailable if executed." in page.text
