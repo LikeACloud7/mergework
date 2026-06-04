@@ -133,6 +133,7 @@ REQUIRED_PUBLIC_PHRASES = {
 }
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$", re.MULTILINE)
+FENCE_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 DOCS_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/docs.yml"
 SECURITY_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/security-report.yml"
 BUG_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/bug.yml"
@@ -146,8 +147,31 @@ def _markdown_heading_anchor(heading: str) -> str:
 
 
 def _markdown_anchors(path: Path) -> set[str]:
-    text = path.read_text(encoding="utf-8")
-    return {_markdown_heading_anchor(match.group(1)) for match in HEADING_RE.finditer(text)}
+    anchors: set[str] = set()
+    counts: dict[str, int] = {}
+    fence_marker = ""
+
+    for line in path.read_text(encoding="utf-8").splitlines():
+        fence_match = FENCE_RE.match(line)
+        if fence_match:
+            marker = fence_match.group(1)
+            if not fence_marker:
+                fence_marker = marker
+            elif marker.startswith(fence_marker[0]) and len(marker) >= len(fence_marker):
+                fence_marker = ""
+            continue
+        if fence_marker:
+            continue
+
+        heading_match = HEADING_RE.match(line)
+        if not heading_match:
+            continue
+        anchor = _markdown_heading_anchor(heading_match.group(1))
+        count = counts.get(anchor, 0)
+        counts[anchor] = count + 1
+        anchors.add(anchor if count == 0 else f"{anchor}-{count}")
+
+    return anchors
 
 
 def _local_target_exists(source: Path, target: str) -> bool:

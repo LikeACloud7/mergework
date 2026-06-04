@@ -7,6 +7,7 @@ from scripts.docs_smoke import (
     REQUIRED,
     _issue_template_labels,
     _local_target_exists,
+    _markdown_anchors,
     _markdown_heading_anchor,
     _template_field_is_required,
 )
@@ -203,6 +204,39 @@ def test_docs_smoke_validates_markdown_heading_anchors(tmp_path: Path) -> None:
 
     assert _local_target_exists(source, "docs.md#current-transfer-paths") is True
     assert _local_target_exists(source, "docs.md#missing-section") is False
+
+
+def test_docs_smoke_validates_duplicate_markdown_heading_anchors(tmp_path: Path) -> None:
+    source = tmp_path / "README.md"
+    target = tmp_path / "docs.md"
+    source.write_text(
+        "[First](docs.md#current-transfer-paths)\n[Second](docs.md#current-transfer-paths-1)\n",
+        encoding="utf-8",
+    )
+    target.write_text(
+        "## Current Transfer Paths\n\nDetails.\n\n## Current Transfer Paths\n\nMore details.\n",
+        encoding="utf-8",
+    )
+
+    assert _local_target_exists(source, "docs.md#current-transfer-paths") is True
+    assert _local_target_exists(source, "docs.md#current-transfer-paths-1") is True
+    assert _local_target_exists(source, "docs.md#current-transfer-paths-2") is False
+
+
+def test_markdown_anchors_ignore_fenced_code_headings(tmp_path: Path) -> None:
+    target = tmp_path / "docs.md"
+    target.write_text(
+        "## Real Heading\n\n"
+        "```markdown\n"
+        "## Pseudo Heading\n"
+        "```\n"
+        "~~~\n"
+        "## Other Pseudo Heading\n"
+        "~~~\n",
+        encoding="utf-8",
+    )
+
+    assert _markdown_anchors(target) == {"real-heading"}
 
 
 def test_markdown_heading_anchor_handles_inline_code() -> None:
