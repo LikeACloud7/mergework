@@ -327,6 +327,12 @@ def test_mcp_initialize_returns_server_capabilities(sqlite_url: str) -> None:
             "method": "initialize",
             "params": {"protocolVersion": "invalid-version"},
         },
+        {
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "initialize",
+            "params": {"protocolVersion": ""},
+        },
     ],
 )
 def test_mcp_initialize_defaults_unsupported_protocol_versions(
