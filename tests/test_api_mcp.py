@@ -250,6 +250,10 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
         "status, q, sort, limit, and availability filters"
         in tools["result"]["tools"][0]["description"]
     )
+    list_bounties_schema = tools["result"]["tools"][0]["inputSchema"]
+    assert list_bounties_schema["additionalProperties"] is False
+    assert list_bounties_schema["properties"]["q"]["maxLength"] == 500
+    assert list_bounties_schema["properties"]["limit"]["maximum"] == 100
     submit_tool = next(
         tool for tool in tools["result"]["tools"] if tool["name"] == "submit_work_proof"
     )
@@ -569,7 +573,7 @@ def test_mcp_list_bounties_filters_status_query_and_limit(sqlite_url: str) -> No
     oversized_payload = json.loads(oversized_result["result"]["content"][0]["text"])
     assert oversized_payload == []
 
-    digit_limit_result = client.post(
+    max_length_search_result = client.post(
         "/mcp",
         json={
             "jsonrpc": "2.0",
@@ -577,12 +581,12 @@ def test_mcp_list_bounties_filters_status_query_and_limit(sqlite_url: str) -> No
             "method": "tools/call",
             "params": {
                 "name": "list_bounties",
-                "arguments": {"q": "9" * 5000},
+                "arguments": {"q": "9" * 500},
             },
         },
     ).json()
-    digit_limit_payload = json.loads(digit_limit_result["result"]["content"][0]["text"])
-    assert digit_limit_payload == []
+    max_length_search_payload = json.loads(max_length_search_result["result"]["content"][0]["text"])
+    assert max_length_search_payload == []
 
 
 def test_mcp_list_bounties_honors_sort_argument(sqlite_url: str) -> None:
@@ -697,6 +701,7 @@ def test_mcp_list_bounties_filters_effective_availability(sqlite_url: str) -> No
         ({"limit": 101}, 35),
         ({"sort": "invalid"}, 36),
         ({"availability": "maybe"}, 37),
+        ({"q": "a" * 501}, 38),
     ],
 )
 def test_mcp_list_bounties_rejects_invalid_filters(
