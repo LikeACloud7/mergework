@@ -34,6 +34,8 @@ from app.status import (
     UNSUPPORTED_PUBLIC_PATHS_SUMMARY,
 )
 
+WALLET_SEARCH_QUERY_MAX_LENGTH = 500
+
 
 def _bounties_api_url(
     status: str | None,
@@ -181,6 +183,11 @@ def public_bounties_context(
 def wallets_page_context(session: Session, q: str | None = None) -> dict[str, Any]:
     if q is not None and contains_control_character(q):
         raise HTTPException(status_code=400, detail="q must not contain control characters")
+    if q is not None and len(q) > WALLET_SEARCH_QUERY_MAX_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"q must be at most {WALLET_SEARCH_QUERY_MAX_LENGTH} characters",
+        )
     query_text = q.strip() if q is not None else ""
     query = select(Wallet)
     if query_text:
