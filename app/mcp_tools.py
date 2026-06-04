@@ -126,6 +126,11 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
             raise ValueError(f"{field} must be a boolean")
         return value
 
+    def require_known_fields(*allowed_fields: str) -> None:
+        unknown_fields = set(args) - set(allowed_fields)
+        if unknown_fields:
+            raise ValueError(f"unknown argument: {sorted(unknown_fields)[0]}")
+
     def bounty_by_issue_number(repo_selector: str | None) -> Bounty | None:
         issue_query = select(Bounty).where(Bounty.issue_number == positive_int_arg("issue_number"))
         if repo_selector is not None:
@@ -270,6 +275,7 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
                 }
             )
         if name == "submit_work_proof":
+            require_known_fields("bounty_id", "issue_number", "repo", "format")
             output_format = output_format_arg()
             has_bounty_id = "bounty_id" in args and args.get("bounty_id") is not None
             has_issue_number = "issue_number" in args and args.get("issue_number") is not None
