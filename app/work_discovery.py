@@ -98,7 +98,7 @@ def work_discovery_to_dict(
     """Return public read-only work discovery grouped by claimability."""
     capped_limit = max(1, min(limit, MAX_WORK_DISCOVERY_LIMIT))
     open_bounties = session.scalars(
-        select(Bounty).where(Bounty.status == "open").order_by(Bounty.id.desc()).limit(capped_limit)
+        select(Bounty).where(Bounty.status == "open").order_by(Bounty.id.desc())
     ).all()
     terminal_bounties = session.scalars(
         select(Bounty).where(Bounty.status != "open").order_by(Bounty.id.desc()).limit(capped_limit)

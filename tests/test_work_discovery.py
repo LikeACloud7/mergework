@@ -163,3 +163,53 @@ def test_work_discovery_limit_caps_public_buckets(sqlite_url: str) -> None:
     assert body["summary"]["limit"] == 1
     assert len(body["claimable_now"]) == 1
     assert len(body["opening_soon"]) == 1
+
+
+def test_work_discovery_limit_keeps_older_claimable_bounty_visible(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        older_live = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=910,
+            issue_url="https://github.com/ramimbo/mergework/issues/910",
+            title="Older live bounty",
+            reward_mrwk="25",
+            max_awards=1,
+            acceptance="This live bounty should remain discoverable.",
+        )
+        newer_pending_full = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=911,
+            issue_url="https://github.com/ramimbo/mergework/issues/911",
+            title="Newer pending payout full bounty",
+            reward_mrwk="30",
+            max_awards=1,
+            acceptance="A pending payout should consume effective capacity.",
+        )
+        propose_treasury_action(
+            session,
+            action="pay_bounty",
+            payload={
+                "bounty_id": newer_pending_full.id,
+                "to_account": "github:alice",
+                "submission_url": "https://github.com/ramimbo/mergework/pull/911",
+                "accepted_by": "maintainer",
+            },
+            proposed_by="maintainer",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    body = client.get("/api/v1/work-discovery?limit=1").json()
+
+    assert body["summary"]["limit"] == 1
+    assert body["summary"]["claimable_now_count"] == 1
+    assert body["claimable_now"][0]["bounty_id"] == older_live.id
+    assert body["claimable_now"][0]["issue_number"] == 910
+    assert body["claimable_now"][0]["availability_state"] == "live_bounty"
+    assert body["not_claimable"][0]["bounty_id"] == newer_pending_full.id
+    assert body["not_claimable"][0]["issue_number"] == 911
+    assert body["not_claimable"][0]["availability_state"] == "pending_payout"
