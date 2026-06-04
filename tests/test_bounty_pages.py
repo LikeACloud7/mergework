@@ -946,8 +946,12 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert limited_ledger_page.text.count('class="ledger-row ledger-row--') == 1
     assert f'href="/ledger/{unsafe_payment_sequence}"' in limited_ledger_page.text
     assert f'href="/ledger/{payment_sequence}"' not in limited_ledger_page.text
-    assert client.get("/ledger?limit=01").status_code == 400
-    assert client.get("/ledger?limit=1&limit=2").status_code == 400
+    noncanonical_limit = client.get("/ledger?limit=01")
+    repeated_limit = client.get("/ledger?limit=1&limit=2")
+    assert noncanonical_limit.status_code == 400
+    assert noncanonical_limit.json()["detail"] == "limit must be a canonical positive integer"
+    assert repeated_limit.status_code == 400
+    assert repeated_limit.json()["detail"] == "limit must be provided at most once"
 
     ledger_entry_page = client.get(f"/ledger/{payment_sequence}")
     assert ledger_entry_page.status_code == 200
