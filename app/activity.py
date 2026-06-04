@@ -23,6 +23,7 @@ def activity_context(
     normalized = normalized_account(account) if account is not None else None
     context = activity_to_dict(session, query, account=normalized)
     context["api_activity_url"] = _activity_api_url(context["query"], context.get("account"))
+    context["clear_activity_url"] = _activity_page_url(context.get("account"))
     return context
 
 
@@ -33,6 +34,10 @@ def _activity_api_url(query: str, account: str | None) -> str:
     if account:
         params.append(("account", account))
     return f"/api/v1/activity?{urlencode(params)}" if params else "/api/v1/activity"
+
+
+def _activity_page_url(account: str | None) -> str:
+    return f"/activity?{urlencode({'account': account})}" if account else "/activity"
 
 
 def register_activity_routes(app: FastAPI, *, db_url: str, templates: Jinja2Templates) -> None:

@@ -11,6 +11,7 @@ def test_activity_context_preserves_empty_feed_shape(sqlite_url: str) -> None:
         assert activity_context(session) == {
             "query": "",
             "api_activity_url": "/api/v1/activity",
+            "clear_activity_url": "/activity",
             "totals": {
                 "accepted_awards": 0,
                 "accepted_mrwk": "0",
