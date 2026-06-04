@@ -132,6 +132,7 @@ REQUIRED_PUBLIC_PHRASES = {
     ],
 }
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+FIELD_ID_RE = re.compile(r"^(?P<indent>\s*)id:\s*(?P<field_id>[^\s#]+)")
 DOCS_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/docs.yml"
 SECURITY_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/security-report.yml"
 BUG_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/bug.yml"
@@ -150,12 +151,20 @@ def _squash(text: str) -> str:
 
 
 def _template_field_block(template: str, field_id: str) -> str:
-    marker = f"id: {field_id}"
-    if marker not in template:
-        return ""
-    block = template.split(marker, 1)[1]
-    next_field = block.find("\n    id: ")
-    return block if next_field == -1 else block[:next_field]
+    lines = template.splitlines()
+    for index, line in enumerate(lines):
+        match = FIELD_ID_RE.match(line)
+        if not match or match.group("field_id").strip("\"'") != field_id:
+            continue
+        indent = match.group("indent")
+        end = len(lines)
+        for next_index, next_line in enumerate(lines[index + 1 :], start=index + 1):
+            next_match = FIELD_ID_RE.match(next_line)
+            if next_match and next_match.group("indent") == indent:
+                end = next_index
+                break
+        return "\n".join(lines[index:end])
+    return ""
 
 
 def _template_field_is_required(template: str, field_id: str) -> bool:

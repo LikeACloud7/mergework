@@ -437,6 +437,18 @@ def test_docs_smoke_requires_bounty_evidence_exclusion_and_duplicate_fields() ->
     )
 
 
+def test_docs_smoke_matches_required_template_field_ids_exactly() -> None:
+    template = """
+body:
+  - type: textarea
+    id: evidence_extra
+    validations:
+      required: true
+"""
+
+    assert not _template_field_is_required(template, "evidence")
+
+
 def test_contributing_names_docs_smoke_for_public_docs_changes() -> None:
     contributing = Path("CONTRIBUTING.md").read_text(encoding="utf-8")
 
