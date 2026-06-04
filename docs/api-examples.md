@@ -172,6 +172,7 @@ Read proposals:
 ```bash
 curl -s "$API_HOST/api/v1/treasury/status"
 curl -s "$API_HOST/api/v1/treasury/proposals"
+curl -s "$API_HOST/api/v1/treasury/proposals?limit=25&offset=25"
 curl -s "$API_HOST/api/v1/treasury/proposals?action=pay_bounty&status=pending&bounty_id=<bounty_id>"
 curl -s "$API_HOST/api/v1/treasury/proposals/<proposal_id>"
 ```
@@ -179,7 +180,8 @@ curl -s "$API_HOST/api/v1/treasury/proposals/<proposal_id>"
 Use the optional `action`, `status`, and `bounty_id` filters to inspect one
 queue slice without client-side scanning. The `bounty_id` filter matches
 proposal payloads such as pending payout or close-bounty proposals, not GitHub
-issue numbers.
+issue numbers. Use canonical `limit` and `offset` values to page through the
+newest-first proposal list.
 
 The treasury status endpoint reports the 24-hour create-bounty reserve cap,
 recent executed reserves, pending create-bounty proposal reserves, remaining
