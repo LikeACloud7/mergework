@@ -11,6 +11,8 @@ from app.treasury import proposal_payload
 
 DEFAULT_WORK_DISCOVERY_LIMIT = 50
 MAX_WORK_DISCOVERY_LIMIT = 100
+OPEN_BOUNTY_SCAN_PAGE_SIZE = 25
+MAX_OPEN_BOUNTY_SCAN_ROWS = 500
 
 STATE_DEFINITIONS = {
     "live_bounty": "Public bounty row is open and has positive effective_awards_remaining.",
@@ -90,6 +92,56 @@ def _pending_create_item(proposal: TreasuryProposal) -> dict[str, Any]:
     }
 
 
+def _append_capped_item(bucket: list[dict[str, Any]], item: dict[str, Any], *, limit: int) -> None:
+    if len(bucket) < limit:
+        bucket.append(item)
+
+
+def _scan_open_bounty_buckets(
+    session: Session,
+    *,
+    limit: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    claimable_now: list[dict[str, Any]] = []
+    not_claimable: list[dict[str, Any]] = []
+    last_seen_id: int | None = None
+    scanned_rows = 0
+    page_size = min(MAX_WORK_DISCOVERY_LIMIT, max(limit, OPEN_BOUNTY_SCAN_PAGE_SIZE))
+
+    while scanned_rows < MAX_OPEN_BOUNTY_SCAN_ROWS:
+        batch_limit = min(page_size, MAX_OPEN_BOUNTY_SCAN_ROWS - scanned_rows)
+        query = select(Bounty).where(Bounty.status == "open")
+        if last_seen_id is not None:
+            query = query.where(Bounty.id < last_seen_id)
+        batch = session.scalars(query.order_by(Bounty.id.desc()).limit(batch_limit)).all()
+        if not batch:
+            break
+
+        rows = bounties_to_dict(batch, session=session)
+        scanned_rows += len(rows)
+        last_seen_id = int(batch[-1].id)
+        for row in rows:
+            if int(row["effective_awards_remaining"]) > 0:
+                _append_capped_item(
+                    claimable_now,
+                    _bounty_work_item(row, "live_bounty"),
+                    limit=limit,
+                )
+            else:
+                _append_capped_item(
+                    not_claimable,
+                    _bounty_work_item(row, _not_claimable_state(row)),
+                    limit=limit,
+                )
+
+        if len(batch) < batch_limit:
+            break
+        if len(claimable_now) >= limit and len(not_claimable) >= limit:
+            break
+
+    return claimable_now, not_claimable
+
+
 def work_discovery_to_dict(
     session: Session,
     *,
@@ -97,23 +149,22 @@ def work_discovery_to_dict(
 ) -> dict[str, Any]:
     """Return public read-only work discovery grouped by claimability."""
     capped_limit = max(1, min(limit, MAX_WORK_DISCOVERY_LIMIT))
-    open_bounties = session.scalars(
-        select(Bounty).where(Bounty.status == "open").order_by(Bounty.id.desc())
-    ).all()
-    terminal_bounties = session.scalars(
-        select(Bounty).where(Bounty.status != "open").order_by(Bounty.id.desc()).limit(capped_limit)
-    ).all()
-    open_rows = bounties_to_dict(open_bounties, session=session)
-    terminal_rows = bounties_to_dict(terminal_bounties, session=session)
-    claimable_now: list[dict[str, Any]] = []
-    not_claimable: list[dict[str, Any]] = []
-    for row in open_rows:
-        if int(row["effective_awards_remaining"]) > 0:
-            claimable_now.append(_bounty_work_item(row, "live_bounty"))
-        else:
-            not_claimable.append(_bounty_work_item(row, _not_claimable_state(row)))
-    for row in terminal_rows:
-        not_claimable.append(_bounty_work_item(row, _not_claimable_state(row)))
+    claimable_now, not_claimable = _scan_open_bounty_buckets(session, limit=capped_limit)
+
+    if len(not_claimable) < capped_limit:
+        terminal_bounties = session.scalars(
+            select(Bounty)
+            .where(Bounty.status != "open")
+            .order_by(Bounty.id.desc())
+            .limit(capped_limit)
+        ).all()
+        terminal_rows = bounties_to_dict(terminal_bounties, session=session)
+        for row in terminal_rows:
+            _append_capped_item(
+                not_claimable,
+                _bounty_work_item(row, _not_claimable_state(row)),
+                limit=capped_limit,
+            )
 
     pending_create_proposals = session.scalars(
         select(TreasuryProposal)
@@ -128,12 +179,12 @@ def work_discovery_to_dict(
         "summary": {
             "claimable_now_count": len(claimable_now),
             "opening_soon_count": len(opening_soon),
-            "not_claimable_count": len(not_claimable[:capped_limit]),
+            "not_claimable_count": len(not_claimable),
             "limit": capped_limit,
         },
         "state_definitions": STATE_DEFINITIONS,
-        "claimable_now": claimable_now[:capped_limit],
+        "claimable_now": claimable_now,
         "opening_soon": opening_soon,
-        "not_claimable": not_claimable[:capped_limit],
+        "not_claimable": not_claimable,
         "non_claimable_issue_states": NON_CLAIMABLE_ISSUE_STATES,
     }

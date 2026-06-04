@@ -4,6 +4,7 @@ from datetime import datetime
 
 from fastapi.testclient import TestClient
 
+from app import work_discovery
 from app.db import create_schema, session_scope
 from app.ledger.service import create_bounty, ensure_genesis, pay_bounty
 from app.main import create_app
@@ -213,3 +214,61 @@ def test_work_discovery_limit_keeps_older_claimable_bounty_visible(sqlite_url: s
     assert body["not_claimable"][0]["bounty_id"] == newer_pending_full.id
     assert body["not_claimable"][0]["issue_number"] == 911
     assert body["not_claimable"][0]["availability_state"] == "pending_payout"
+
+
+def test_work_discovery_scans_open_bounties_in_bounded_pages(
+    sqlite_url: str,
+    monkeypatch,
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        for issue_number in range(950, 990):
+            create_bounty(
+                session,
+                repo="ramimbo/mergework",
+                issue_number=issue_number,
+                issue_url=f"https://github.com/ramimbo/mergework/issues/{issue_number}",
+                title=f"Live bounty {issue_number}",
+                reward_mrwk="10",
+                max_awards=1,
+                acceptance="Live bounty.",
+            )
+        newest_pending_full = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=990,
+            issue_url="https://github.com/ramimbo/mergework/issues/990",
+            title="Newest pending payout full bounty",
+            reward_mrwk="30",
+            max_awards=1,
+            acceptance="Newest open row should fill the not-claimable bucket.",
+        )
+        propose_treasury_action(
+            session,
+            action="pay_bounty",
+            payload={
+                "bounty_id": newest_pending_full.id,
+                "to_account": "github:alice",
+                "submission_url": "https://github.com/ramimbo/mergework/pull/990",
+                "accepted_by": "maintainer",
+            },
+            proposed_by="maintainer",
+        )
+
+    batch_sizes: list[int] = []
+    real_bounties_to_dict = work_discovery.bounties_to_dict
+
+    def instrumented_bounties_to_dict(bounties, *, session):
+        batch_sizes.append(len(bounties))
+        return real_bounties_to_dict(bounties, session=session)
+
+    monkeypatch.setattr(work_discovery, "bounties_to_dict", instrumented_bounties_to_dict)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    body = client.get("/api/v1/work-discovery?limit=1").json()
+
+    assert body["claimable_now"][0]["issue_number"] == 989
+    assert body["not_claimable"][0]["issue_number"] == 990
+    assert batch_sizes == [work_discovery.OPEN_BOUNTY_SCAN_PAGE_SIZE]
