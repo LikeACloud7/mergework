@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
+from typing import Any
 
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
+import app.accounts as accounts_module
 import app.serializers as serializers_module
 from app.accounts import account_api_context, account_page_context, normalized_account
 from app.db import create_schema, session_scope
@@ -219,6 +223,36 @@ def test_account_pages_fall_back_when_pending_payouts_fail(sqlite_url: str, monk
     assert api_context["pending_payouts"] == []
     assert page_context["pending_summary"] == api_context["pending_summary"]
     assert page_context["pending_payouts"] == []
+
+
+def test_account_page_context_reuses_api_summary_context(sqlite_url: str, monkeypatch) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    calls = {"accepted": 0, "pending": 0}
+    real_accepted_summary = accounts_module.safe_account_accepted_summary
+    real_pending_payouts = accounts_module.safe_pending_payouts_for_account
+
+    def count_accepted_summary(session: Session, account: str) -> dict[str, Any]:
+        calls["accepted"] += 1
+        return real_accepted_summary(session, account)
+
+    def count_pending_payouts(session: Session, account: str) -> list[dict[str, Any]]:
+        calls["pending"] += 1
+        return real_pending_payouts(session, account)
+
+    monkeypatch.setattr(accounts_module, "safe_account_accepted_summary", count_accepted_summary)
+    monkeypatch.setattr(accounts_module, "safe_pending_payouts_for_account", count_pending_payouts)
+
+    with session_scope(sqlite_url) as session:
+        page_context = account_page_context(session, " GitHub:Alice ")
+
+    assert calls == {"accepted": 1, "pending": 1}
+    assert page_context["account"]["account"] == "github:alice"
+    assert page_context["accepted_summary"] == page_context["account"]["accepted_work"]
+    assert page_context["pending_summary"] == page_context["account"]["pending_summary"]
+    assert page_context["pending_payouts"] == page_context["account"]["pending_payouts"]
 
 
 def test_account_page_filters_transactions_by_type(sqlite_url: str) -> None:
