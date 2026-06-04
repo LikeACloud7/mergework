@@ -132,17 +132,34 @@ REQUIRED_PUBLIC_PHRASES = {
     ],
 }
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$", re.MULTILINE)
 DOCS_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/docs.yml"
 SECURITY_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/security-report.yml"
 BUG_ISSUE_TEMPLATE = ".github/ISSUE_TEMPLATE/bug.yml"
 PR_TEMPLATE = ".github/pull_request_template.md"
 
 
+def _markdown_heading_anchor(heading: str) -> str:
+    text = re.sub(r"`([^`]+)`", r"\1", heading.strip().lower())
+    text = re.sub(r"[^\w\s-]", "", text)
+    return re.sub(r"[\s-]+", "-", text).strip("-")
+
+
+def _markdown_anchors(path: Path) -> set[str]:
+    text = path.read_text(encoding="utf-8")
+    return {_markdown_heading_anchor(match.group(1)) for match in HEADING_RE.finditer(text)}
+
+
 def _local_target_exists(source: Path, target: str) -> bool:
-    clean = target.split("#", 1)[0]
-    if not clean or clean.startswith(("http://", "https://", "mailto:")):
+    clean, separator, fragment = target.partition("#")
+    if clean.startswith(("http://", "https://", "mailto:")):
         return True
-    return (source.parent / clean).resolve().exists()
+    target_path = (source.parent / clean).resolve() if clean else source.resolve()
+    if not target_path.exists():
+        return False
+    if separator and fragment and target_path.suffix.lower() in {".md", ".markdown"}:
+        return fragment in _markdown_anchors(target_path)
+    return True
 
 
 def _squash(text: str) -> str:
