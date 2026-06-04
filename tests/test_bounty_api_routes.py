@@ -602,11 +602,13 @@ def test_bounty_api_filters_by_exact_repo_and_issue_number(sqlite_url: str) -> N
 
     invalid_repo = client.get("/api/v1/bounties?repo=ramimbo%C2%85mergework")
     max_length_repo = client.get("/api/v1/bounties", params={"repo": "a" * 200})
+    max_length_summary_repo = client.get("/api/v1/bounties/summary", params={"repo": "a" * 200})
     oversized_repo = client.get("/api/v1/bounties", params={"repo": "a" * 201})
     oversized_summary_repo = client.get("/api/v1/bounties/summary", params={"repo": "a" * 201})
     assert invalid_repo.status_code == 400
     assert invalid_repo.json()["detail"] == "repo must not contain control characters"
     assert max_length_repo.status_code == 200
+    assert max_length_summary_repo.status_code == 200
     assert oversized_repo.status_code == 400
     assert oversized_repo.json()["detail"] == "repo is too long"
     assert oversized_summary_repo.status_code == 400
