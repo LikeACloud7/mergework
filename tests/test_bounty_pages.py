@@ -707,6 +707,8 @@ def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
         'href="https://github.com/ramimbo/mergework/issues/4" rel="nofollow noopener"'
         in response.text
     )
+    assert "View source bounty matches" in response.text
+    assert 'href="/bounties?repo=ramimbo/mergework&amp;issue_number=4"' in response.text
     assert f'href="/api/v1/bounties/{bounty.id}"' in response.text
     assert f'href="/api/v1/bounties/{bounty.id}/attempts"' in response.text
 
