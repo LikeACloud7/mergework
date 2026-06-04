@@ -7,16 +7,21 @@
 <form class="search-form" method="get" action="/activity" role="search">
   <label for="activity-q">Search accepted work</label>
   <div class="search-row">
+    {% if account %}<input type="hidden" name="account" value="{{ account }}">{% endif %}
     <input id="activity-q" name="q" value="{{ query }}" placeholder="account, PR, proof, issue, bounty">
     <button type="submit">Search</button>
     {% if query %}<a href="/activity">Clear</a>{% endif %}
   </div>
 </form>
-{% if query %}
+{% if account and query %}
+<p class="notice">Showing accepted work for <code>{{ account }}</code> matching "{{ query }}"</p>
+{% elif account %}
+<p class="notice">Showing accepted work for <code>{{ account }}</code></p>
+{% elif query %}
 <p class="notice">Showing accepted work matching “{{ query }}”.</p>
 {% endif %}
 <nav class="actions detail-actions" aria-label="Activity inspection links">
-  <a href="/api/v1/activity{% if query %}?q={{ query | urlencode }}{% endif %}">View JSON activity</a>
+  <a href="{{ api_activity_url }}">View JSON activity</a>
 </nav>
 
 <section class="grid">

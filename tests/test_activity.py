@@ -79,6 +79,7 @@ def test_activity_api_summarizes_proof_backed_bounty_payments(sqlite_url: str) -
 
     assert response.status_code == 200
     payload = response.json()
+    assert "account" not in payload
     assert payload["totals"] == {
         "accepted_awards": 3,
         "accepted_mrwk": "90",
@@ -473,6 +474,7 @@ def test_activity_page_renders_empty_and_paid_states(sqlite_url: str) -> None:
     assert 'role="search"' in paid.text
     assert 'aria-label="Activity inspection links"' in paid.text
     assert 'href="/api/v1/activity">View JSON activity</a>' in paid.text
+    assert 'name="account"' not in paid.text
     assert 'name="q"' in paid.text
     assert f'href="/bounties/{bounty.id}">Bounty #{bounty.id}</a>' in paid.text
     assert "Latest bounty" in paid.text
@@ -481,6 +483,28 @@ def test_activity_page_renders_empty_and_paid_states(sqlite_url: str) -> None:
     assert f'href="/proofs/{proof.hash}"' in paid.text
     assert "/accounts/github:bob" in paid.text
     assert "Pending accepted work" in paid.text
+
+    scoped_account = client.get("/activity?account=GitHub:Bob")
+
+    assert scoped_account.status_code == 200
+    assert 'name="account" value="github:bob"' in scoped_account.text
+    assert "Showing accepted work for <code>github:bob</code>" in scoped_account.text
+    assert (
+        'href="/api/v1/activity?account=github%3Abob">View JSON activity</a>' in scoped_account.text
+    )
+    assert "github:bob" in scoped_account.text
+    assert "75 MRWK" in scoped_account.text
+
+    scoped_account_query = client.get("/activity?account=GitHub:Bob&q=pull%2F12")
+
+    assert scoped_account_query.status_code == 200
+    assert 'value="pull/12"' in scoped_account_query.text
+    assert 'Showing accepted work for <code>github:bob</code> matching "pull/12"' in (
+        scoped_account_query.text
+    )
+    assert (
+        'href="/api/v1/activity?q=pull%2F12&amp;account=github%3Abob">View JSON activity</a>'
+    ) in scoped_account_query.text
 
     filtered = client.get("/activity?q=bob")
     issue_ref = client.get("/activity?q=%2312")
