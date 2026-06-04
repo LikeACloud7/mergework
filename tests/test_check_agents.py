@@ -17,3 +17,11 @@ def test_non_colliding_agent_docs_are_allowed() -> None:
     )
 
     assert collisions == []
+
+
+def test_agent_instruction_paths_include_nested_agents_files() -> None:
+    paths = check_agents.agent_instruction_paths(
+        ["AGENTS.md", "docs/AGENTS.md", "docs/agent-guide.md", "README.md"]
+    )
+
+    assert paths == ["AGENTS.md", "docs/AGENTS.md"]
