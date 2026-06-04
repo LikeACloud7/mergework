@@ -25,6 +25,7 @@ from app.submission_requirements import (
 )
 
 PendingBountyProposals = tuple[list[dict[str, Any]], dict[str, Any] | None]
+MRWK_MICROUNITS = Decimal(1_000_000)
 
 
 def public_utc_timestamp(value: datetime) -> str:
@@ -173,8 +174,7 @@ def bounty_list_summary(bounties: list[dict[str, Any]]) -> dict[str, Any]:
     """Aggregate visible bounty rows into capacity totals."""
     open_awards = sum(int(bounty["awards_remaining"]) for bounty in bounties)
     open_pool_microunits = sum(
-        int(Decimal(str(bounty["reward_mrwk"])) * Decimal(1_000_000))
-        * int(bounty["awards_remaining"])
+        _bounty_reward_microunits(bounty) * int(bounty["awards_remaining"])
         for bounty in bounties
     )
     effective_open_awards = sum(
@@ -182,8 +182,7 @@ def bounty_list_summary(bounties: list[dict[str, Any]]) -> dict[str, Any]:
         for bounty in bounties
     )
     effective_open_pool_microunits = sum(
-        int(Decimal(str(bounty["reward_mrwk"])) * Decimal(1_000_000))
-        * int(bounty.get("effective_awards_remaining", bounty["awards_remaining"]))
+        _bounty_reward_microunits(bounty) * _effective_awards_from_payload(bounty)
         for bounty in bounties
     )
     availability_state_counts: dict[str, int] = {}
@@ -213,6 +212,14 @@ def bounty_list_summary(bounties: list[dict[str, Any]]) -> dict[str, Any]:
         "reduced_capacity_bounties": reduced_capacity_bounties,
         "effectively_unavailable_bounties": effectively_unavailable_bounties,
     }
+
+
+def _bounty_reward_microunits(bounty: dict[str, Any]) -> int:
+    return int(Decimal(str(bounty["reward_mrwk"])) * MRWK_MICROUNITS)
+
+
+def _effective_awards_from_payload(bounty: dict[str, Any]) -> int:
+    return int(bounty.get("effective_awards_remaining", bounty["awards_remaining"]))
 
 
 def _proposal_payload(proposal: TreasuryProposal) -> dict[str, Any] | None:
