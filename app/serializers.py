@@ -174,8 +174,7 @@ def bounty_list_summary(bounties: list[dict[str, Any]]) -> dict[str, Any]:
     """Aggregate visible bounty rows into capacity totals."""
     open_awards = sum(int(bounty["awards_remaining"]) for bounty in bounties)
     open_pool_microunits = sum(
-        _bounty_reward_microunits(bounty) * int(bounty["awards_remaining"])
-        for bounty in bounties
+        _bounty_reward_microunits(bounty) * int(bounty["awards_remaining"]) for bounty in bounties
     )
     effective_open_awards = sum(
         int(bounty.get("effective_awards_remaining", bounty["awards_remaining"]))
