@@ -137,16 +137,32 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
             raise ValueError("issue_number matches multiple bounties")
         return bounties[0]
 
-    def selected_bounty(internal_id_field: str) -> Bounty | None:
-        has_internal_id = internal_id_field in args and args.get(internal_id_field) is not None
+    def selected_bounty(
+        internal_id_field: str,
+        *,
+        internal_id_aliases: tuple[str, ...] = (),
+    ) -> Bounty | None:
+        internal_id_fields = (internal_id_field, *internal_id_aliases)
+        provided_internal_id_fields = [
+            field for field in internal_id_fields if field in args and args.get(field) is not None
+        ]
+        has_internal_id = bool(provided_internal_id_fields)
         has_issue_number = "issue_number" in args and args.get("issue_number") is not None
         repo_selector = optional_repo_selector_arg()
+        if len(provided_internal_id_fields) > 1:
+            raise ValueError(
+                "use one of "
+                + ", ".join(internal_id_fields)
+                + ", or issue_number, not multiple internal id fields"
+            )
         if has_internal_id and has_issue_number:
-            raise ValueError(f"use {internal_id_field} or issue_number, not both")
+            raise ValueError(
+                "use one of " + ", ".join(internal_id_fields) + ", or issue_number, not both"
+            )
         if repo_selector is not None and not has_issue_number:
             raise ValueError("repo can only be used with issue_number")
         if has_internal_id:
-            return session.get(Bounty, positive_int_arg(internal_id_field))
+            return session.get(Bounty, positive_int_arg(provided_internal_id_fields[0]))
         if has_issue_number:
             return bounty_by_issue_number(repo_selector)
         raise ValueError(f"{internal_id_field} or issue_number is required")
@@ -193,7 +209,7 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
             )
             return json.dumps(sorted_bounties[:limit])
         if name == "get_bounty":
-            bounty = selected_bounty("id")
+            bounty = selected_bounty("id", internal_id_aliases=("bounty_id",))
             if bounty is None:
                 return "bounty not found"
             bounty_data = bounty_to_dict(bounty, session=session)

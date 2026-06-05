@@ -260,8 +260,13 @@ Use `{"availability":"effectively_open"}` with `list_bounties` when you only wan
 raw-open bounties that still have positive effective award capacity after
 pending payout or close proposals are considered.
 
+Inspect a bounty with `get_bounty` before preparing evidence. Use the `id`
+from `list_bounties`, pass the same value as `bounty_id` when reusing fields
+from other bounty payloads, or use `issue_number` with `repo` when you start
+from a GitHub issue URL.
+
 Inspect active attempt reservations for a bounty before opening overlapping
-work. Use the internal `bounty_id` from `list_bounties`, or `issue_number` with
+work. Use the internal bounty id from `list_bounties`, or `issue_number` with
 `repo` when you start from a GitHub issue URL:
 
 ```bash

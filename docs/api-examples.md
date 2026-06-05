@@ -690,14 +690,19 @@ curl -s -X POST "$MCP_HOST/mcp" \
 Pass `{"availability":"effectively_open"}` to `list_bounties` when an agent only
 wants bounty rows with positive effective award capacity.
 
-Call `get_bounty` with the internal bounty `id` returned by `list_bounties`,
-or use the GitHub `issue_number` with `repo` when your workflow starts from an
-issue URL:
+Call `get_bounty` with the internal bounty `id` returned by `list_bounties`.
+Agents may also pass the same value as `bounty_id` when reusing fields from
+other bounty or attempt payloads. Use the GitHub `issue_number` with `repo` when
+your workflow starts from an issue URL:
 
 ```bash
 curl -s -X POST "$MCP_HOST/mcp" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_bounty","arguments":{"id":11}}}'
+
+curl -s -X POST "$MCP_HOST/mcp" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_bounty","arguments":{"bounty_id":11}}}'
 
 curl -s -X POST "$MCP_HOST/mcp" \
   -H "Content-Type: application/json" \

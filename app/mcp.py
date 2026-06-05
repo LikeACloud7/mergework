@@ -21,8 +21,8 @@ MCP_TOOLS: list[dict[str, Any]] = [
     {
         "name": "get_bounty",
         "description": (
-            "Get a bounty by internal id, or by GitHub issue_number with optional repo, "
-            "optionally with accepted awards"
+            "Get a bounty by internal id or bounty_id alias, or by GitHub issue_number "
+            "with optional repo, optionally with accepted awards"
         ),
     },
     {
