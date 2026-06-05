@@ -479,6 +479,8 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
     leading_zero_source_filter_page = client.get(
         "/bounties?repo=ramimbo%2Fmergework&issue_number=0064"
     )
+    max_length_repo_filter_page = client.get("/bounties", params={"repo": "a" * 200})
+    oversized_repo_filter_page = client.get("/bounties", params={"repo": "a" * 201})
     plus_limit_page = client.get("/bounties?limit=%2B1")
     leading_zero_limit_page = client.get("/bounties?limit=01")
     assert source_filter_page.status_code == 200
@@ -517,6 +519,9 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
         leading_zero_source_filter_page.json()["detail"]
         == "issue_number must be a canonical positive integer"
     )
+    assert max_length_repo_filter_page.status_code == 200
+    assert oversized_repo_filter_page.status_code == 400
+    assert oversized_repo_filter_page.json()["detail"] == "repo is too long"
     assert plus_limit_page.status_code == 400
     assert plus_limit_page.json()["detail"] == "limit must be a canonical positive integer"
     assert leading_zero_limit_page.status_code == 400

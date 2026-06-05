@@ -46,6 +46,8 @@ from app.work_discovery import (
     work_discovery_to_dict,
 )
 
+BOUNTY_REPO_FILTER_MAX_LENGTH = 200
+
 
 def _payout_response_from_proof(proof: Proof, *, status: str) -> dict[str, Any]:
     data = json.loads(proof.public_json)
@@ -175,6 +177,8 @@ def register_bounty_api_routes(
                         status_code=400, detail="repo must not contain control characters"
                     )
                 normalized_repo = repo.strip().lower()
+                if len(normalized_repo) > BOUNTY_REPO_FILTER_MAX_LENGTH:
+                    raise HTTPException(status_code=400, detail="repo is too long")
                 if normalized_repo:
                     query = query.where(func.lower(Bounty.repo) == normalized_repo)
             if issue_number is not None:
