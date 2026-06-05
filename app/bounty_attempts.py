@@ -10,8 +10,9 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.control_chars import contains_control_character
 from app.db import session_scope
-from app.ledger.service import CONTROL_CHAR_RE, LedgerError, validate_public_url
+from app.ledger.service import LedgerError, validate_public_url
 from app.models import Bounty, BountyAttempt
 from app.openapi_request_bodies import OPTIONAL_ATTEMPT_BODY, OPTIONAL_ATTEMPT_RELEASE_BODY
 from app.query_validation import (
@@ -281,7 +282,7 @@ def register_bounty_attempt_routes(
             source = ""
         if not isinstance(source, str):
             raise HTTPException(status_code=400, detail="source_url must be a string")
-        if CONTROL_CHAR_RE.search(source):
+        if contains_control_character(source):
             raise HTTPException(
                 status_code=400, detail="source_url must not contain control characters"
             )
