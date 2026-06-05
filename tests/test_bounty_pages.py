@@ -698,6 +698,14 @@ def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     assert "Focused PR improves status, reward, issue link, and acceptance text." in response.text
     assert "Contributor next steps" in response.text
     assert "Before you start" in response.text
+    assert "Submission requirements" in response.text
+    assert "<dt>Claim command</dt>" in response.text
+    assert "<code>/claim</code>" in response.text
+    assert "<dt>Reference formats</dt>" in response.text
+    assert "<code>Bounty #4</code>" in response.text
+    assert "<code>Refs #4</code>" in response.text
+    assert "<dt>Expected artifact</dt>" in response.text
+    assert "focused PR, issue, report, or evidence URL" in response.text
     assert "Confirm the source issue is still open" in response.text
     assert bounty.id != bounty.issue_number
     assert "link the source issue as <strong>Bounty #4</strong>" in response.text
@@ -741,6 +749,35 @@ def test_bounty_detail_highlights_action_fields(sqlite_url: str) -> None:
     assert oversized_api_response.json()["detail"] == "bounty id is too large"
     oversized_page_response = client.get(f"/bounties/{oversized_bounty_id}")
     assert oversized_page_response.status_code == 400
+
+
+def test_bounty_detail_shows_issue_submission_requirements(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=649,
+            issue_url="https://github.com/ramimbo/mergework/issues/649",
+            title="Queue proposed-work requests",
+            reward_mrwk="40",
+            acceptance=(
+                "Accepted work is a new proposed-work issue with clear evidence, "
+                "duplicate search, and acceptance notes."
+            ),
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.get(f"/bounties/{bounty.id}")
+
+    assert response.status_code == 200
+    assert "<code>/claim #649</code>" in response.text
+    assert "<code>Bounty #649</code>" in response.text
+    assert "<code>Refs #649</code>" in response.text
+    assert "<code>Linked bounty: #649</code>" in response.text
+    assert "new proposed-work GitHub issue URL" in response.text
 
 
 def test_bounty_detail_warns_when_no_awards_remain(sqlite_url: str) -> None:
