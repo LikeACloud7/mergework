@@ -31,6 +31,7 @@ from app.query_validation import (
     reject_control_char_query_param,
     reject_noncanonical_int_query_param,
     reject_repeated_query_param,
+    reject_unsupported_query_params,
 )
 from app.serializers import (
     bounties_to_dict,
@@ -210,6 +211,13 @@ def register_bounty_api_routes(
         for name in ("limit", "issue_number"):
             reject_noncanonical_int_query_param(request, name)
 
+    def _reject_bounty_detail_list_filters(request: Request) -> None:
+        reject_unsupported_query_params(
+            request,
+            ("status", "q", "limit", "offset", "sort", "repo", "issue_number", "availability"),
+            context="bounty detail",
+        )
+
     @app.get("/api/v1/bounties")
     def api_bounties(
         request: Request,
@@ -313,8 +321,7 @@ def register_bounty_api_routes(
                 raise _ledger_http_error(exc) from exc
             return proposal_to_dict(proposal)
 
-    @app.get("/api/v1/bounties/{bounty_id}")
-    def api_bounty(bounty_id: str) -> dict[str, Any]:
+    def get_bounty_detail(bounty_id: str) -> dict[str, Any]:
         bounty_id_int = positive_bounty_id(bounty_id)
         with session_scope(db_url) as session:
             bounty = session.get(Bounty, bounty_id_int)
@@ -323,6 +330,11 @@ def register_bounty_api_routes(
             result = bounty_to_dict(bounty, session=session)
             result["accepted_awards"] = bounty_awards_to_dict(session, bounty.id)
             return result
+
+    @app.get("/api/v1/bounties/{bounty_id}")
+    def api_bounty(request: Request, bounty_id: str) -> dict[str, Any]:
+        _reject_bounty_detail_list_filters(request)
+        return get_bounty_detail(bounty_id)
 
     @app.get("/api/v1/reconciliation/payouts")
     def api_payout_reconciliation(
@@ -425,5 +437,5 @@ def register_bounty_api_routes(
 
     return {
         "list_bounties_by_status": _list_bounties_by_status,
-        "get_bounty_detail": api_bounty,
+        "get_bounty_detail": get_bounty_detail,
     }
