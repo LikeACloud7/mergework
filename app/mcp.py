@@ -19,6 +19,42 @@ MCP_TOOLS: list[dict[str, Any]] = [
         "description": (
             "List MRWK bounties with optional status, q, sort, limit, and availability filters"
         ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": ["open", "paid", "closed"],
+                    "default": "open",
+                    "description": "Bounty status filter.",
+                },
+                "q": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "description": "Optional bounty text or issue-number search.",
+                },
+                "sort": {
+                    "type": "string",
+                    "enum": ["newest", "reward"],
+                    "default": "newest",
+                    "description": "Sort order for returned bounties.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "default": 25,
+                    "description": "Maximum number of bounties to return.",
+                },
+                "availability": {
+                    "type": "string",
+                    "enum": ["all", "effectively_open"],
+                    "default": "all",
+                    "description": "Optional effective availability filter.",
+                },
+            },
+            "additionalProperties": False,
+        },
     },
     {
         "name": "get_bounty",

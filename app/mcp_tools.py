@@ -33,6 +33,7 @@ from app.serializers import (
 )
 
 MCP_INTEGER_RE = re.compile(r"^(?:0|-?[1-9][0-9]*)$")
+MCP_BOUNTY_SEARCH_QUERY_MAX_LENGTH = 500
 
 
 def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | dict[str, Any]:
@@ -90,6 +91,12 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
             raise ValueError(f"{field} must not contain control characters")
         clean = value.strip()
         return clean or None
+
+    def optional_bounty_search_query_arg() -> str | None:
+        query = optional_clean_str_arg("q")
+        if query is not None and len(query) > MCP_BOUNTY_SEARCH_QUERY_MAX_LENGTH:
+            raise ValueError("q must be at most 500 characters")
+        return query
 
     def output_format_arg() -> str:
         value = args.get("format", "text")
@@ -180,7 +187,7 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
             if normalized_status not in {"open", "paid", "closed"}:
                 raise ValueError("status must be one of: open, paid, closed")
             query = select(Bounty).where(Bounty.status == normalized_status)
-            query_text = optional_clean_str_arg("q")
+            query_text = optional_bounty_search_query_arg()
             if query_text:
                 escaped_query = (
                     query_text.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
