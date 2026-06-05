@@ -177,6 +177,12 @@ def _active_attempts_verified(raw: dict[str, Any]) -> bool:
     return raw.get("active_attempts_verified", True) is not False
 
 
+def _copy_effective_availability_fields(source: dict[str, Any], target: dict[str, Any]) -> None:
+    for field in EFFECTIVE_AVAILABILITY_FIELDS:
+        if field in source:
+            target[field] = source[field]
+
+
 def _safe_attempts(raw: dict[str, Any]) -> list[dict[str, Any]]:
     attempts = raw.get("active_attempts", [])
     if not isinstance(attempts, list):
@@ -580,9 +586,7 @@ def _load_api_bounties(repo: str, api_host: str) -> dict[int, dict[str, Any]]:
             "state": item.get("status", "open"),
             "awards_remaining": item.get("awards_remaining"),
         }
-        for field in EFFECTIVE_AVAILABILITY_FIELDS:
-            if field in item:
-                bounties[issue_number][field] = item.get(field)
+        _copy_effective_availability_fields(item, bounties[issue_number])
     return bounties
 
 
@@ -691,37 +695,35 @@ def _load_live_context(
                 or api_bounty.get("effective_awards_remaining") is not None
             ),
         }
-        for field in EFFECTIVE_AVAILABILITY_FIELDS:
-            if field in api_bounty:
-                bounty_record[field] = api_bounty[field]
-        bounties.append(bounty_record)
+        _copy_effective_availability_fields(api_bounty, bounty_record)
         if issue["number"] in referenced_bounties:
             try:
-                bounties[-1].update(_load_issue_maintainer_activity(repo, issue["number"]))
-                bounties[-1]["max_maintainer_age_days"] = max_maintainer_age_days
+                bounty_record.update(_load_issue_maintainer_activity(repo, issue["number"]))
+                bounty_record["max_maintainer_age_days"] = max_maintainer_age_days
             except (RuntimeError, FileNotFoundError, json.JSONDecodeError) as exc:
-                bounties[-1]["maintainer_activity_verified"] = False
+                bounty_record["maintainer_activity_verified"] = False
                 load_warnings.append(
                     f"maintainer activity unavailable for bounty #{issue['number']}: {exc}"
                 )
             bounty_id = api_bounty.get("id")
             if isinstance(bounty_id, int):
                 try:
-                    bounties[-1]["active_attempts"] = _load_api_attempts(api_host, bounty_id)
-                    bounties[-1]["active_attempts_verified"] = True
+                    bounty_record["active_attempts"] = _load_api_attempts(api_host, bounty_id)
+                    bounty_record["active_attempts_verified"] = True
                 except RuntimeError as exc:
-                    bounties[-1]["active_attempts"] = []
-                    bounties[-1]["active_attempts_verified"] = False
+                    bounty_record["active_attempts"] = []
+                    bounty_record["active_attempts_verified"] = False
                     load_warnings.append(
                         f"active attempts unavailable for bounty #{issue['number']}: {exc}"
                     )
             else:
-                bounties[-1]["active_attempts"] = []
-                bounties[-1]["active_attempts_verified"] = False
+                bounty_record["active_attempts"] = []
+                bounty_record["active_attempts_verified"] = False
                 load_warnings.append(
                     f"active attempts unavailable for bounty #{issue['number']}: "
                     "MergeWork API bounty id unavailable for attempts lookup"
                 )
+        bounties.append(bounty_record)
     data = {"submission_text": submission_text, "bounties": bounties, "pull_requests": prs}
     if load_warnings:
         data["load_warning"] = "; ".join(load_warnings)
