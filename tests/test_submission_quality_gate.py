@@ -1385,3 +1385,13 @@ def test_quality_gate_cli_rejects_negative_max_maintainer_age_days(tmp_path, cap
         main(["--input", str(fixture), "--max-maintainer-age-days", "-1"])
     assert excinfo.value.code == 2
     assert "must be >= 0" in capsys.readouterr().err
+
+
+def test_quality_gate_cli_rejects_invalid_api_host(tmp_path, capsys) -> None:
+    draft = tmp_path / "draft.md"
+    draft.write_text("Summary: work\n\nRefs #319\n\nValidation: pytest passed", encoding="utf-8")
+    for bad in ("", "   ", "/relative", "ftp://api.example.test"):
+        with pytest.raises(SystemExit) as excinfo:
+            main(["--text-file", str(draft), "--api-host", bad])
+        assert excinfo.value.code == 2
+        assert "api host must" in capsys.readouterr().err

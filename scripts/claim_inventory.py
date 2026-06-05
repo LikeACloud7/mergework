@@ -15,6 +15,7 @@ from typing import Any
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from scripts.api_host_args import public_api_host
 from scripts.bounty_refs import BOUNTY_REF_RE
 
 DEFAULT_API_HOST = "https://api.mrwk.online"
@@ -668,7 +669,7 @@ def main(argv: list[str] | None = None) -> int:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--input", help="Read public claim fixture JSON.")
     source.add_argument("--repo", help="Collect live public state with read-only gh calls.")
-    parser.add_argument("--api-host", default=DEFAULT_API_HOST)
+    parser.add_argument("--api-host", default=DEFAULT_API_HOST, type=public_api_host)
     parser.add_argument("--format", choices=["json", "markdown"], default="markdown")
     args = parser.parse_args(argv)
 

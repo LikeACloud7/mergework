@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from scripts import claim_inventory
 from scripts.claim_inventory import analyze_inventory, format_markdown_report, main
 
@@ -423,3 +425,11 @@ def test_claim_inventory_script_entrypoint_loads_shared_parser() -> None:
 
     assert result.returncode == 0
     assert "usage:" in result.stdout
+
+
+def test_claim_inventory_rejects_invalid_api_host(capsys) -> None:
+    for bad in ("", "   ", "/relative", "ftp://api.example.test"):
+        with pytest.raises(SystemExit) as excinfo:
+            main(["--repo", "ramimbo/mergework", "--api-host", bad])
+        assert excinfo.value.code == 2
+        assert "api host must" in capsys.readouterr().err
