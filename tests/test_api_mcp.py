@@ -336,6 +336,7 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     assert "active-attempt reservations" in attempt_tool["description"]
     attempt_schema = attempt_tool["inputSchema"]
     assert attempt_schema["additionalProperties"] is False
+    assert attempt_schema["properties"]["id"]["minimum"] == 1
     assert attempt_schema["properties"]["bounty_id"]["minimum"] == 1
     assert attempt_schema["properties"]["issue_number"]["minimum"] == 1
     assert attempt_schema["properties"]["repo"]["maxLength"] == 200
@@ -344,6 +345,7 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     assert attempt_schema["properties"]["limit"]["maximum"] == 100
     assert attempt_schema["properties"]["limit"]["default"] == 25
     assert attempt_schema["oneOf"] == [
+        {"required": ["id"]},
         {"required": ["bounty_id"]},
         {"required": ["issue_number"]},
     ]

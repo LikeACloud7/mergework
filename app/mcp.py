@@ -73,6 +73,11 @@ MCP_TOOLS: list[dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {
+                "id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Alias for the internal MRWK bounty id.",
+                },
                 "bounty_id": {
                     "type": "integer",
                     "minimum": 1,
@@ -102,6 +107,7 @@ MCP_TOOLS: list[dict[str, Any]] = [
                 },
             },
             "oneOf": [
+                {"required": ["id"]},
                 {"required": ["bounty_id"]},
                 {"required": ["issue_number"]},
             ],
