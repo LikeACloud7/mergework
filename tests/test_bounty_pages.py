@@ -50,6 +50,9 @@ def test_bounties_page_renders_and_filters_by_status(sqlite_url: str) -> None:
     assert "Open public bounty" in all_rows.text
     assert "Paid public bounty" in all_rows.text
     assert f'href="/bounties/{open_bounty.id}"' in all_rows.text
+    assert f'aria-label="Bounty action links for {open_bounty.id}"' in all_rows.text
+    assert f'href="/api/v1/bounties/{open_bounty.id}">JSON details</a>' in all_rows.text
+    assert f'href="/api/v1/bounties/{open_bounty.id}/attempts">Active attempts</a>' in all_rows.text
     assert (
         'href="https://github.com/ramimbo/mergework/issues/50" rel="nofollow noopener"'
         in all_rows.text
