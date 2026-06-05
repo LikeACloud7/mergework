@@ -806,14 +806,19 @@ curl -s -X POST "$MCP_HOST/mcp" \
   -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_bounty","arguments":{"issue_number":404,"repo":"ramimbo/mergework"}}}'
 ```
 
-Call `list_bounty_attempts` with the same internal `bounty_id`, or the GitHub
-`issue_number` plus `repo`, before opening a PR. Omit `include_expired` to see
-only active attempts:
+Call `list_bounty_attempts` with the same internal `bounty_id` (or the `id`
+field returned by `list_bounties`/`get_bounty`), or the GitHub `issue_number`
+plus `repo`, before opening a PR. Omit `include_expired` to see only active
+attempts:
 
 ```bash
 curl -s -X POST "$MCP_HOST/mcp" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"list_bounty_attempts","arguments":{"bounty_id":11,"include_expired":false}}}'
+
+curl -s -X POST "$MCP_HOST/mcp" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"list_bounty_attempts","arguments":{"id":11,"include_expired":false}}}'
 
 curl -s -X POST "$MCP_HOST/mcp" \
   -H "Content-Type: application/json" \

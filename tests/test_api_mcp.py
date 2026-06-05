@@ -553,6 +553,54 @@ def test_mcp_list_bounty_attempts_accepts_issue_number_selector(sqlite_url: str)
     assert result["attempts"][0]["submitter_account"] == "github:alice"
 
 
+def test_mcp_list_bounty_attempts_accepts_id_alias(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    now = datetime.now(UTC)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=323,
+            issue_url="https://github.com/ramimbo/mergework/issues/323",
+            title="Attempt lookup by id alias",
+            reward_mrwk="250",
+            max_awards=2,
+            acceptance="Agents can reuse the id field from list_bounties.",
+        )
+        session.add(
+            BountyAttempt(
+                bounty_id=bounty.id,
+                submitter_account="github:alice",
+                source_url="https://github.com/ramimbo/mergework/pull/523",
+                status="active",
+                expires_at=now + timedelta(hours=1),
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        bounty_id = bounty.id
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    result = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 25,
+            "method": "tools/call",
+            "params": {
+                "name": "list_bounty_attempts",
+                "arguments": {"id": bounty_id},
+            },
+        },
+    ).json()["result"]["structuredContent"]
+
+    assert result["bounty_id"] == bounty_id
+    assert result["issue_number"] == 323
+    assert result["attempts"][0]["submitter_account"] == "github:alice"
+
+
 def test_mcp_list_bounty_attempts_rejects_invalid_arguments(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
@@ -587,6 +635,44 @@ def test_mcp_list_bounty_attempts_rejects_invalid_arguments(sqlite_url: str) -> 
     assert response.json() == {
         "jsonrpc": "2.0",
         "id": 23,
+        "error": {"code": -32602, "message": "invalid tool arguments"},
+    }
+
+
+def test_mcp_list_bounty_attempts_rejects_mixed_id_aliases(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=324,
+            issue_url="https://github.com/ramimbo/mergework/issues/324",
+            title="Attempt alias ambiguity",
+            reward_mrwk="250",
+            acceptance="Agents should not mix internal id aliases.",
+        )
+        bounty_id = bounty.id
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 26,
+            "method": "tools/call",
+            "params": {
+                "name": "list_bounty_attempts",
+                "arguments": {"bounty_id": bounty_id, "id": bounty_id},
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "jsonrpc": "2.0",
+        "id": 26,
         "error": {"code": -32602, "message": "invalid tool arguments"},
     }
 
