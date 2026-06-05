@@ -88,6 +88,11 @@
     <p class="notice">{{ bounty.availability_note }}</p>
     {% endif %}
     <p>{{ bounty.acceptance }}</p>
+    <div class="next-steps-actions" aria-label="Bounty action links for {{ bounty.id }}">
+      <a href="/bounties/{{ bounty.id }}">View details</a>
+      <a href="/api/v1/bounties/{{ bounty.id }}">JSON details</a>
+      <a href="/api/v1/bounties/{{ bounty.id }}/attempts">Active attempts</a>
+    </div>
   </article>
   {% else %}
   {% if query_text or selected_status or selected_availability != "all" %}
