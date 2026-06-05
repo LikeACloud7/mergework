@@ -166,7 +166,7 @@ def test_bounties_page_shows_effective_capacity_after_pending_payout(
             acceptance="Public pages should show effective capacity after pending payouts.",
         )
         bounty_id = bounty.id
-        propose_treasury_action(
+        proposal = propose_treasury_action(
             session,
             action="pay_bounty",
             payload={
@@ -177,6 +177,7 @@ def test_bounties_page_shows_effective_capacity_after_pending_payout(
             },
             proposed_by="maintainer",
         )
+        proposal_id = proposal.id
 
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 
@@ -197,6 +198,16 @@ def test_bounties_page_shows_effective_capacity_after_pending_payout(
     assert "<span>Effective remaining</span>" in detail.text
     assert "<span>Effective available</span>" in detail.text
     assert "Visible capacity before pending proposals: 2 awards, 50 MRWK." in detail.text
+    assert "Pending treasury proposals" in detail.text
+    assert "Capacity already in review" in detail.text
+    assert f'href="/api/v1/treasury/proposals/{proposal_id}">Proposal #{proposal_id}</a>' in (
+        detail.text
+    )
+    assert "would pay github:alice for" in detail.text
+    assert (
+        'href="https://github.com/ramimbo/mergework/pull/67" rel="nofollow noopener">'
+        "submitted work</a>"
+    ) in detail.text
     assert "1 award still open for distinct accepted work after pending treasury proposals." in (
         detail.text
     )
@@ -219,7 +230,7 @@ def test_bounties_page_shows_effective_capacity_after_pending_close(
             acceptance="Public pages should show no effective capacity after pending close.",
         )
         bounty_id = bounty.id
-        propose_treasury_action(
+        proposal = propose_treasury_action(
             session,
             action="close_bounty",
             payload={
@@ -229,6 +240,7 @@ def test_bounties_page_shows_effective_capacity_after_pending_close(
             },
             proposed_by="maintainer",
         )
+        proposal_id = proposal.id
 
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 
@@ -243,6 +255,15 @@ def test_bounties_page_shows_effective_capacity_after_pending_close(
     assert "A pending close proposal would make this bounty unavailable if executed." in page.text
     assert detail.status_code == 200
     assert "Visible capacity before pending proposals: 3 awards, 90 MRWK." in detail.text
+    assert "Pending treasury proposals" in detail.text
+    assert f'href="/api/v1/treasury/proposals/{proposal_id}">Proposal #{proposal_id}</a>' in (
+        detail.text
+    )
+    assert "would close this bounty after" in detail.text
+    assert (
+        'Reference: <a href="https://github.com/ramimbo/mergework/issues/68#close" '
+        'rel="nofollow noopener">ramimbo/mergework/issues/68#close</a>.'
+    ) in detail.text
     assert (
         "No awards remain after pending treasury proposals; treat new work as unpaid unless "
         "maintainers reopen or free capacity."
