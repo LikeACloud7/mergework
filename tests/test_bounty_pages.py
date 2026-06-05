@@ -455,6 +455,7 @@ def test_bounties_page_and_api_search_by_text_and_issue_number(sqlite_url: str) 
     leading_zero_limit_page = client.get("/bounties?limit=01")
     assert source_filter_page.status_code == 200
     assert "Source filter: ramimbo/mergework #64." in source_filter_page.text
+    assert 'href="/bounties">Clear source filter</a>' in source_filter_page.text
     assert "Improve public bounty discovery" in source_filter_page.text
     assert "Other repo same issue" not in source_filter_page.text
     assert (

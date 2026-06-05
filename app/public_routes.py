@@ -137,6 +137,15 @@ def public_bounties_context(
             issue_number,
             selected_availability,
         ),
+        "clear_source_filter_url": _bounties_page_url(
+            selected_status,
+            query_text,
+            selected_sort,
+            limit,
+            "",
+            None,
+            selected_availability,
+        ),
         "status_filter_urls": {
             "all": _bounties_page_url(
                 None,
