@@ -881,7 +881,7 @@ proof payload as both JSON text and parsed `structuredContent`:
     "content": [
       {
         "type": "text",
-        "text": "{\"hash\":\"<proof_hash>\",\"kind\":\"bounty_payment\",\"ledger_sequence\":322,\"bounty_id\":32,\"submission_id\":279,\"created_at\":\"2026-05-24T20:28:53.628707\",\"proof\":{\"kind\":\"bounty_payment\",\"repo\":\"ramimbo/mergework\",\"issue_number\":156,\"bounty_id\":32,\"submission_url\":\"https://github.com/ramimbo/mergework/pull/155#pullrequestreview-4353350771\",\"to_account\":\"github:ckeplinger199\",\"amount_mrwk\":\"40\"}}"
+        "text": "{\"hash\":\"<proof_hash>\",\"kind\":\"bounty_payment\",\"ledger_sequence\":322,\"bounty_id\":32,\"submission_id\":279,\"created_at\":\"2026-05-24T20:28:53.628707Z\",\"proof\":{\"kind\":\"bounty_payment\",\"repo\":\"ramimbo/mergework\",\"issue_number\":156,\"bounty_id\":32,\"submission_url\":\"https://github.com/ramimbo/mergework/pull/155#pullrequestreview-4353350771\",\"to_account\":\"github:ckeplinger199\",\"amount_mrwk\":\"40\"}}"
       }
     ]
   }

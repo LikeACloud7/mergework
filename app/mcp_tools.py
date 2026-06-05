@@ -28,6 +28,7 @@ from app.serializers import (
     bounties_to_dict,
     bounty_awards_to_dict,
     bounty_to_dict,
+    public_utc_timestamp,
     wallet_to_dict,
     wallet_transfer_to_dict,
 )
@@ -311,7 +312,7 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
                     "ledger_sequence": proof.ledger_sequence,
                     "bounty_id": proof.bounty_id,
                     "submission_id": proof.submission_id,
-                    "created_at": proof.created_at.isoformat(),
+                    "created_at": public_utc_timestamp(proof.created_at),
                     "proof": public_payload,
                 }
             )
