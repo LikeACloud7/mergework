@@ -318,11 +318,12 @@ Read recent ledger entries and inspect one entry:
 
 ```bash
 curl -s "$API_HOST/api/v1/ledger?limit=10"
+curl -s "$API_HOST/api/v1/ledger?limit=10&offset=10"
 curl -s "$API_HOST/api/v1/ledger/<sequence>"
 ```
 
 Ledger entries use the internal immutable sequence number as the API path key.
-Recent-list and single-entry responses share the same shape:
+Recent-list queries accept `limit` from `1` to `200` and `offset` from `0` through SQLite's signed integer maximum. Recent-list and single-entry responses share the same shape:
 
 ```json
 {
