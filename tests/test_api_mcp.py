@@ -317,10 +317,37 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     assert submit_schema["not"] == {"required": ["bounty_id", "issue_number"]}
     bounty_tool = next(tool for tool in tools["result"]["tools"] if tool["name"] == "get_bounty")
     assert "accepted awards" in bounty_tool["description"]
+    bounty_schema = bounty_tool["inputSchema"]
+    assert bounty_schema["additionalProperties"] is False
+    assert bounty_schema["properties"]["id"]["minimum"] == 1
+    assert bounty_schema["properties"]["bounty_id"]["minimum"] == 1
+    assert bounty_schema["properties"]["issue_number"]["minimum"] == 1
+    assert bounty_schema["properties"]["repo"]["maxLength"] == 200
+    assert bounty_schema["properties"]["include_awards"]["default"] is False
+    assert bounty_schema["oneOf"] == [
+        {"required": ["id"]},
+        {"required": ["bounty_id"]},
+        {"required": ["issue_number"]},
+    ]
+    assert bounty_schema["dependentRequired"] == {"repo": ["issue_number"]}
     attempt_tool = next(
         tool for tool in tools["result"]["tools"] if tool["name"] == "list_bounty_attempts"
     )
     assert "active-attempt reservations" in attempt_tool["description"]
+    attempt_schema = attempt_tool["inputSchema"]
+    assert attempt_schema["additionalProperties"] is False
+    assert attempt_schema["properties"]["bounty_id"]["minimum"] == 1
+    assert attempt_schema["properties"]["issue_number"]["minimum"] == 1
+    assert attempt_schema["properties"]["repo"]["maxLength"] == 200
+    assert attempt_schema["properties"]["include_expired"]["default"] is False
+    assert attempt_schema["properties"]["limit"]["minimum"] == 1
+    assert attempt_schema["properties"]["limit"]["maximum"] == 100
+    assert attempt_schema["properties"]["limit"]["default"] == 25
+    assert attempt_schema["oneOf"] == [
+        {"required": ["bounty_id"]},
+        {"required": ["issue_number"]},
+    ]
+    assert attempt_schema["dependentRequired"] == {"repo": ["issue_number"]}
     wallet_tool = next(tool for tool in tools["result"]["tools"] if tool["name"] == "get_wallet")
     wallet_schema = wallet_tool["inputSchema"]
     assert wallet_schema["required"] == ["address"]
