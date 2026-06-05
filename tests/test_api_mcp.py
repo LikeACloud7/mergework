@@ -268,6 +268,12 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
         tool for tool in tools["result"]["tools"] if tool["name"] == "list_bounty_attempts"
     )
     assert "active-attempt reservations" in attempt_tool["description"]
+    balance_tool = next(tool for tool in tools["result"]["tools"] if tool["name"] == "get_balance")
+    balance_schema = balance_tool["inputSchema"]
+    assert balance_schema["required"] == ["account"]
+    assert balance_schema["additionalProperties"] is False
+    assert balance_schema["properties"]["account"]["minLength"] == 1
+    assert "github:<login>" in balance_schema["properties"]["account"]["description"]
 
     balance = client.post(
         "/mcp",
