@@ -3,7 +3,14 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from scripts.docs_smoke import REQUIRED, _issue_template_labels, _template_field_is_required
+from scripts.docs_smoke import (
+    REQUIRED,
+    _issue_template_labels,
+    _local_target_exists,
+    _markdown_anchors,
+    _markdown_heading_anchor,
+    _template_field_is_required,
+)
 
 
 def test_readme_lists_live_and_legacy_urls() -> None:
@@ -189,6 +196,53 @@ def test_issue_template_labels_parse_inline_and_block_styles() -> None:
         "proposed-work",
         "docs",
     }
+
+
+def test_docs_smoke_validates_markdown_heading_anchors(tmp_path: Path) -> None:
+    source = tmp_path / "README.md"
+    target = tmp_path / "docs.md"
+    source.write_text("[Docs](docs.md#current-transfer-paths)", encoding="utf-8")
+    target.write_text("## Current Transfer Paths\n\nDetails.\n", encoding="utf-8")
+
+    assert _local_target_exists(source, "docs.md#current-transfer-paths") is True
+    assert _local_target_exists(source, "docs.md#missing-section") is False
+
+
+def test_docs_smoke_validates_duplicate_markdown_heading_anchors(tmp_path: Path) -> None:
+    source = tmp_path / "README.md"
+    target = tmp_path / "docs.md"
+    source.write_text(
+        "[First](docs.md#current-transfer-paths)\n[Second](docs.md#current-transfer-paths-1)\n",
+        encoding="utf-8",
+    )
+    target.write_text(
+        "## Current Transfer Paths\n\nDetails.\n\n## Current Transfer Paths\n\nMore details.\n",
+        encoding="utf-8",
+    )
+
+    assert _local_target_exists(source, "docs.md#current-transfer-paths") is True
+    assert _local_target_exists(source, "docs.md#current-transfer-paths-1") is True
+    assert _local_target_exists(source, "docs.md#current-transfer-paths-2") is False
+
+
+def test_markdown_anchors_ignore_fenced_code_headings(tmp_path: Path) -> None:
+    target = tmp_path / "docs.md"
+    target.write_text(
+        "## Real Heading\n\n"
+        "```markdown\n"
+        "## Pseudo Heading\n"
+        "```\n"
+        "~~~\n"
+        "## Other Pseudo Heading\n"
+        "~~~\n",
+        encoding="utf-8",
+    )
+
+    assert _markdown_anchors(target) == {"real-heading"}
+
+
+def test_markdown_heading_anchor_handles_inline_code() -> None:
+    assert _markdown_heading_anchor("Use `mrwk1` Wallets!") == "use-mrwk1-wallets"
 
 
 def test_bounty_rules_document_proposed_work_lifecycle() -> None:
