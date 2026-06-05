@@ -703,6 +703,16 @@ def test_direct_proposal_creation_requires_admin_token(
             },
             "title must not contain control characters",
         ),
+        (
+            {
+                "action": "create_bounty",
+                "payload": {
+                    **_bounty_payload(issue_number=182),
+                    "acceptance": "Accepted\x85work.",
+                },
+            },
+            "acceptance must not contain control characters",
+        ),
     ],
 )
 def test_treasury_proposal_creation_rejects_raw_control_characters(
