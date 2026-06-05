@@ -994,6 +994,7 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
         proof_hash = proof.hash
         payment_sequence = proof.ledger_sequence
         unsafe_proof_hash = unsafe_proof.hash
+        unsafe_payment_sequence = unsafe_proof.ledger_sequence
 
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 
@@ -1011,6 +1012,17 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
         in ledger_page.text
     )
     assert f'href="/proofs/{proof_hash}">Payment proof</a>' in ledger_page.text
+    limited_ledger_page = client.get("/ledger?limit=1")
+    assert limited_ledger_page.status_code == 200
+    assert limited_ledger_page.text.count('class="ledger-row ledger-row--') == 1
+    assert f'href="/ledger/{unsafe_payment_sequence}"' in limited_ledger_page.text
+    assert f'href="/ledger/{payment_sequence}"' not in limited_ledger_page.text
+    noncanonical_limit = client.get("/ledger?limit=01")
+    repeated_limit = client.get("/ledger?limit=1&limit=2")
+    assert noncanonical_limit.status_code == 400
+    assert noncanonical_limit.json()["detail"] == "limit must be a canonical positive integer"
+    assert repeated_limit.status_code == 400
+    assert repeated_limit.json()["detail"] == "limit must be provided at most once"
 
     ledger_entry_page = client.get(f"/ledger/{payment_sequence}")
     assert ledger_entry_page.status_code == 200

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import quote, urlencode
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -323,7 +323,7 @@ def register_public_routes(
         list[dict[str, Any]],
     ],
     api_bounty: Callable[[str], dict[str, Any]],
-    api_ledger: Callable[[], list[dict[str, Any]]],
+    api_ledger: Callable[[int], list[dict[str, Any]]],
     api_ledger_entry: Callable[[str], dict[str, Any]],
     api_proof: Callable[[str], dict[str, Any]],
 ) -> None:
@@ -367,8 +367,13 @@ def register_public_routes(
         )
 
     @app.get("/ledger", response_class=HTMLResponse)
-    def ledger_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "ledger.html", {"entries": api_ledger()})
+    def ledger_page(
+        request: Request,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    ) -> HTMLResponse:
+        reject_repeated_query_param(request, "limit")
+        reject_noncanonical_int_query_param(request, "limit")
+        return templates.TemplateResponse(request, "ledger.html", {"entries": api_ledger(limit)})
 
     @app.get("/ledger/{sequence}", response_class=HTMLResponse)
     def ledger_entry_page(request: Request, sequence: str) -> HTMLResponse:
