@@ -644,11 +644,11 @@ def activity_to_dict(
 
     by_account: dict[str, dict[str, Any]] = {}
     for row in recent:
-        account = str(row["account"])
+        contributor_account = str(row["account"])
         contributor = by_account.setdefault(
-            account,
+            contributor_account,
             {
-                "account": account,
+                "account": contributor_account,
                 "accepted_awards": 0,
                 "accepted_microunits": 0,
                 "accepted_mrwk": "0",
