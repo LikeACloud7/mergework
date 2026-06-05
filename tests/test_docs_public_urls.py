@@ -224,6 +224,18 @@ def test_agent_guide_tells_agents_not_to_claim_proposed_work() -> None:
     assert "wait for `mrwk:bounty`" in guide
 
 
+def test_docs_document_public_work_discovery_endpoint() -> None:
+    guide = Path("docs/agent-guide.md").read_text(encoding="utf-8")
+    examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
+
+    assert "GET /api/v1/work-discovery" in guide
+    assert "claimable_now" in guide
+    assert "opening_soon" in guide
+    assert "/api/v1/work-discovery" in examples
+    assert "live bounty rows from pending create-bounty proposals" in examples
+    assert '"availability_state": "pending_create"' in examples
+
+
 def test_admin_runbook_warns_to_validate_production_admin_token() -> None:
     runbook = Path("docs/admin-runbook.md").read_text(encoding="utf-8")
 

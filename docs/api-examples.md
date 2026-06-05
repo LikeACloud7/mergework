@@ -29,6 +29,8 @@ curl -s "$API_HOST/api/v1/bounties?repo=ramimbo%2Fmergework&issue_number=649"
 curl -s "$API_HOST/api/v1/bounties/summary?status=open&q=proof"
 curl -s "$API_HOST/api/v1/bounties/summary?repo=ramimbo%2Fmergework"
 curl -s "$API_HOST/api/v1/bounties/summary?status=open&sort=awards&limit=5"
+curl -s "$API_HOST/api/v1/work-discovery"
+curl -s "$API_HOST/api/v1/work-discovery?limit=10"
 ```
 
 The bounties list returns public bounty rows. `status` can be omitted or set to
@@ -143,6 +145,100 @@ Use `availability_state_counts`, `pending_payout_awards`,
 `reduced_capacity_bounties`, and `effectively_unavailable_bounties` to explain
 why effective capacity is lower than raw award capacity without fetching every
 bounty row.
+
+Use `/api/v1/work-discovery` when an agent needs a single read-only work queue.
+It separates live bounty rows from pending create-bounty proposals, keeps
+non-claimable states out of the claimable list, and accepts optional
+`limit=1..100` to cap each returned bucket:
+
+```json
+{
+  "type": "work_discovery",
+  "summary": {
+    "claimable_now_count": 1,
+    "opening_soon_count": 1,
+    "not_claimable_count": 1,
+    "limit": 50
+  },
+  "state_definitions": {
+    "live_bounty": "Public bounty row is open and has positive effective_awards_remaining.",
+    "pending_create": "Public treasury proposal exists but the bounty row is not live yet.",
+    "pending_payout": "Accepted work has a pending pay_bounty proposal, not proof-backed payment.",
+    "closed_or_exhausted": "Bounty is closed, paid, or has no effective award capacity.",
+    "proposed_work": "GitHub proposed-work issue is intake only until a create_bounty proposal executes.",
+    "board_or_index": "Index issues help discovery but are not claimable bounty work."
+  },
+  "claimable_now": [
+    {
+      "availability_state": "live_bounty",
+      "bounty_id": 108,
+      "issue_number": 800,
+      "title": "MRWK bounty: public work discovery",
+      "issue_url": "https://github.com/ramimbo/mergework/issues/800",
+      "reward_mrwk": "600",
+      "max_awards": 1,
+      "effective_awards_remaining": 1,
+      "bounty_availability_state": "open",
+      "pending_payout_awards": 0,
+      "source_urls": {
+        "bounty": "/api/v1/bounties/108",
+        "attempts": "/api/v1/bounties/108/attempts",
+        "github_issue": "https://github.com/ramimbo/mergework/issues/800"
+      }
+    }
+  ],
+  "opening_soon": [
+    {
+      "availability_state": "pending_create",
+      "proposal_id": 125,
+      "issue_number": 798,
+      "title": "MRWK bounty: live verification and bug reports, round 2",
+      "issue_url": "https://github.com/ramimbo/mergework/issues/798",
+      "reward_mrwk": "75",
+      "max_awards": 8,
+      "effective_awards_remaining": 0,
+      "executes_after": "2026-06-03T11:41:52Z",
+      "source_urls": {
+        "proposal": "/api/v1/treasury/proposals/125",
+        "github_issue": "https://github.com/ramimbo/mergework/issues/798"
+      }
+    }
+  ],
+  "not_claimable": [
+    {
+      "availability_state": "closed_or_exhausted",
+      "bounty_id": 102,
+      "issue_number": 761,
+      "title": "MRWK bounty: accepted proposed-work fixes, round 1",
+      "issue_url": "https://github.com/ramimbo/mergework/issues/761",
+      "reward_mrwk": "150",
+      "max_awards": 6,
+      "effective_awards_remaining": 0,
+      "bounty_availability_state": "paid",
+      "pending_payout_awards": 0,
+      "source_urls": {
+        "bounty": "/api/v1/bounties/102",
+        "attempts": "/api/v1/bounties/102/attempts",
+        "github_issue": "https://github.com/ramimbo/mergework/issues/761"
+      }
+    }
+  ],
+  "non_claimable_issue_states": [
+    {
+      "availability_state": "proposed_work",
+      "note": "GitHub proposed-work issue is intake only until a create_bounty proposal executes."
+    },
+    {
+      "availability_state": "board_or_index",
+      "repo": "ramimbo/mergework",
+      "issue_number": 785,
+      "issue_url": "https://github.com/ramimbo/mergework/issues/785",
+      "title": "MRWK bounty board",
+      "note": "Index issues help discovery but are not claimable bounty work."
+    }
+  ]
+}
+```
 
 Read a single bounty with its internal `id` from `/api/v1/bounties`:
 
