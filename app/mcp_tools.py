@@ -151,6 +151,12 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
             return bounty_by_issue_number(repo_selector)
         raise ValueError(f"{internal_id_field} or issue_number is required")
 
+    def reject_unexpected_args(tool_name: str, allowed: set[str]) -> None:
+        unexpected = sorted(set(args) - allowed)
+        if unexpected:
+            names = ", ".join(unexpected)
+            raise ValueError(f"{tool_name} received unexpected argument(s): {names}")
+
     with session_scope(database_url) as session:
         if name == "list_bounties":
             status = optional_clean_str_arg("status") or "open"
@@ -221,6 +227,7 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
             account = normalized_account(str_arg("account"))
             return f"{account}: {format_mrwk(get_balance(session, account))} MRWK"
         if name == "register_wallet":
+            reject_unexpected_args("register_wallet", {"public_key_hex", "label"})
             wallet = register_wallet(
                 session,
                 public_key_hex=str_arg("public_key_hex"),
@@ -233,6 +240,17 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
                 return "wallet not found"
             return json.dumps(wallet_to_dict(session, wallet_row))
         if name == "submit_wallet_transfer":
+            reject_unexpected_args(
+                "submit_wallet_transfer",
+                {
+                    "from_address",
+                    "to_address",
+                    "amount_mrwk",
+                    "nonce",
+                    "memo",
+                    "signature_hex",
+                },
+            )
             transfer = submit_wallet_transfer(
                 session,
                 from_address=str_arg("from_address"),
