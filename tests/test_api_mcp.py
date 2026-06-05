@@ -128,6 +128,7 @@ def test_ledger_api_honors_offset(sqlite_url: str) -> None:
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 
     newest = client.get("/api/v1/ledger?limit=1")
+    offset_zero = client.get("/api/v1/ledger?limit=1&offset=0")
     shifted = client.get("/api/v1/ledger?limit=1&offset=1")
     exhausted = client.get("/api/v1/ledger?limit=1&offset=99")
     max_valid = client.get("/api/v1/ledger?offset=9223372036854775807")
@@ -137,8 +138,10 @@ def test_ledger_api_honors_offset(sqlite_url: str) -> None:
     repeated = client.get("/api/v1/ledger?offset=1&offset=2")
 
     assert newest.status_code == 200
+    assert offset_zero.status_code == 200
     assert shifted.status_code == 200
     assert [entry["reference"] for entry in newest.json()] == [newer_bounty.issue_url]
+    assert [entry["reference"] for entry in offset_zero.json()] == [newer_bounty.issue_url]
     assert [entry["reference"] for entry in shifted.json()] == [older_bounty.issue_url]
     assert exhausted.status_code == 200
     assert exhausted.json() == []
