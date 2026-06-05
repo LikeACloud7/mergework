@@ -2489,3 +2489,58 @@ def test_mcp_can_register_and_fetch_wallet(sqlite_url: str) -> None:
     assert fetched_wallet["address"] == registered_wallet["address"]
     assert fetched_wallet["label"] == "MCP wallet"
     assert fetched_wallet["created_at"] == registered_wallet["created_at"]
+
+
+def test_mcp_wallet_write_tools_reject_unexpected_arguments(sqlite_url: str) -> None:
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    register_response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "register_wallet",
+                "arguments": {
+                    "public_key_hex": "22" * 32,
+                    "label": "MCP wallet",
+                    "public_key": "22" * 32,
+                },
+            },
+        },
+    )
+
+    assert register_response.status_code == 200
+    assert register_response.json() == {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {"code": -32602, "message": "invalid tool arguments"},
+    }
+
+    transfer_response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "submit_wallet_transfer",
+                "arguments": {
+                    "from_address": "mrwk1" + "1" * 40,
+                    "to_address": "mrwk1" + "2" * 40,
+                    "amount_mrwk": "1",
+                    "nonce": 1,
+                    "memo": "test",
+                    "signature_hex": "aa" * 64,
+                    "signature": "aa" * 64,
+                },
+            },
+        },
+    )
+
+    assert transfer_response.status_code == 200
+    assert transfer_response.json()["error"] == {
+        "code": -32602,
+        "message": "invalid tool arguments",
+    }
