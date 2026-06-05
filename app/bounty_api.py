@@ -191,6 +191,14 @@ def register_bounty_api_routes(
                 return sorted_bounties[:limit]
             return sorted_bounties
 
+    def _validate_bounty_list_request(request: Request) -> None:
+        for name in ("status", "q", "limit", "sort", "repo", "issue_number", "availability"):
+            reject_repeated_query_param(request, name)
+        for name in ("status", "q", "sort", "repo", "availability"):
+            reject_control_char_query_param(request, name)
+        for name in ("limit", "issue_number"):
+            reject_noncanonical_int_query_param(request, name)
+
     @app.get("/api/v1/bounties")
     def api_bounties(
         request: Request,
@@ -202,12 +210,7 @@ def register_bounty_api_routes(
         issue_number: Annotated[int | None, Query(ge=1, le=SQLITE_INTEGER_MAX)] = None,
         availability: str | None = Query(None),
     ) -> list[dict[str, Any]]:
-        for name in ("status", "q", "limit", "sort", "repo", "issue_number", "availability"):
-            reject_repeated_query_param(request, name)
-        for name in ("status", "q", "sort", "repo", "availability"):
-            reject_control_char_query_param(request, name)
-        for name in ("limit", "issue_number"):
-            reject_noncanonical_int_query_param(request, name)
+        _validate_bounty_list_request(request)
         return _list_bounties_by_status(
             status,
             q,
@@ -229,12 +232,7 @@ def register_bounty_api_routes(
         issue_number: Annotated[int | None, Query(ge=1, le=SQLITE_INTEGER_MAX)] = None,
         availability: str | None = Query(None),
     ) -> dict[str, Any]:
-        for name in ("status", "q", "limit", "sort", "repo", "issue_number", "availability"):
-            reject_repeated_query_param(request, name)
-        for name in ("status", "q", "sort", "repo", "availability"):
-            reject_control_char_query_param(request, name)
-        for name in ("limit", "issue_number"):
-            reject_noncanonical_int_query_param(request, name)
+        _validate_bounty_list_request(request)
         return bounty_list_summary(
             _list_bounties_by_status(
                 status,
