@@ -153,14 +153,12 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
         repo_selector = optional_repo_selector_arg()
         if len(provided_internal_id_fields) > 1:
             raise ValueError(
-                "use one of "
-                + ", ".join(internal_id_fields)
-                + ", or issue_number, not multiple internal id fields"
+                "use "
+                + " or ".join(provided_internal_id_fields)
+                + ", not multiple internal id fields"
             )
         if has_internal_id and has_issue_number:
-            raise ValueError(
-                "use one of " + ", ".join(internal_id_fields) + ", or issue_number, not both"
-            )
+            raise ValueError(f"use {provided_internal_id_fields[0]} or issue_number, not both")
         if repo_selector is not None and not has_issue_number:
             raise ValueError("repo can only be used with issue_number")
         if has_internal_id:
@@ -225,7 +223,7 @@ def call_mcp_tool(database_url: str, name: str, args: dict[str, Any]) -> str | d
                 bounty_data["awards"] = bounty_awards_to_dict(session, bounty.id)
             return json.dumps(bounty_data)
         if name == "list_bounty_attempts":
-            bounty = selected_bounty("bounty_id")
+            bounty = selected_bounty("bounty_id", internal_id_aliases=("id",))
             if bounty is None:
                 return "bounty not found"
             attempt_listing = list_bounty_attempts(

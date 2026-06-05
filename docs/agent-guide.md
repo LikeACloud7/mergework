@@ -266,13 +266,17 @@ from other bounty payloads, or use `issue_number` with `repo` when you start
 from a GitHub issue URL.
 
 Inspect active attempt reservations for a bounty before opening overlapping
-work. Use the internal bounty id from `list_bounties`, or `issue_number` with
-`repo` when you start from a GitHub issue URL:
+work. Use the internal `bounty_id` or the `id` field from `list_bounties`, or
+`issue_number` with `repo` when you start from a GitHub issue URL:
 
 ```bash
 curl -s -X POST "$MCP_HOST/mcp" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"list_bounty_attempts","arguments":{"bounty_id":11}}}'
+
+curl -s -X POST "$MCP_HOST/mcp" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"list_bounty_attempts","arguments":{"id":11}}}'
 
 curl -s -X POST "$MCP_HOST/mcp" \
   -H "Content-Type: application/json" \

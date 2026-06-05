@@ -28,8 +28,8 @@ MCP_TOOLS: list[dict[str, Any]] = [
     {
         "name": "list_bounty_attempts",
         "description": (
-            "List advisory active-attempt reservations for a bounty by internal bounty_id, "
-            "or by GitHub issue_number with optional repo"
+            "List advisory active-attempt reservations for a bounty by internal bounty_id "
+            "(or id alias), or by GitHub issue_number with optional repo"
         ),
     },
     {

@@ -74,6 +74,29 @@ def test_call_mcp_tool_preserves_argument_validation_errors(
         call_mcp_tool(sqlite_url, tool_name, arguments)
 
 
+def test_call_mcp_tool_reports_attempt_id_alias_issue_number_mix(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=391,
+            issue_url="https://github.com/ramimbo/mergework/issues/391",
+            title="Attempt alias issue-number conflict",
+            reward_mrwk="200",
+            acceptance="Agents should get actionable selector errors.",
+        )
+        bounty_id = bounty.id
+
+    with pytest.raises(ValueError, match="use id or issue_number, not both"):
+        call_mcp_tool(
+            sqlite_url,
+            "list_bounty_attempts",
+            {"id": bounty_id, "issue_number": 391},
+        )
+
+
 def test_call_mcp_tool_rejects_c1_status_before_normalizing(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
