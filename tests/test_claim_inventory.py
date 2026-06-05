@@ -220,6 +220,7 @@ def test_claim_inventory_classifies_required_statuses(tmp_path, capsys) -> None:
     assert (
         rows["https://github.com/ramimbo/mergework/pull/582"]["likely_status"] == "unpaid_candidate"
     )
+    assert rows["https://github.com/ramimbo/mergework/pull/582"]["pending_proposal_id"] is None
     assert (
         rows["https://github.com/ramimbo/mergework/issues/578#issuecomment-3"]["source_type"]
         == "bounty_issue_comment"
