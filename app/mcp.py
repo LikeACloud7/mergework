@@ -32,7 +32,25 @@ MCP_TOOLS: list[dict[str, Any]] = [
             "or by GitHub issue_number with optional repo"
         ),
     },
-    {"name": "get_balance", "description": "Get an account balance"},
+    {
+        "name": "get_balance",
+        "description": "Get an account balance",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": (
+                        "Account selector such as github:<login>, treasury:mrwk, "
+                        "reserve:bounty:<id>, or an mrwk1 wallet address."
+                    ),
+                },
+            },
+            "required": ["account"],
+            "additionalProperties": False,
+        },
+    },
     {
         "name": "register_wallet",
         "description": "Register an MRWK wallet public key",
