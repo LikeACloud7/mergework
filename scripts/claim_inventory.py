@@ -252,6 +252,7 @@ def _duplicate_key(text: str, source_url: str, bounty_issue: int | None) -> str:
 
 
 def _pending_row_fields(pending_details: dict[str, Any] | None) -> dict[str, Any]:
+    """Return normalized pending-payout fields for a claim inventory row."""
     if pending_details is None:
         return {
             "pending_proposal_id": None,
