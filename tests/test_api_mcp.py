@@ -318,7 +318,17 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     assert submit_schema["properties"]["bounty_id"]["minimum"] == 1
     assert submit_schema["properties"]["issue_number"]["minimum"] == 1
     assert submit_schema["properties"]["repo"]["maxLength"] == 200
-    assert submit_schema["not"] == {"required": ["bounty_id", "issue_number"]}
+    assert submit_schema["allOf"] == [
+        {"not": {"required": ["bounty_id", "issue_number"]}},
+        {
+            "if": {"required": ["repo"]},
+            "then": {
+                "required": ["issue_number"],
+                "not": {"required": ["bounty_id"]},
+            },
+        },
+        {"if": {"required": ["bounty_id"]}, "then": {"not": {"required": ["repo"]}}},
+    ]
     bounty_tool = next(tool for tool in tools["result"]["tools"] if tool["name"] == "get_bounty")
     assert "accepted awards" in bounty_tool["description"]
     bounty_schema = bounty_tool["inputSchema"]
@@ -2321,6 +2331,42 @@ def test_mcp_submit_work_proof_scopes_issue_number_by_repo(sqlite_url: str) -> N
     ],
 )
 def test_mcp_submit_work_proof_rejects_invalid_bounty_selectors(
+    sqlite_url: str, arguments: dict[str, object], request_id: int
+) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/call",
+            "params": {"name": "submit_work_proof", "arguments": arguments},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "error": {"code": -32602, "message": "invalid tool arguments"},
+    }
+
+
+@pytest.mark.parametrize(
+    ("arguments", "request_id"),
+    [
+        ({"unexpected": "ignored"}, 33),
+        ({"format": "json", "unexpected": "ignored"}, 34),
+        ({"formta": "json"}, 35),
+        ({"bounty_id": 1, "unexpected": "ignored"}, 36),
+    ],
+)
+def test_mcp_submit_work_proof_rejects_undeclared_arguments(
     sqlite_url: str, arguments: dict[str, object], request_id: int
 ) -> None:
     create_schema(sqlite_url)

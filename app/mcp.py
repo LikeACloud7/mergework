@@ -231,7 +231,17 @@ MCP_TOOLS: list[dict[str, Any]] = [
                 },
             },
             "additionalProperties": False,
-            "not": {"required": ["bounty_id", "issue_number"]},
+            "allOf": [
+                {"not": {"required": ["bounty_id", "issue_number"]}},
+                {
+                    "if": {"required": ["repo"]},
+                    "then": {
+                        "required": ["issue_number"],
+                        "not": {"required": ["bounty_id"]},
+                    },
+                },
+                {"if": {"required": ["bounty_id"]}, "then": {"not": {"required": ["repo"]}}},
+            ],
         },
     },
 ]
