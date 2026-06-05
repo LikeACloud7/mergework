@@ -3,7 +3,12 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 import app.serializers as serializers_module
-from app.accounts import account_api_context, account_page_context, normalized_account
+from app.accounts import (
+    account_action_urls,
+    account_api_context,
+    account_page_context,
+    normalized_account,
+)
 from app.db import create_schema, session_scope
 from app.ledger.service import (
     TREASURY_ACCOUNT,
@@ -52,6 +57,11 @@ def test_account_contexts_include_balance_status_and_proof_backed_rows(
     assert api_context["accepted_work"]["latest_proof_hash"] == proof.hash
 
     assert page_context["account"]["account"] == "github:alice"
+    assert page_context["account_action_urls"] == {
+        "account_json": "/api/v1/accounts/github:alice",
+        "accepted_work_json": "/api/v1/accounts/github:alice/accepted-work",
+        "activity": "/api/v1/activity?account=github%3Aalice",
+    }
     assert page_context["accepted_summary"]["accepted_mrwk"] == "40"
     assert page_context["accepted_work"][0]["proof_hash"] == proof.hash
     assert page_context["transactions"][0]["proof_hash"] == proof.hash
@@ -95,8 +105,19 @@ def test_registered_account_routes_preserve_api_and_page_shapes(sqlite_url: str)
     assert page_response.status_code == 200
     assert "github:bob" in page_response.text
     assert "25 MRWK" in page_response.text
+    assert 'href="/api/v1/accounts/github:bob"' in page_response.text
+    assert 'href="/api/v1/accounts/github:bob/accepted-work"' in page_response.text
+    assert 'href="/api/v1/activity?account=github%3Abob"' in page_response.text
     assert '<p class="reference-cell">' in page_response.text
     assert f'href="/proofs/{proof.hash}"' in page_response.text
+
+
+def test_account_action_urls_escape_query_accounts() -> None:
+    assert account_action_urls("github:alice") == {
+        "account_json": "/api/v1/accounts/github:alice",
+        "accepted_work_json": "/api/v1/accounts/github:alice/accepted-work",
+        "activity": "/api/v1/activity?account=github%3Aalice",
+    }
 
 
 def test_account_routes_expose_pending_payouts_separately_from_paid_work(

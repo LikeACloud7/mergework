@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from urllib.parse import quote, urlencode
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -107,6 +108,15 @@ def account_transfer_status(account: str) -> str:
     return "MRWK wallet transfers require a registered mrwk1 address."
 
 
+def account_action_urls(account: str) -> dict[str, str]:
+    path_account = quote(account, safe=":")
+    return {
+        "account_json": f"/api/v1/accounts/{path_account}",
+        "accepted_work_json": f"/api/v1/accounts/{path_account}/accepted-work",
+        "activity": f"/api/v1/activity?{urlencode({'account': account})}",
+    }
+
+
 def account_api_context(session: Session, account: str) -> dict[str, Any]:
     account = normalized_account(account)
     account_row = session.get(Account, account)
@@ -161,6 +171,7 @@ def account_page_context(
     pending_payouts = safe_pending_payouts_for_account(session, account)
     return {
         "account": account_api_context(session, account),
+        "account_action_urls": account_action_urls(account),
         "accepted_summary": safe_account_accepted_summary(session, account),
         "accepted_work": safe_accepted_work_for_account(session, account),
         "pending_summary": pending_payout_summary(pending_payouts),
