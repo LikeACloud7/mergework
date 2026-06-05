@@ -67,8 +67,13 @@ def register_wallet_api_routes(
         post_only_route()
 
     @app.get("/api/v1/wallets/{address}")
-    def api_wallet(address: str) -> dict[str, Any]:
+    def api_wallet(request: Request, address: str) -> dict[str, Any]:
         reject_path_whitespace_padding(address, "MRWK wallet address")
+        if request.query_params.getlist("type") or request.query_params.getlist("tx_type"):
+            raise HTTPException(
+                status_code=400,
+                detail="transaction filters are not supported on wallet JSON detail",
+            )
         address = normalized_wallet_address(address)
         with session_scope(db_url) as session:
             wallet = session.get(Wallet, address)

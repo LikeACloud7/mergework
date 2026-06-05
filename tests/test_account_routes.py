@@ -97,12 +97,22 @@ def test_registered_account_routes_preserve_api_and_page_shapes(sqlite_url: str)
     client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
 
     api_response = client.get("/api/v1/accounts/GitHub:Bob")
+    api_type_filter_response = client.get("/api/v1/accounts/github:bob?type=github_claim")
+    api_tx_type_filter_response = client.get("/api/v1/accounts/github:bob?tx_type=github_claim")
     accepted_response = client.get("/api/v1/accounts/github:bob/accepted-work")
     page_response = client.get("/accounts/github:bob")
 
     assert api_response.status_code == 200
     assert api_response.json()["account"] == "github:bob"
     assert api_response.json()["accepted_work"]["latest_proof_hash"] == proof.hash
+    assert api_type_filter_response.status_code == 400
+    assert api_type_filter_response.json()["detail"] == (
+        "transaction filters are not supported on account JSON detail"
+    )
+    assert api_tx_type_filter_response.status_code == 400
+    assert api_tx_type_filter_response.json()["detail"] == (
+        "transaction filters are not supported on account JSON detail"
+    )
     assert accepted_response.status_code == 200
     assert accepted_response.json()["summary"]["accepted_mrwk"] == "25"
     assert accepted_response.json()["accepted_work"][0]["submission_url"].endswith("/pull/178")

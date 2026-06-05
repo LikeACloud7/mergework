@@ -100,6 +100,23 @@ def test_wallet_api_register_lookup_and_transfer(sqlite_url: str) -> None:
     assert transfer["type"] == "wallet_transfer"
     assert transfer["amount_mrwk"] == "3"
     assert client.get(f"/api/v1/wallets/{receiver_address}").json()["balance_mrwk"] == "3"
+    type_filter = client.get(f"/api/v1/wallets/{receiver_address}?type=github_claim")
+    tx_type_filter = client.get(f"/api/v1/wallets/{receiver_address}?tx_type=github_claim")
+    repeated_type_filter = client.get(
+        f"/api/v1/wallets/{receiver_address}?type=github_claim&type=bounty_payment"
+    )
+    assert type_filter.status_code == 400
+    assert type_filter.json()["detail"] == (
+        "transaction filters are not supported on wallet JSON detail"
+    )
+    assert tx_type_filter.status_code == 400
+    assert tx_type_filter.json()["detail"] == (
+        "transaction filters are not supported on wallet JSON detail"
+    )
+    assert repeated_type_filter.status_code == 400
+    assert repeated_type_filter.json()["detail"] == (
+        "transaction filters are not supported on wallet JSON detail"
+    )
 
 
 def test_wallet_transfer_api_rejects_replayed_signed_body(sqlite_url: str) -> None:

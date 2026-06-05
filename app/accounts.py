@@ -189,8 +189,13 @@ def account_page_context(
 
 def register_account_routes(app: FastAPI, *, db_url: str, templates: Jinja2Templates) -> None:
     @app.get("/api/v1/accounts/{account}")
-    def api_account(account: str) -> dict[str, Any]:
+    def api_account(request: Request, account: str) -> dict[str, Any]:
         reject_path_whitespace_padding(account, "account")
+        if request.query_params.getlist("type") or request.query_params.getlist("tx_type"):
+            raise HTTPException(
+                status_code=400,
+                detail="transaction filters are not supported on account JSON detail",
+            )
         with session_scope(db_url) as session:
             return account_api_context(session, account)
 
