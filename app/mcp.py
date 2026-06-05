@@ -37,7 +37,22 @@ MCP_TOOLS: list[dict[str, Any]] = [
         "name": "register_wallet",
         "description": "Register an MRWK wallet public key",
     },
-    {"name": "get_wallet", "description": "Get an MRWK wallet by address"},
+    {
+        "name": "get_wallet",
+        "description": "Get an MRWK wallet by address",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string",
+                    "pattern": "^[mM][rR][wW][kK]1[0-9a-fA-F]{40}$",
+                    "description": "MRWK wallet address, using the mrwk1 prefix and 40 hex chars.",
+                },
+            },
+            "required": ["address"],
+            "additionalProperties": False,
+        },
+    },
     {
         "name": "submit_wallet_transfer",
         "description": "Submit a signed MRWK wallet transfer",

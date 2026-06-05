@@ -268,6 +268,13 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
         tool for tool in tools["result"]["tools"] if tool["name"] == "list_bounty_attempts"
     )
     assert "active-attempt reservations" in attempt_tool["description"]
+    wallet_tool = next(tool for tool in tools["result"]["tools"] if tool["name"] == "get_wallet")
+    wallet_schema = wallet_tool["inputSchema"]
+    assert wallet_schema["required"] == ["address"]
+    assert wallet_schema["additionalProperties"] is False
+    assert wallet_schema["properties"]["address"]["pattern"] == (
+        "^[mM][rR][wW][kK]1[0-9a-fA-F]{40}$"
+    )
 
     balance = client.post(
         "/mcp",
