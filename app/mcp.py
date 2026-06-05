@@ -24,6 +24,43 @@ MCP_TOOLS: list[dict[str, Any]] = [
             "Get a bounty by internal id or bounty_id alias, or by GitHub issue_number "
             "with optional repo, optionally with accepted awards"
         ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Internal MRWK bounty id. Use one bounty selector.",
+                },
+                "bounty_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Alias for the internal MRWK bounty id.",
+                },
+                "issue_number": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "GitHub issue number for an MRWK bounty.",
+                },
+                "repo": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "Optional owner/name repository scope for issue_number lookups.",
+                },
+                "include_awards": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Include accepted award records in the bounty payload.",
+                },
+            },
+            "oneOf": [
+                {"required": ["id"]},
+                {"required": ["bounty_id"]},
+                {"required": ["issue_number"]},
+            ],
+            "dependentRequired": {"repo": ["issue_number"]},
+            "additionalProperties": False,
+        },
     },
     {
         "name": "list_bounty_attempts",
@@ -31,6 +68,44 @@ MCP_TOOLS: list[dict[str, Any]] = [
             "List advisory active-attempt reservations for a bounty by internal bounty_id, "
             "or by GitHub issue_number with optional repo"
         ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "bounty_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Internal MRWK bounty id.",
+                },
+                "issue_number": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "GitHub issue number for an MRWK bounty.",
+                },
+                "repo": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "Optional owner/name repository scope for issue_number lookups.",
+                },
+                "include_expired": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Include expired advisory attempts as well as active ones.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "default": 25,
+                    "description": "Maximum attempt records to return.",
+                },
+            },
+            "oneOf": [
+                {"required": ["bounty_id"]},
+                {"required": ["issue_number"]},
+            ],
+            "dependentRequired": {"repo": ["issue_number"]},
+            "additionalProperties": False,
+        },
     },
     {
         "name": "get_balance",
