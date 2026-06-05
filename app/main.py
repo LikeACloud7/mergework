@@ -306,18 +306,20 @@ def create_app(database_url: str | None = None, webhook_secret: str | None = Non
         post_only_route=post_only_route,
     )
 
-    def ledger_rows(limit: int = 50) -> list[dict[str, Any]]:
+    def ledger_rows(limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
         with session_scope(db_url) as session:
-            return recent_ledger_entries(session, limit)
+            return recent_ledger_entries(session, limit, offset)
 
     @app.get("/api/v1/ledger")
     def api_ledger(
         request: Request,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
+        offset: Annotated[int, Query(ge=0, le=SQLITE_INTEGER_MAX)] = 0,
     ) -> list[dict[str, Any]]:
-        reject_repeated_query_param(request, "limit")
-        reject_noncanonical_int_query_param(request, "limit")
-        return ledger_rows(limit)
+        for name in ("limit", "offset"):
+            reject_repeated_query_param(request, name)
+            reject_noncanonical_int_query_param(request, name)
+        return ledger_rows(limit, offset)
 
     @app.get("/api/v1/ledger/{sequence}")
     def api_ledger_entry(sequence: int | str) -> dict[str, Any]:

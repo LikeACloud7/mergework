@@ -102,6 +102,56 @@ def test_ledger_api_rejects_repeated_limit_before_using_later_value(sqlite_url: 
     assert response.json()["detail"] == "limit must be provided at most once"
 
 
+def test_ledger_api_honors_offset(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        older_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=201,
+            issue_url="https://github.com/ramimbo/mergework/issues/201",
+            title="Older ledger row",
+            reward_mrwk="25",
+            acceptance="Ledger offset should skip newest rows.",
+        )
+        newer_bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=202,
+            issue_url="https://github.com/ramimbo/mergework/issues/202",
+            title="Newer ledger row",
+            reward_mrwk="25",
+            acceptance="Ledger offset should return later pages.",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    newest = client.get("/api/v1/ledger?limit=1")
+    shifted = client.get("/api/v1/ledger?limit=1&offset=1")
+    exhausted = client.get("/api/v1/ledger?limit=1&offset=99")
+    max_valid = client.get("/api/v1/ledger?offset=9223372036854775807")
+    negative = client.get("/api/v1/ledger?offset=-1")
+    oversized = client.get("/api/v1/ledger?offset=9999999999999999999999999999999999999999")
+    noncanonical = client.get("/api/v1/ledger?offset=01")
+    repeated = client.get("/api/v1/ledger?offset=1&offset=2")
+
+    assert newest.status_code == 200
+    assert shifted.status_code == 200
+    assert [entry["reference"] for entry in newest.json()] == [newer_bounty.issue_url]
+    assert [entry["reference"] for entry in shifted.json()] == [older_bounty.issue_url]
+    assert exhausted.status_code == 200
+    assert exhausted.json() == []
+    assert max_valid.status_code == 200
+    assert max_valid.json() == []
+    assert negative.status_code == 422
+    assert oversized.status_code == 422
+    assert noncanonical.status_code == 400
+    assert noncanonical.json()["detail"] == "offset must be a canonical positive integer"
+    assert repeated.status_code == 400
+    assert repeated.json()["detail"] == "offset must be provided at most once"
+
+
 def test_head_requests_match_get_routes_without_body(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:

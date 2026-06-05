@@ -94,6 +94,7 @@ def test_api_examples_document_ledger_response_shape() -> None:
     examples = Path("docs/api-examples.md").read_text(encoding="utf-8")
 
     assert "/api/v1/ledger?limit=10" in examples
+    assert "/api/v1/ledger?limit=10&offset=10" in examples
     assert "/api/v1/ledger/<sequence>" in examples
     assert '"sequence": 329' in examples
     assert '"type": "bounty_reserve"' in examples
@@ -105,6 +106,7 @@ def test_api_examples_document_ledger_response_shape() -> None:
     )
     assert '"proof_hash": null' in examples
     assert "bounty-payment ledger entries" in examples
+    assert "offset` from `0` through SQLite's signed integer maximum" in examples
 
 
 def test_api_examples_document_auth_me_response_shape() -> None:
