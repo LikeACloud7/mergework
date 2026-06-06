@@ -11,6 +11,7 @@ These tests pin down the contract:
 4. Works for both dict-typed and list-typed defaults.
 5. Works with arguments bound via closure (lambda).
 """
+
 from __future__ import annotations
 
 import pytest
@@ -25,6 +26,7 @@ def test_safe_return_returns_result_on_success():
 
 def test_safe_return_returns_default_on_exception():
     """When the wrapped call raises, the default is returned."""
+
     def boom() -> str:
         raise RuntimeError("kaboom")
 
@@ -53,6 +55,7 @@ def test_safe_return_handles_empty_list_default():
 
 def test_safe_return_propagates_no_exception():
     """The helper must swallow every exception, not re-raise."""
+
     def boom() -> None:
         raise RuntimeError("must be swallowed")
 
@@ -79,6 +82,7 @@ def test_safe_return_default_evaluated_only_on_failure():
     We use a sentinel object that is also a class to detect eager evaluation
     via `is` identity.
     """
+
     class _Sentinel:
         pass
 
