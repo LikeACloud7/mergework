@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Sequence, Callable
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, TypeVar
+from typing import Any
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -26,7 +26,6 @@ from app.submission_requirements import (
 
 PendingBountyProposals = tuple[list[dict[str, Any]], dict[str, Any] | None]
 MRWK_MICROUNITS = Decimal(1_000_000)
-T = TypeVar("T")
 
 
 def public_utc_timestamp(value: datetime) -> str:
@@ -872,7 +871,7 @@ def empty_accepted_summary() -> dict[str, Any]:
     }
 
 
-def _safe_return(call_, default: T) -> T:
+def _safe_return[T](call_: Callable[[], T], default: T) -> T:
     """Call `call_` and return its result, falling back to `default` on any error.
 
     Used by the `safe_*_for_account` helpers to keep page-context builders
