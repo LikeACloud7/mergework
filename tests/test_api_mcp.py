@@ -350,6 +350,34 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
         {"required": ["issue_number"]},
     ]
     assert bounty_schema["dependentRequired"] == {"repo": ["issue_number"]}
+    bounty_output_schema = bounty_tool["outputSchema"]
+    assert bounty_output_schema["additionalProperties"] is True
+    assert "Serialized MRWK bounty payload" in bounty_output_schema["description"]
+    assert bounty_output_schema["required"] == [
+        "id",
+        "repo",
+        "issue_number",
+        "issue_url",
+        "title",
+        "reward_mrwk",
+        "available_mrwk",
+        "reserved_mrwk",
+        "max_awards",
+        "awards_paid",
+        "awards_remaining",
+        "effective_available_mrwk",
+        "effective_awards_remaining",
+        "pending_payout_awards",
+        "availability_state",
+        "availability_note",
+        "status",
+        "acceptance",
+        "created_at",
+    ]
+    assert bounty_output_schema["properties"]["id"]["minimum"] == 1
+    assert bounty_output_schema["properties"]["issue_number"]["minimum"] == 1
+    assert bounty_output_schema["properties"]["awards"]["type"] == "array"
+    assert "include_awards" in bounty_output_schema["properties"]["awards"]["description"]
     attempt_tool = next(
         tool for tool in tools["result"]["tools"] if tool["name"] == "list_bounty_attempts"
     )
