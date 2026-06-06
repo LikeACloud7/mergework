@@ -84,6 +84,11 @@ def test_work_discovery_distinguishes_live_and_pending_create_work(sqlite_url: s
     assert body["non_claimable_issue_states"][1]["availability_state"] == "board_or_index"
     assert body["non_claimable_issue_states"][1]["issue_number"] == 785
 
+    live_requirements = body["claimable_now"][0]["submission_requirements"]
+    assert live_requirements["reference_formats"] == ["Bounty #800", "Refs #800"]
+    assert live_requirements["attempt_endpoint"] == f"/api/v1/bounties/{live_bounty.id}/attempts"
+    assert live_requirements["next_actions"][0]["id"] == "confirm_award_slot"
+
     assert body["claimable_now"] == [
         {
             "availability_state": "live_bounty",
@@ -101,9 +106,19 @@ def test_work_discovery_distinguishes_live_and_pending_create_work(sqlite_url: s
                 "attempts": f"/api/v1/bounties/{live_bounty.id}/attempts",
                 "github_issue": "https://github.com/ramimbo/mergework/issues/800",
             },
+            "submission_requirements": live_requirements,
         }
     ]
     pending_create_executes_after = body["opening_soon"][0]["executes_after"]
+    pending_create_requirements = body["opening_soon"][0]["submission_requirements"]
+    assert pending_create_requirements["reference_formats"] == [
+        "Bounty #900",
+        "Refs #900",
+    ]
+    assert pending_create_requirements["attempt_endpoint"] == (
+        "/api/v1/bounties/<bounty_id>/attempts"
+    )
+    assert pending_create_requirements["next_actions"][0]["id"] == "select_bounty"
     assert body["opening_soon"] == [
         {
             "availability_state": "pending_create",
@@ -119,6 +134,7 @@ def test_work_discovery_distinguishes_live_and_pending_create_work(sqlite_url: s
                 "proposal": f"/api/v1/treasury/proposals/{pending_create.id}",
                 "github_issue": "https://github.com/ramimbo/mergework/issues/900",
             },
+            "submission_requirements": pending_create_requirements,
         }
     ]
     assert pending_create_executes_after.endswith("Z")
