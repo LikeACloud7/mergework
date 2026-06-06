@@ -90,11 +90,31 @@ LOWERCASE_HEX_128_SCHEMA = {
     "pattern": "^[0-9a-f]{128}$",
 }
 
+MRWK_WALLET_ADDRESS_SCHEMA = {
+    "type": "string",
+    "description": "Registered MRWK wallet address in mrwk1 + 40 lowercase hex format.",
+    "minLength": 45,
+    "maxLength": 45,
+    "pattern": "^mrwk1[0-9a-f]{40}$",
+}
+
+WALLET_LABEL_SCHEMA = {
+    "type": "string",
+    "description": "Optional wallet display label, trimmed and limited to 160 characters.",
+    "maxLength": 160,
+}
+
+WALLET_MEMO_SCHEMA = {
+    "type": "string",
+    "description": "Transfer memo string, trimmed by the API and limited to 240 characters.",
+    "maxLength": 240,
+}
+
 WALLET_RESPONSE_SCHEMA = _object_schema(
     {
-        "address": {"type": "string"},
+        "address": MRWK_WALLET_ADDRESS_SCHEMA,
         "public_key_hex": LOWERCASE_HEX_64_SCHEMA,
-        "label": {"type": "string", "nullable": True},
+        "label": {**WALLET_LABEL_SCHEMA, "nullable": True},
         "github_login": {"type": "string", "nullable": True},
         "balance_mrwk": MRWK_DECIMAL_SCHEMA,
         "nonce": {"type": "integer", "minimum": 0},
@@ -123,8 +143,8 @@ WALLET_TRANSFER_RESPONSE_SCHEMA = _object_schema(
         "hash": LOWERCASE_HEX_64_SCHEMA,
         "type": {"type": "string"},
         "ledger_sequence": {"type": "integer", "minimum": 1},
-        "from_address": {"type": "string"},
-        "to_address": {"type": "string"},
+        "from_address": MRWK_WALLET_ADDRESS_SCHEMA,
+        "to_address": MRWK_WALLET_ADDRESS_SCHEMA,
         "amount_mrwk": MRWK_AMOUNT_SCHEMA,
         "nonce": {"type": "integer", "minimum": 1},
         "memo": {"type": "string", "nullable": True},
@@ -267,7 +287,7 @@ WALLET_REGISTER_BODY = {
                     **LOWERCASE_HEX_64_SCHEMA,
                     "description": "64-character lowercase hex Ed25519 public key.",
                 },
-                "label": {"type": "string", "description": "Optional wallet display label."},
+                "label": WALLET_LABEL_SCHEMA,
             },
             required=["public_key_hex"],
         ),
@@ -278,7 +298,7 @@ WALLET_REGISTER_BODY = {
 }
 
 SIGNED_WALLET_ACTION_PROPERTIES = {
-    "address": {"type": "string", "description": "Registered mrwk1 wallet address."},
+    "address": MRWK_WALLET_ADDRESS_SCHEMA,
     "nonce": INTEGER_OR_STRING_SCHEMA,
     "signature_hex": {
         **LOWERCASE_HEX_128_SCHEMA,
@@ -309,11 +329,17 @@ WALLET_TRANSFER_BODY = {
     "requestBody": _request_body(
         _object_schema(
             {
-                "from_address": {"type": "string", "description": "Sender mrwk1 wallet address."},
-                "to_address": {"type": "string", "description": "Receiver mrwk1 wallet address."},
+                "from_address": {
+                    **MRWK_WALLET_ADDRESS_SCHEMA,
+                    "description": "Sender registered mrwk1 wallet address.",
+                },
+                "to_address": {
+                    **MRWK_WALLET_ADDRESS_SCHEMA,
+                    "description": "Receiver registered mrwk1 wallet address.",
+                },
                 "amount_mrwk": MRWK_AMOUNT_SCHEMA,
                 "nonce": INTEGER_OR_STRING_SCHEMA,
-                "memo": {"type": "string", "description": "Optional transfer memo."},
+                "memo": WALLET_MEMO_SCHEMA,
                 "signature_hex": {
                     **LOWERCASE_HEX_128_SCHEMA,
                     "description": "128-character lowercase hex Ed25519 signature.",
