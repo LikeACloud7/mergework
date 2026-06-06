@@ -40,6 +40,12 @@ def _activity_page_url(account: str | None) -> str:
     return f"/activity?{urlencode({'account': account})}" if account else "/activity"
 
 
+def _validate_activity_filter_params(request: Request) -> None:
+    for name in ("q", "account"):
+        reject_control_char_query_param(request, name)
+        reject_repeated_query_param(request, name)
+
+
 def register_activity_routes(app: FastAPI, *, db_url: str, templates: Jinja2Templates) -> None:
     @app.get("/api/v1/activity")
     def api_activity(
@@ -47,10 +53,7 @@ def register_activity_routes(app: FastAPI, *, db_url: str, templates: Jinja2Temp
         q: str | None = Query(None),
         account: str | None = Query(None),
     ) -> dict[str, Any]:
-        reject_control_char_query_param(request, "q")
-        reject_repeated_query_param(request, "q")
-        reject_control_char_query_param(request, "account")
-        reject_repeated_query_param(request, "account")
+        _validate_activity_filter_params(request)
         with session_scope(db_url) as session:
             return activity_context(session, q, account)
 
@@ -60,10 +63,7 @@ def register_activity_routes(app: FastAPI, *, db_url: str, templates: Jinja2Temp
         q: str | None = Query(None),
         account: str | None = Query(None),
     ) -> HTMLResponse:
-        reject_control_char_query_param(request, "q")
-        reject_repeated_query_param(request, "q")
-        reject_control_char_query_param(request, "account")
-        reject_repeated_query_param(request, "account")
+        _validate_activity_filter_params(request)
         with session_scope(db_url) as session:
             context = activity_context(session, q, account)
         return templates.TemplateResponse(request, "activity.html", context)
