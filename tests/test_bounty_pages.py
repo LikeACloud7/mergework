@@ -1073,12 +1073,26 @@ def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) 
     assert limited_ledger_page.text.count('class="ledger-row ledger-row--') == 1
     assert f'href="/ledger/{unsafe_payment_sequence}"' in limited_ledger_page.text
     assert f'href="/ledger/{payment_sequence}"' not in limited_ledger_page.text
+    offset_ledger_page = client.get("/ledger?limit=1&offset=1")
+    assert offset_ledger_page.status_code == 200
+    assert offset_ledger_page.text.count('class="ledger-row ledger-row--') == 1
+    expected_shifted = client.get("/api/v1/ledger?limit=1&offset=1")
+    assert expected_shifted.status_code == 200
+    expected_sequence = expected_shifted.json()[0]["sequence"]
+    assert f'href="/ledger/{expected_sequence}"' in offset_ledger_page.text
+    assert f'href="/ledger/{unsafe_payment_sequence}"' not in offset_ledger_page.text
     noncanonical_limit = client.get("/ledger?limit=01")
     repeated_limit = client.get("/ledger?limit=1&limit=2")
+    noncanonical_offset = client.get("/ledger?offset=01")
+    repeated_offset = client.get("/ledger?offset=1&offset=2")
     assert noncanonical_limit.status_code == 400
     assert noncanonical_limit.json()["detail"] == "limit must be a canonical positive integer"
     assert repeated_limit.status_code == 400
     assert repeated_limit.json()["detail"] == "limit must be provided at most once"
+    assert noncanonical_offset.status_code == 400
+    assert noncanonical_offset.json()["detail"] == "offset must be a canonical positive integer"
+    assert repeated_offset.status_code == 400
+    assert repeated_offset.json()["detail"] == "offset must be provided at most once"
 
     ledger_entry_page = client.get(f"/ledger/{payment_sequence}")
     assert ledger_entry_page.status_code == 200

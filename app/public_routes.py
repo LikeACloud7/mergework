@@ -331,7 +331,7 @@ def register_public_routes(
         list[dict[str, Any]],
     ],
     api_bounty: Callable[[str], dict[str, Any]],
-    api_ledger: Callable[[int], list[dict[str, Any]]],
+    api_ledger: Callable[[int, int], list[dict[str, Any]]],
     api_ledger_entry: Callable[[str], dict[str, Any]],
     api_proof: Callable[[str], dict[str, Any]],
 ) -> None:
@@ -383,10 +383,14 @@ def register_public_routes(
     def ledger_page(
         request: Request,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
+        offset: Annotated[int, Query(ge=0, le=SQLITE_INTEGER_MAX)] = 0,
     ) -> HTMLResponse:
-        reject_repeated_query_param(request, "limit")
-        reject_noncanonical_int_query_param(request, "limit")
-        return templates.TemplateResponse(request, "ledger.html", {"entries": api_ledger(limit)})
+        for name in ("limit", "offset"):
+            reject_repeated_query_param(request, name)
+            reject_noncanonical_int_query_param(request, name)
+        return templates.TemplateResponse(
+            request, "ledger.html", {"entries": api_ledger(limit, offset)}
+        )
 
     @app.get("/ledger/{sequence}", response_class=HTMLResponse)
     def ledger_entry_page(request: Request, sequence: str) -> HTMLResponse:
