@@ -778,6 +778,28 @@ curl -s -X POST "$MCP_HOST/mcp" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_balance","arguments":{"account":"treasury:mrwk"}}}'
 ```
 
+`get_balance` keeps the legacy text response and adds parsed balance fields:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "treasury:mrwk: 100000000 MRWK"
+      }
+    ],
+    "structuredContent": {
+      "account": "treasury:mrwk",
+      "balance_mrwk": "100000000",
+      "balance_microunits": 100000000000000
+    }
+  }
+}
+```
+
 Call `list_bounties`:
 
 ```bash
@@ -849,8 +871,7 @@ curl -s -X POST "$MCP_HOST/mcp" \
 Successful MCP tools that return JSON objects or lists include the
 backward-compatible JSON string in `result.content[0].text` and the parsed
 payload in `result.structuredContent`. Prefer `structuredContent` when present;
-fall back to text for human-readable responses such as balances and not-found
-messages.
+fall back to text for human-readable not-found messages.
 
 Successful MCP transfer responses expose the transfer hash, ledger sequence,
 addresses, amount, nonce, memo, and timestamp in that JSON payload:
