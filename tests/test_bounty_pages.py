@@ -960,6 +960,40 @@ def test_bounty_detail_skips_malformed_award_proof_payloads(sqlite_url: str) -> 
     assert "No accepted work has been paid for this bounty yet." in page.text
 
 
+def test_bounty_detail_rejects_list_query_filters(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        bounty = create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=166,
+            issue_url="https://github.com/ramimbo/mergework/issues/166",
+            title="Detail query filters",
+            reward_mrwk="100",
+            acceptance="Bounty detail routes should not silently accept list filters.",
+        )
+        bounty_id = bounty.id
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    assert client.get(f"/api/v1/bounties/{bounty_id}").status_code == 200
+    assert client.get(f"/bounties/{bounty_id}").status_code == 200
+    for query, field in (
+        ("limit=1", "limit"),
+        ("status=open", "status"),
+        ("q=review", "q"),
+        ("offset=1", "offset"),
+    ):
+        api_response = client.get(f"/api/v1/bounties/{bounty_id}?{query}")
+        page_response = client.get(f"/bounties/{bounty_id}?{query}")
+
+        assert api_response.status_code == 400
+        assert api_response.json()["detail"] == f"{field} is not supported on bounty detail"
+        assert page_response.status_code == 400
+        assert page_response.json()["detail"] == f"{field} is not supported on bounty detail"
+
+
 def test_ledger_and_proof_pages_make_bounty_payments_scannable(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
