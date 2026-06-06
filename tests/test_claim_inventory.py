@@ -415,6 +415,21 @@ def test_claim_inventory_live_mode_uses_read_only_calls(monkeypatch) -> None:
     ), calls
 
 
+def test_run_gh_json_reports_missing_gh(monkeypatch) -> None:
+    def missing_gh(*args, **kwargs):
+        raise FileNotFoundError("gh")
+
+    monkeypatch.setattr(claim_inventory.subprocess, "run", missing_gh)
+
+    try:
+        claim_inventory._run_gh_json(["gh", "issue", "list"])
+    except RuntimeError as exc:
+        assert "GitHub CLI executable 'gh' was not found" in str(exc)
+        assert "live --repo mode" in str(exc)
+    else:
+        raise AssertionError("expected missing gh RuntimeError")
+
+
 def test_claim_inventory_script_entrypoint_loads_shared_parser() -> None:
     result = subprocess.run(
         [sys.executable, "scripts/claim_inventory.py", "--help"],
