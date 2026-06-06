@@ -184,6 +184,11 @@ non-claimable states out of the claimable list, and accepts optional
         "bounty": "/api/v1/bounties/108",
         "attempts": "/api/v1/bounties/108/attempts",
         "github_issue": "https://github.com/ramimbo/mergework/issues/800"
+      },
+      "next_action": {
+        "id": "confirm_award_slot",
+        "required": true,
+        "text": "Confirm this bounty is open and has at least one award slot remaining."
       }
     }
   ],
@@ -201,6 +206,11 @@ non-claimable states out of the claimable list, and accepts optional
       "source_urls": {
         "proposal": "/api/v1/treasury/proposals/125",
         "github_issue": "https://github.com/ramimbo/mergework/issues/798"
+      },
+      "next_action": {
+        "id": "select_bounty",
+        "required": true,
+        "text": "Select a concrete open bounty before submitting work proof."
       }
     }
   ],
@@ -220,6 +230,11 @@ non-claimable states out of the claimable list, and accepts optional
         "bounty": "/api/v1/bounties/102",
         "attempts": "/api/v1/bounties/102/attempts",
         "github_issue": "https://github.com/ramimbo/mergework/issues/761"
+      },
+      "next_action": {
+        "id": "choose_open_bounty",
+        "required": true,
+        "text": "Do not open or claim new work for this bounty unless a maintainer reopens it."
       }
     }
   ],

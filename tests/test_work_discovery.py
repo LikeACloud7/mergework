@@ -106,6 +106,11 @@ def test_work_discovery_distinguishes_live_and_pending_create_work(sqlite_url: s
                 "attempts": f"/api/v1/bounties/{live_bounty.id}/attempts",
                 "github_issue": "https://github.com/ramimbo/mergework/issues/800",
             },
+            "next_action": {
+                "id": "confirm_award_slot",
+                "required": True,
+                "text": "Confirm this bounty is open and has at least one award slot remaining.",
+            },
             "submission_requirements": live_requirements,
         }
     ]
@@ -134,6 +139,11 @@ def test_work_discovery_distinguishes_live_and_pending_create_work(sqlite_url: s
                 "proposal": f"/api/v1/treasury/proposals/{pending_create.id}",
                 "github_issue": "https://github.com/ramimbo/mergework/issues/900",
             },
+            "next_action": {
+                "id": "select_bounty",
+                "required": True,
+                "text": "Select a concrete open bounty before submitting work proof.",
+            },
             "submission_requirements": pending_create_requirements,
         }
     ]
@@ -141,6 +151,7 @@ def test_work_discovery_distinguishes_live_and_pending_create_work(sqlite_url: s
     assert datetime.fromisoformat(pending_create_executes_after.replace("Z", "+00:00"))
     assert body["not_claimable"][0]["availability_state"] == "closed_or_exhausted"
     assert body["not_claimable"][0]["issue_number"] == 761
+    assert body["not_claimable"][0]["next_action"]["id"] == "choose_open_bounty"
 
 
 def test_work_discovery_limit_caps_public_buckets(sqlite_url: str) -> None:
@@ -230,6 +241,7 @@ def test_work_discovery_limit_keeps_older_claimable_bounty_visible(sqlite_url: s
     assert body["not_claimable"][0]["bounty_id"] == newer_pending_full.id
     assert body["not_claimable"][0]["issue_number"] == 911
     assert body["not_claimable"][0]["availability_state"] == "pending_payout"
+    assert body["not_claimable"][0]["next_action"]["id"] == "watch_for_award_slot"
 
 
 def test_work_discovery_scans_open_bounties_in_bounded_pages(
