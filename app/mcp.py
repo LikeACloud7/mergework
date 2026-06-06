@@ -14,6 +14,87 @@ MCPToolHandler = Callable[[str, str, dict[str, Any]], str | dict[str, Any] | MCP
 MCP_PROTOCOL_VERSION = "2025-06-18"
 MCP_SERVER_INFO = {"name": "mergework", "version": "0.1.0"}
 
+
+MCP_BOUNTY_SUMMARY_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "integer", "minimum": 1},
+        "repo": {"type": "string"},
+        "issue_number": {"type": "integer", "minimum": 1},
+        "issue_url": {"type": "string"},
+        "title": {"type": "string"},
+        "reward_mrwk": {"type": "string"},
+        "status": {"type": "string"},
+        "acceptance": {"type": "string"},
+        "created_at": {"type": "string"},
+        "award_mode": {"type": "string"},
+        "max_awards": {"type": "integer", "minimum": 1},
+        "awards_paid": {"type": "integer", "minimum": 0},
+        "awards_remaining": {"type": "integer", "minimum": 0},
+        "accepted_awards_count": {"type": "integer", "minimum": 0},
+        "effective_awards_remaining": {"type": "integer", "minimum": 0},
+        "submission_requirements": {"type": "object"},
+    },
+    "required": [
+        "id",
+        "repo",
+        "issue_number",
+        "issue_url",
+        "title",
+        "reward_mrwk",
+        "status",
+        "acceptance",
+        "created_at",
+        "award_mode",
+        "max_awards",
+        "accepted_awards_count",
+        "effective_awards_remaining",
+    ],
+    "additionalProperties": True,
+}
+
+MCP_BOUNTY_ATTEMPT_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "integer", "minimum": 1},
+        "bounty_id": {"type": "integer", "minimum": 1},
+        "repo": {"type": "string"},
+        "issue_number": {"type": "integer", "minimum": 1},
+        "issue_url": {"type": "string"},
+        "claimant": {"type": "string"},
+        "comment_url": {"type": "string"},
+        "expires_at": {"type": "string"},
+        "created_at": {"type": "string"},
+        "expired": {"type": "boolean"},
+    },
+    "required": [
+        "id",
+        "bounty_id",
+        "repo",
+        "issue_number",
+        "issue_url",
+        "claimant",
+        "comment_url",
+        "expires_at",
+        "created_at",
+        "expired",
+    ],
+    "additionalProperties": False,
+}
+
+MCP_BOUNTY_ATTEMPTS_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "bounty_id": {"type": "integer", "minimum": 1},
+        "issue_number": {"type": "integer", "minimum": 1},
+        "status": {"type": "string"},
+        "warnings": {"type": "array", "items": {"type": "string"}},
+        "attempts": {"type": "array", "items": MCP_BOUNTY_ATTEMPT_OUTPUT_SCHEMA},
+    },
+    "required": ["bounty_id", "issue_number", "status", "warnings", "attempts"],
+    "additionalProperties": False,
+}
+
 MCP_TOOLS: list[dict[str, Any]] = [
     {
         "name": "list_bounties",
@@ -55,6 +136,10 @@ MCP_TOOLS: list[dict[str, Any]] = [
                 },
             },
             "additionalProperties": False,
+        },
+        "outputSchema": {
+            "type": "array",
+            "items": MCP_BOUNTY_SUMMARY_OUTPUT_SCHEMA,
         },
     },
     {
@@ -100,6 +185,7 @@ MCP_TOOLS: list[dict[str, Any]] = [
             "dependentRequired": {"repo": ["issue_number"]},
             "additionalProperties": False,
         },
+        "outputSchema": MCP_BOUNTY_SUMMARY_OUTPUT_SCHEMA,
     },
     {
         "name": "list_bounty_attempts",
@@ -151,6 +237,7 @@ MCP_TOOLS: list[dict[str, Any]] = [
             "dependentRequired": {"repo": ["issue_number"]},
             "additionalProperties": False,
         },
+        "outputSchema": MCP_BOUNTY_ATTEMPTS_OUTPUT_SCHEMA,
     },
     {
         "name": "get_balance",

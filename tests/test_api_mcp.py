@@ -313,6 +313,23 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     assert list_bounties_schema["additionalProperties"] is False
     assert list_bounties_schema["properties"]["q"]["maxLength"] == 500
     assert list_bounties_schema["properties"]["limit"]["maximum"] == 100
+    list_bounties_output_schema = tools["result"]["tools"][0]["outputSchema"]
+    assert list_bounties_output_schema["type"] == "array"
+    assert list_bounties_output_schema["items"]["required"] == [
+        "id",
+        "repo",
+        "issue_number",
+        "issue_url",
+        "title",
+        "reward_mrwk",
+        "status",
+        "acceptance",
+        "created_at",
+        "award_mode",
+        "max_awards",
+        "accepted_awards_count",
+        "effective_awards_remaining",
+    ]
     submit_tool = next(
         tool for tool in tools["result"]["tools"] if tool["name"] == "submit_work_proof"
     )
@@ -350,6 +367,9 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
         {"required": ["issue_number"]},
     ]
     assert bounty_schema["dependentRequired"] == {"repo": ["issue_number"]}
+    bounty_output_schema = bounty_tool["outputSchema"]
+    assert bounty_output_schema["properties"]["effective_awards_remaining"]["minimum"] == 0
+    assert bounty_output_schema["properties"]["submission_requirements"]["type"] == "object"
     attempt_tool = next(
         tool for tool in tools["result"]["tools"] if tool["name"] == "list_bounty_attempts"
     )
@@ -370,6 +390,17 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
         {"required": ["issue_number"]},
     ]
     assert attempt_schema["dependentRequired"] == {"repo": ["issue_number"]}
+    attempt_output_schema = attempt_tool["outputSchema"]
+    assert attempt_output_schema["required"] == [
+        "bounty_id",
+        "issue_number",
+        "status",
+        "warnings",
+        "attempts",
+    ]
+    assert attempt_output_schema["properties"]["attempts"]["items"]["properties"]["expired"] == {
+        "type": "boolean"
+    }
     wallet_tool = next(tool for tool in tools["result"]["tools"] if tool["name"] == "get_wallet")
     wallet_schema = wallet_tool["inputSchema"]
     assert wallet_schema["required"] == ["address"]
