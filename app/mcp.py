@@ -174,6 +174,49 @@ MCP_TOOLS: list[dict[str, Any]] = [
     {
         "name": "register_wallet",
         "description": "Register an MRWK wallet public key",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "public_key_hex": {
+                    "type": "string",
+                    "pattern": "^[0-9a-fA-F]{64}$",
+                    "description": "Ed25519 public key as 32 bytes of hex.",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Optional human-readable wallet label.",
+                },
+            },
+            "required": ["public_key_hex"],
+            "additionalProperties": False,
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string",
+                    "pattern": "^[mM][rR][wW][kK]1[0-9a-fA-F]{40}$",
+                },
+                "public_key_hex": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+                "label": {"type": ["string", "null"]},
+                "github_login": {"type": ["string", "null"]},
+                "balance_mrwk": {"type": "string"},
+                "nonce": {"type": "integer", "minimum": 0},
+                "next_nonce": {"type": "integer", "minimum": 1},
+                "created_at": {"type": "string"},
+            },
+            "required": [
+                "address",
+                "public_key_hex",
+                "label",
+                "github_login",
+                "balance_mrwk",
+                "nonce",
+                "next_nonce",
+                "created_at",
+            ],
+            "additionalProperties": True,
+        },
     },
     {
         "name": "get_wallet",
