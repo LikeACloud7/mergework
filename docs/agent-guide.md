@@ -329,6 +329,47 @@ back to text for human-readable not-found messages.
 `result.structuredContent.account`, `balance_mrwk`, and `balance_microunits` so
 callers do not need to parse the text response.
 
+### Argument-validation errors
+
+`tools/call` returns the standard JSON-RPC `code: -32602` with a literal
+`message: "invalid tool arguments"` for every argument-validation failure, so
+existing clients that only read the message keep working. When the underlying
+`ValueError` matches a whitelisted safe phrase, the dispatcher also attaches
+an additive `error.data` payload so clients can act on the failure without
+parsing natural language:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "error": {
+    "code": -32602,
+    "message": "invalid tool arguments",
+    "data": {
+      "code": "invalid_argument",
+      "tool": "list_bounties",
+      "field": "limit",
+      "message": "must be at most 100"
+    }
+  }
+}
+```
+
+The shape is:
+
+- `code` — always `"invalid_argument"` for argument-validation failures.
+- `tool` — the requested tool name as the dispatcher saw it.
+- `field` — the offending field name, or `null` for field-less phrases such
+  as `unknown tool` or `repo can only be used with issue_number`.
+- `message` — a static, whitelisted safe phrase. Caller input is never
+  echoed, so the payload is safe to surface to LLM prompts or logs.
+
+When the underlying `ValueError` does not match the whitelist, the
+`error.data` key is omitted and the response is byte-for-byte identical to
+the previous envelope. `KeyError`, `TypeError`, `LedgerError`, and
+`HTTPException` paths still go through the legacy envelope with no
+`error.data`.
+
 ## Contribution Rules
 
 - Read `AGENTS.md` before starting.

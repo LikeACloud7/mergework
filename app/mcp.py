@@ -395,6 +395,138 @@ def _jsonrpc_error(response_id: Any, code: int, message: str) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": response_id, "error": {"code": code, "message": message}}
 
 
+# Field-level error metadata for the additive `error.data` payload. The
+# dispatcher surfaces this only when a `ValueError` raised by
+# :func:`call_mcp_tool` matches a whitelisted safe phrase. Untrusted caller
+# input is never echoed: `field` must be one of `_KNOWN_TOOL_FIELDS` and
+# `message` must be one of `_KNOWN_FIELD_MESSAGES` or `None` (field-less).
+_KNOWN_TOOL_FIELDS: frozenset[str] = frozenset(
+    {
+        "id",
+        "bounty_id",
+        "issue_number",
+        "repo",
+        "include_awards",
+        "include_expired",
+        "limit",
+        "q",
+        "sort",
+        "availability",
+        "status",
+        "account",
+        "address",
+        "public_key_hex",
+        "label",
+        "from_address",
+        "to_address",
+        "amount_mrwk",
+        "nonce",
+        "memo",
+        "signature_hex",
+        "sequence",
+        "hash",
+        "format",
+    }
+)
+
+# Safe, no-user-input phrases recognized as the trailing half of a
+# field-prefixed `ValueError` message. Values are the strings that callers
+# will see in `error.data.message`; they are never derived from caller input.
+_KNOWN_FIELD_MESSAGES: dict[str, str] = {
+    "must be an integer": "must be an integer",
+    "must be a string": "must be a string",
+    "must be a boolean": "must be a boolean",
+    "must be positive": "must be positive",
+    "must not be empty": "must not be empty",
+    "must not contain control characters": "must not contain control characters",
+    "is too large": "is too large",
+    "is too long": "is too long",
+    "must be at most 100": "must be at most 100",
+    "must be at most 500 characters": "must be at most 500 characters",
+    "must be one of: open, paid, closed": "must be one of: open, paid, closed",
+    "must be text or json": "must be text or json",
+}
+
+# Field-less safe phrases emitted when the underlying message is not
+# field-prefixed (e.g. `unknown tool`).
+_KNOWN_FIELDLESS_MESSAGES: dict[str, str] = {
+    "unknown tool": "unknown tool",
+    "matches multiple bounties": "matches multiple bounties",
+    "repo can only be used with issue_number": ("repo can only be used with issue_number"),
+}
+
+
+def _classify_value_error(exc: ValueError) -> dict[str, Any] | None:
+    """Map a ``ValueError`` raised by :func:`call_mcp_tool` to a safe
+    field-level error data payload.
+
+    Returns a ``{"code", "tool", "field", "message"}`` dict built only from
+    the static ``_KNOWN_TOOL_FIELDS`` / ``_KNOWN_FIELD_MESSAGES`` /
+    ``_KNOWN_FIELDLESS_MESSAGES`` whitelists when the original message
+    matches, or ``None`` if it does not — in which case the dispatcher
+    returns the legacy envelope without ``error.data`` so untrusted caller
+    input never reaches the response.
+
+    The recognised patterns are:
+
+    - ``"<field> <safe phrase>"`` where ``<field>`` is a known tool field
+      and ``<safe phrase>`` is a known field-level message.
+    - A field-less known message (e.g. ``"unknown tool"``).
+    """
+    if not exc.args:
+        return None
+    message = str(exc.args[0])
+    if not message:
+        return None
+
+    # Field-prefixed: "<field> <safe phrase>". Split on the first whitespace
+    # only; the field token is the first identifier-shaped run and the rest
+    # of the message must match a whitelisted safe phrase verbatim. This
+    # keeps the surface area to a small finite set of literal strings.
+    head, sep, tail = message.partition(" ")
+    if sep and head in _KNOWN_TOOL_FIELDS and tail in _KNOWN_FIELD_MESSAGES:
+        return {
+            "code": "invalid_argument",
+            "field": head,
+            "message": _KNOWN_FIELD_MESSAGES[tail],
+        }
+
+    # Field-less safe phrases.
+    if message in _KNOWN_FIELDLESS_MESSAGES:
+        return {
+            "code": "invalid_argument",
+            "field": None,
+            "message": _KNOWN_FIELDLESS_MESSAGES[message],
+        }
+
+    return None
+
+
+def _invalid_tool_arguments_response(
+    response_id: Any, tool_name: str, exc: ValueError
+) -> dict[str, Any]:
+    """Return the legacy ``-32602 invalid tool arguments`` envelope with an
+    optional, additive ``error.data`` payload for safe argument-validation
+    failures.
+
+    The JSON-RPC ``error.message`` always stays exactly
+    ``"invalid tool arguments"`` for backward compatibility. The new
+    ``error.data`` is attached only when the underlying ``ValueError``
+    message matches a whitelisted safe phrase, so untrusted caller input
+    never reaches the response.
+    """
+    error_payload: dict[str, Any] = {"code": -32602, "message": "invalid tool arguments"}
+    classified = _classify_value_error(exc)
+    if classified is not None:
+        error_payload["data"] = {
+            "code": classified["code"],
+            "tool": tool_name,
+            "field": classified["field"],
+            "message": classified["message"],
+        }
+    return {"jsonrpc": "2.0", "id": response_id, "error": error_payload}
+
+
 def _initialize_response(response_id: Any, params: Any) -> dict[str, Any]:
     protocol_version = MCP_PROTOCOL_VERSION
     if (
@@ -497,7 +629,9 @@ async def handle_mcp_request(
 
     try:
         tool_result = call_tool(database_url, name, args)
-    except (KeyError, TypeError, ValueError, LedgerError, HTTPException):
+    except ValueError as exc:
+        return _invalid_tool_arguments_response(response_id, name, exc)
+    except (KeyError, TypeError, LedgerError, HTTPException):
         return _jsonrpc_error(response_id, -32602, "invalid tool arguments")
 
     return _tool_result_response(response_id, tool_result)
