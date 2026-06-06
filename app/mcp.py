@@ -8,8 +8,9 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app.ledger.service import LedgerError
+from app.mcp_results import MCPTextResult
 
-MCPToolHandler = Callable[[str, str, dict[str, Any]], str | dict[str, Any]]
+MCPToolHandler = Callable[[str, str, dict[str, Any]], str | dict[str, Any] | MCPTextResult]
 MCP_PROTOCOL_VERSION = "2025-06-18"
 MCP_SERVER_INFO = {"name": "mergework", "version": "0.1.0"}
 
@@ -280,7 +281,14 @@ def _structured_json_payload(text: str) -> dict[str, Any] | list[Any] | None:
     return None
 
 
-def _tool_result_response(response_id: Any, tool_result: str | dict[str, Any]) -> dict[str, Any]:
+def _tool_result_response(
+    response_id: Any, tool_result: str | dict[str, Any] | MCPTextResult
+) -> dict[str, Any]:
+    if isinstance(tool_result, MCPTextResult):
+        result: dict[str, Any] = {"content": [{"type": "text", "text": tool_result.text}]}
+        if tool_result.structured_content is not None:
+            result["structuredContent"] = tool_result.structured_content
+        return {"jsonrpc": "2.0", "id": response_id, "result": result}
     if isinstance(tool_result, dict):
         return {
             "jsonrpc": "2.0",

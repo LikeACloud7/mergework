@@ -7,7 +7,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.db import create_schema, session_scope
-from app.ledger.service import close_bounty, create_bounty, ensure_genesis, pay_bounty
+from app.ledger.service import (
+    GENESIS_SUPPLY_MICRO,
+    close_bounty,
+    create_bounty,
+    ensure_genesis,
+    pay_bounty,
+)
 from app.main import create_app
 from app.models import BountyAttempt, Proof
 from app.serializers import public_utc_timestamp
@@ -389,7 +395,11 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     ).json()
     assert balance["result"]["content"][0]["type"] == "text"
     assert "100000000" in balance["result"]["content"][0]["text"]
-    assert "structuredContent" not in balance["result"]
+    assert balance["result"]["structuredContent"] == {
+        "account": "treasury:mrwk",
+        "balance_mrwk": "100000000",
+        "balance_microunits": GENESIS_SUPPLY_MICRO,
+    }
 
 
 def test_mcp_initialize_returns_server_capabilities(sqlite_url: str) -> None:
