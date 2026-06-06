@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Bounty, TreasuryProposal
 from app.serializers import bounties_to_dict, public_utc_timestamp
+from app.submission_requirements import work_proof_submission_requirements
 from app.treasury import proposal_payload
 
 DEFAULT_WORK_DISCOVERY_LIMIT = 50
@@ -64,6 +65,7 @@ def _bounty_work_item(row: dict[str, Any], availability_state: str) -> dict[str,
         "bounty_availability_state": str(row["availability_state"]),
         "pending_payout_awards": int(row["pending_payout_awards"]),
         "source_urls": _bounty_source_urls(row),
+        "submission_requirements": row["submission_requirements"],
     }
 
 
@@ -89,6 +91,13 @@ def _pending_create_item(proposal: TreasuryProposal) -> dict[str, Any]:
             "proposal": f"/api/v1/treasury/proposals/{proposal.id}",
             "github_issue": str(payload["issue_url"]),
         },
+        "submission_requirements": work_proof_submission_requirements(
+            bounty_id=None,
+            issue_number=int(payload["issue_number"]),
+            availability="unknown",
+            title=str(payload["title"]),
+            acceptance=str(payload.get("acceptance", "")),
+        ),
     }
 
 
