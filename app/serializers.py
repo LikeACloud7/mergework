@@ -26,6 +26,7 @@ from app.submission_requirements import (
 
 PendingBountyProposals = tuple[list[dict[str, Any]], dict[str, Any] | None]
 MRWK_MICROUNITS = Decimal(1_000_000)
+T = TypeVar("T")
 
 
 def public_utc_timestamp(value: datetime) -> str:
