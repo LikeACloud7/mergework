@@ -197,6 +197,12 @@ def test_public_post_openapi_response_schemas_expose_wallet_transfer_and_attempt
             "created_at",
         },
     )
+    wallet_props = wallet_schema["properties"]
+    assert wallet_props["address"]["pattern"] == "^mrwk1[0-9a-f]{40}$"
+    assert wallet_props["address"]["minLength"] == 45
+    assert wallet_props["address"]["maxLength"] == 45
+    assert wallet_props["label"]["maxLength"] == 160
+
     link_wallet_schema = _post_response_schema(openapi, "/api/v1/wallets/link-github")
     _assert_properties(
         link_wallet_schema,
@@ -211,6 +217,11 @@ def test_public_post_openapi_response_schemas_expose_wallet_transfer_and_attempt
             "created_at",
         },
     )
+    link_wallet_props = link_wallet_schema["properties"]
+    assert link_wallet_props["address"]["pattern"] == "^mrwk1[0-9a-f]{40}$"
+    assert link_wallet_props["address"]["minLength"] == 45
+    assert link_wallet_props["address"]["maxLength"] == 45
+    assert link_wallet_props["label"]["maxLength"] == 160
 
     claim_schema = _post_response_schema(openapi, "/api/v1/github/claim")
     _assert_properties(
@@ -244,6 +255,13 @@ def test_public_post_openapi_response_schemas_expose_wallet_transfer_and_attempt
             "created_at",
         },
     )
+    transfer_props = transfer_schema["properties"]
+    assert transfer_props["from_address"]["pattern"] == "^mrwk1[0-9a-f]{40}$"
+    assert transfer_props["from_address"]["minLength"] == 45
+    assert transfer_props["from_address"]["maxLength"] == 45
+    assert transfer_props["to_address"]["pattern"] == "^mrwk1[0-9a-f]{40}$"
+    assert transfer_props["to_address"]["minLength"] == 45
+    assert transfer_props["to_address"]["maxLength"] == 45
 
     registered_attempt_schema = _post_response_schema(
         openapi, "/api/v1/bounties/{bounty_id}/attempts", "201"
