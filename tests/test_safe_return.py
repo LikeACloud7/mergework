@@ -14,8 +14,6 @@ These tests pin down the contract:
 
 from __future__ import annotations
 
-import pytest
-
 from app.serializers import _safe_return
 
 
