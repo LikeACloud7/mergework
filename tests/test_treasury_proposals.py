@@ -257,6 +257,25 @@ def test_treasury_status_reports_reserve_capacity_and_pending_create_proposals(
     ]
 
 
+def test_treasury_status_rejects_proposal_list_filters(
+    sqlite_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client(sqlite_url, monkeypatch)
+
+    assert client.get("/api/v1/treasury/status").status_code == 200
+    for query, field in (
+        ("limit=1", "limit"),
+        ("offset=1", "offset"),
+        ("status=pending", "status"),
+        ("action=create_bounty", "action"),
+        ("to_account=github:alice", "to_account"),
+        ("bounty_id=1", "bounty_id"),
+    ):
+        response = client.get(f"/api/v1/treasury/status?{query}")
+        assert response.status_code == 400
+        assert response.json()["detail"] == f"{field} is not supported on treasury status"
+
+
 def test_treasury_status_includes_reserve_at_exact_24h_boundary(
     sqlite_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

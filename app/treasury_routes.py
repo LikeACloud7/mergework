@@ -100,6 +100,14 @@ def _proposal_payload_matches(
         and payload_bounty_id == bounty_id
     )
 
+def _reject_treasury_status_filters(request: Request) -> None:
+    for name in ("limit", "offset", "action", "status", "to_account", "bounty_id"):
+        if request.query_params.getlist(name):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{name} is not supported on treasury status",
+            )
+
 
 def _reject_treasury_proposal_detail_filters(request: Request) -> None:
     for name in ("limit", "offset", "action", "status", "to_account", "bounty_id"):
@@ -186,7 +194,8 @@ def register_treasury_routes(
             return proposals
 
     @app.get("/api/v1/treasury/status")
-    def api_treasury_status() -> dict[str, Any]:
+    def api_treasury_status(request: Request) -> dict[str, Any]:
+        _reject_treasury_status_filters(request)
         with session_scope(db_url) as session:
             return treasury_status(session)
 
