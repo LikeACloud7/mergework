@@ -114,6 +114,20 @@ def test_admin_bounty_creation_creates_public_delayed_proposal(
     assert [proposal["id"] for proposal in listed.json()] == [body["id"]]
     assert detail.status_code == 200
     assert detail.json()["payload_hash"] == body["payload_hash"]
+    for query, field in (
+        ("limit=1", "limit"),
+        ("offset=1", "offset"),
+        ("status=pending", "status"),
+        ("action=create_bounty", "action"),
+        ("to_account=github:alice", "to_account"),
+        ("bounty_id=1", "bounty_id"),
+    ):
+        filtered_detail = client.get(f"/api/v1/treasury/proposals/{body['id']}?{query}")
+        assert filtered_detail.status_code == 400
+        assert (
+            filtered_detail.json()["detail"]
+            == f"{field} is not supported on treasury proposal detail"
+        )
     for noncanonical_id in (f"{body['id']}.0", f"+{body['id']}", f"%C2%85{body['id']}"):
         noncanonical_detail = client.get(f"/api/v1/treasury/proposals/{noncanonical_id}")
         assert noncanonical_detail.status_code == 400

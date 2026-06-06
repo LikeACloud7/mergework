@@ -101,6 +101,15 @@ def _proposal_payload_matches(
     )
 
 
+def _reject_treasury_proposal_detail_filters(request: Request) -> None:
+    for name in ("limit", "offset", "action", "status", "to_account", "bounty_id"):
+        if request.query_params.getlist(name):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{name} is not supported on treasury proposal detail",
+            )
+
+
 def register_treasury_routes(
     app: FastAPI,
     *,
@@ -182,7 +191,8 @@ def register_treasury_routes(
             return treasury_status(session)
 
     @app.get("/api/v1/treasury/proposals/{proposal_id}")
-    def api_treasury_proposal(proposal_id: str) -> dict[str, Any]:
+    def api_treasury_proposal(request: Request, proposal_id: str) -> dict[str, Any]:
+        _reject_treasury_proposal_detail_filters(request)
         proposal_id_int = positive_proposal_id(proposal_id)
         with session_scope(db_url) as session:
             proposal = session.get(TreasuryProposal, proposal_id_int)
