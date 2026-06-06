@@ -100,6 +100,7 @@ def _proposal_payload_matches(
         and payload_bounty_id == bounty_id
     )
 
+
 def _reject_treasury_status_filters(request: Request) -> None:
     for name in ("limit", "offset", "action", "status", "to_account", "bounty_id"):
         if request.query_params.getlist(name):
