@@ -358,9 +358,16 @@ parsing natural language:
 The shape is:
 
 - `code` — always `"invalid_argument"` for argument-validation failures.
-- `tool` — the requested tool name as the dispatcher saw it.
+- `tool` — the registered MCP tool name when it is a known tool, or
+  `null` for the `unknown tool` path. The dispatcher never reflects an
+  arbitrary caller-supplied string into this slot, so the value is safe
+  to surface to LLM prompts or logs.
 - `field` — the offending field name, or `null` for field-less phrases such
-  as `unknown tool` or `repo can only be used with issue_number`.
+  as `unknown tool`, `matches multiple bounties`, or
+  `repo can only be used with issue_number`. Some upstream messages are
+  emitted as `"<field> <field-less phrase>"` (for example
+  `issue_number matches multiple bounties`); the classifier treats those
+  as field-less and drops the leading field token from the response.
 - `message` — a static, whitelisted safe phrase. Caller input is never
   echoed, so the payload is safe to surface to LLM prompts or logs.
 

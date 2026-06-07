@@ -3109,16 +3109,95 @@ def test_mcp_field_error_data_attaches_known_fieldless_unknown_tool(sqlite_url: 
         },
     )
 
+    # The rejected tool name is not in the static ``MCP_TOOLS`` whitelist,
+    # so the dispatcher leaves ``data.tool`` as ``None`` instead of
+    # echoing arbitrary caller input.
     _assert_invalid_tool_arguments_envelope(
         response.json(),
         request_id=5,
         expected_data={
             "code": "invalid_argument",
-            "tool": "definitely_unknown",
+            "tool": None,
             "field": None,
             "message": "unknown tool",
         },
     )
+
+
+def test_mcp_field_error_data_binds_known_tool_name(sqlite_url: str) -> None:
+    """For field-prefixed argument validation the dispatcher must echo the
+    registered tool name (not the raw caller string) into ``data.tool``.
+
+    This is the positive half of the ``data.tool`` bounding guarantee:
+    known tools get their registered name, unknown tools get ``None``.
+    """
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 9,
+            "method": "tools/call",
+            "params": {
+                "name": "list_bounties",
+                "arguments": {"limit": 0},
+            },
+        },
+    )
+
+    _assert_invalid_tool_arguments_envelope(
+        response.json(),
+        request_id=9,
+        expected_data={
+            "code": "invalid_argument",
+            "tool": "list_bounties",
+            "field": "limit",
+            "message": "must be positive",
+        },
+    )
+
+
+def test_mcp_field_error_data_reaches_fieldless_matches_multiple_bounties(
+    sqlite_url: str,
+) -> None:
+    """``issue_number matches multiple bounties`` is the field-less
+    phrase ``matches multiple bounties`` prefixed with a known tool
+    field. The classifier must reach the field-less whitelist even when
+    the message carries the field token, and surface
+    ``field: None, message: "matches multiple bounties"``.
+
+    The integration path is unreachable because the ``Bounty`` model
+    has a ``UniqueConstraint("repo", "issue_number")`` that prevents
+    duplicate ``issue_number`` rows. We exercise the classifier
+    directly to lock in the new branch.
+    """
+    from app.mcp import _classify_value_error
+
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        for issue_number in (902, 903):
+            create_bounty(
+                session,
+                repo="ramimbo/mergework",
+                issue_number=issue_number,
+                issue_url=f"https://github.com/ramimbo/mergework/issues/{issue_number}",
+                title=f"Single-issue coverage {issue_number}",
+                reward_mrwk="100",
+                acceptance="Accepted label",
+            )
+
+    classified = _classify_value_error(ValueError("issue_number matches multiple bounties"))
+    assert classified == {
+        "code": "invalid_argument",
+        "field": None,
+        "message": "matches multiple bounties",
+    }
 
 
 def test_mcp_field_error_data_attaches_repo_requires_issue_number(sqlite_url: str) -> None:

@@ -391,6 +391,15 @@ MCP_TOOLS: list[dict[str, Any]] = [
 ]
 
 
+# Static whitelist of registered MCP tool names, derived once at import time
+# from :data:`MCP_TOOLS`. The dispatcher uses this set to bound the
+# ``data["tool"]`` slot of the additive field-level error envelope: only
+# names that actually belong to a registered tool are surfaced, so an
+# unknown-tool ``ValueError`` (whose ``tool_name`` is, by definition, not in
+# the set) cannot echo arbitrary caller input into the response body.
+_KNOWN_TOOL_NAMES: frozenset[str] = frozenset(tool["name"] for tool in MCP_TOOLS)
+
+
 def _jsonrpc_error(response_id: Any, code: int, message: str) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": response_id, "error": {"code": code, "message": message}}
 
@@ -491,6 +500,21 @@ def _classify_value_error(exc: ValueError) -> dict[str, Any] | None:
             "message": _KNOWN_FIELD_MESSAGES[tail],
         }
 
+    # Some upstream ``ValueError`` messages are emitted as
+    # ``"<field> <field-less safe phrase>"`` even when the phrase itself is
+    # semantically field-less (e.g. ``"issue_number matches multiple
+    # bounties"``). Treat that case as a field-less known phrase so the
+    # whitelist remains reachable for those callsites; the leading field
+    # token is dropped from the response because the message is the
+    # user-facing signal and the field is the static name the dispatcher
+    # would have surfaced anyway.
+    if sep and head in _KNOWN_TOOL_FIELDS and tail in _KNOWN_FIELDLESS_MESSAGES:
+        return {
+            "code": "invalid_argument",
+            "field": None,
+            "message": _KNOWN_FIELDLESS_MESSAGES[tail],
+        }
+
     # Field-less safe phrases.
     if message in _KNOWN_FIELDLESS_MESSAGES:
         return {
@@ -518,9 +542,18 @@ def _invalid_tool_arguments_response(
     error_payload: dict[str, Any] = {"code": -32602, "message": "invalid tool arguments"}
     classified = _classify_value_error(exc)
     if classified is not None:
+        # Bound the ``data["tool"]`` slot to the static
+        # :data:`_KNOWN_TOOL_NAMES` whitelist. Field-level argument
+        # validation always runs *after* the dispatcher has already
+        # resolved ``tool_name`` to a registered tool, so the bound
+        # value is identical to ``tool_name`` on the success path. For
+        # the ``unknown tool`` path the rejected caller name is, by
+        # definition, not in the whitelist; reflecting it would surface
+        # untrusted caller input, so the slot is left as ``None``.
+        safe_tool = tool_name if tool_name in _KNOWN_TOOL_NAMES else None
         error_payload["data"] = {
             "code": classified["code"],
-            "tool": tool_name,
+            "tool": safe_tool,
             "field": classified["field"],
             "message": classified["message"],
         }
