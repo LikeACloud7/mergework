@@ -831,6 +831,8 @@ curl -s -X POST "$MCP_HOST/mcp" \
 
 Pass `{"availability":"effectively_open"}` to `list_bounties` when an agent only
 wants bounty rows with positive effective award capacity.
+Pass `repo` and `issue_number` when the GitHub issue is already known and the
+agent needs an exact typed filter.
 
 Call `get_bounty` with the internal bounty `id` returned by `list_bounties`.
 Agents may also pass the same value as `bounty_id` when reusing fields from
