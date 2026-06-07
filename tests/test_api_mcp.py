@@ -306,12 +306,14 @@ def test_mcp_tools_list_and_call(sqlite_url: str) -> None:
     tools = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).json()
     assert tools["result"]["tools"][0]["name"] == "list_bounties"
     assert (
-        "status, q, sort, limit, and availability filters"
+        "status, q, repo, issue_number, sort, limit, and availability filters"
         in tools["result"]["tools"][0]["description"]
     )
     list_bounties_schema = tools["result"]["tools"][0]["inputSchema"]
     assert list_bounties_schema["additionalProperties"] is False
     assert list_bounties_schema["properties"]["q"]["maxLength"] == 500
+    assert list_bounties_schema["properties"]["repo"]["maxLength"] == 200
+    assert list_bounties_schema["properties"]["issue_number"]["minimum"] == 1
     assert list_bounties_schema["properties"]["limit"]["maximum"] == 100
     list_bounties_output_schema = tools["result"]["tools"][0]["outputSchema"]
     assert list_bounties_output_schema["type"] == "array"
@@ -913,6 +915,63 @@ def test_mcp_list_bounties_filters_status_query_and_limit(sqlite_url: str) -> No
     assert max_length_search_payload == []
 
 
+def test_mcp_list_bounties_filters_repo_and_issue_number(sqlite_url: str) -> None:
+    create_schema(sqlite_url)
+    with session_scope(sqlite_url) as session:
+        ensure_genesis(session)
+        create_bounty(
+            session,
+            repo="ramimbo/mergework",
+            issue_number=391,
+            issue_url="https://github.com/ramimbo/mergework/issues/391",
+            title="Primary repo bounty",
+            reward_mrwk="150",
+            acceptance="MCP repo filtering should skip this bounty.",
+        )
+        target = create_bounty(
+            session,
+            repo="Example/MergeWork",
+            issue_number=391,
+            issue_url="https://github.com/example/mergework/issues/391",
+            title="Target repo bounty",
+            reward_mrwk="200",
+            acceptance="MCP repo and issue filters should find this bounty.",
+        )
+        create_bounty(
+            session,
+            repo="example/mergework",
+            issue_number=392,
+            issue_url="https://github.com/example/mergework/issues/392",
+            title="Same repo different issue",
+            reward_mrwk="50",
+            acceptance="Repo-only filters may include this bounty.",
+        )
+
+    client = TestClient(create_app(database_url=sqlite_url, webhook_secret="secret"))
+
+    filtered = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "tools/call",
+            "params": {
+                "name": "list_bounties",
+                "arguments": {
+                    "repo": " EXAMPLE/MERGEWORK ",
+                    "issue_number": 391,
+                },
+            },
+        },
+    ).json()
+
+    payload = json.loads(filtered["result"]["content"][0]["text"])
+    assert filtered["result"]["structuredContent"] == payload
+    assert [bounty["id"] for bounty in payload] == [target.id]
+    assert payload[0]["repo"] == "example/mergework"
+    assert payload[0]["issue_number"] == 391
+
+
 def test_mcp_list_bounties_honors_sort_argument(sqlite_url: str) -> None:
     create_schema(sqlite_url)
     with session_scope(sqlite_url) as session:
@@ -1026,6 +1085,12 @@ def test_mcp_list_bounties_filters_effective_availability(sqlite_url: str) -> No
         ({"sort": "invalid"}, 36),
         ({"availability": "maybe"}, 37),
         ({"q": "a" * 501}, 38),
+        ({"repo": 1}, 39),
+        ({"repo": "\u0085ramimbo/mergework"}, 40),
+        ({"repo": "a" * 201}, 41),
+        ({"issue_number": 0}, 42),
+        ({"issue_number": True}, 43),
+        ({"unexpected": "ignored"}, 44),
     ],
 )
 def test_mcp_list_bounties_rejects_invalid_filters(

@@ -123,7 +123,8 @@ MCP_TOOLS: list[dict[str, Any]] = [
     {
         "name": "list_bounties",
         "description": (
-            "List MRWK bounties with optional status, q, sort, limit, and availability filters"
+            "List MRWK bounties with optional status, q, repo, issue_number, "
+            "sort, limit, and availability filters"
         ),
         "inputSchema": {
             "type": "object",
@@ -138,6 +139,16 @@ MCP_TOOLS: list[dict[str, Any]] = [
                     "type": "string",
                     "maxLength": 500,
                     "description": "Optional bounty text or issue-number search.",
+                },
+                "repo": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "Optional owner/name repository filter.",
+                },
+                "issue_number": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Optional GitHub issue-number filter.",
                 },
                 "sort": {
                     "type": "string",

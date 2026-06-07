@@ -270,6 +270,8 @@ curl -s -X POST "$MCP_HOST/mcp" \
 Use `{"availability":"effectively_open"}` with `list_bounties` when you only want
 raw-open bounties that still have positive effective award capacity after
 pending payout or close proposals are considered.
+Use `repo` and `issue_number` with `list_bounties` when you already know the
+GitHub issue and want an exact typed filter instead of free-text search.
 
 Inspect a bounty with `get_bounty` before preparing evidence. Use the `id`
 from `list_bounties`, pass the same value as `bounty_id` when reusing fields
