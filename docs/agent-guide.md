@@ -308,7 +308,8 @@ Tools:
 - `get_bounty`
 - `list_bounty_attempts`
 - `get_balance`
-- `register_wallet`
+- `register_wallet` (`tools/list` advertises the public-key input schema and the
+  registered wallet output schema)
 - `get_wallet`
 - `submit_wallet_transfer`
 - `get_ledger_entry`

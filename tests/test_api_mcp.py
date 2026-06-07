@@ -2912,6 +2912,14 @@ def test_mcp_can_register_and_fetch_wallet(sqlite_url: str) -> None:
     assert registered["result"]["structuredContent"] == registered_wallet
     assert registered_wallet["address"].startswith("mrwk1")
 
+    register_tool = next(
+        tool for tool in tools["result"]["tools"] if tool["name"] == "register_wallet"
+    )
+    assert register_tool["inputSchema"]["required"] == ["public_key_hex"]
+    assert register_tool["inputSchema"]["additionalProperties"] is False
+    assert set(register_tool["outputSchema"]["required"]) == set(registered_wallet)
+    assert set(register_tool["outputSchema"]["properties"]) == set(registered_wallet)
+
     fetched = client.post(
         "/mcp",
         json={
